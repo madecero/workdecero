@@ -221,6 +221,11 @@ class FrontMatter(unittest.TestCase):
     def test_empty_properties_block(self):
         self.assertEqual(miniyaml.split_front_matter("---\n---\nbody"), ({}, "body"))
 
+    def test_property_errors_give_the_line_in_the_note(self):
+        with self.assertRaises(YamlError) as caught:
+            miniyaml.split_front_matter("---\ntype: posting\nnotes: |\n  block\n---\nbody\n")
+        self.assertEqual(caught.exception.line, 3)                    # the third line of the file
+
     def test_unclosed_block(self):
         with self.assertRaises(YamlError):
             miniyaml.split_front_matter("---\ntype: posting\nno end\n")

@@ -136,14 +136,15 @@ class RoundTrip(VaultCase):
     def test_what_a_reader_acts_on_comes_first_and_bookkeeping_last(self):
         row = self.store.upsert("job", "J-9", "VP of Product, Example Co", {
             "role": "VP of Product", "fit": 88, "pay_max": 270000, "pay_min": 230000, "work_mode": "Remote",
-            "company": self.store.link("company", "Example Co"), "contact_first": "Pat Example (1st).",
+            "company": self.store.link("company", "Example Co"), "approach": "Pat Example (1st).",
             "apply_url": "https://jobs.example.com/1", "posted": "2026-11-04", "first_seen": "2026-11-05",
             "last_seen": "2026-11-09", "updated": "2026-11-09", "source": "Company site", "req_id": "R-1",
             "liveness": "live", "last_checked": "2026-11-09"})
         keys = [line.split(":")[0] for line in self.read(row).split("---")[1].strip().splitlines()
                 if not line.startswith(" ")]
-        self.assertEqual(keys[:6], ["wd_status", "wd_fit", "wd_pay_max", "wd_pay_min", "wd_company",
-                                    "wd_contact_first"])
+        self.assertEqual(keys[:6], ["wd_status", "wd_fit", "wd_pay_min", "wd_pay_max", "wd_company",
+                                    "wd_approach"])
+        self.assertTrue(all(len(key) <= 14 for key in keys[:8]), keys[:8])     # fits the properties panel
         self.assertEqual(keys[-2:], ["wd_id", "wd_type"])
         for early, late in (("wd_apply_url", "wd_posted"), ("wd_role", "wd_first_seen"),
                             ("wd_work_mode", "wd_last_checked"), ("wd_last_checked", "wd_source")):
@@ -242,6 +243,7 @@ class Safety(VaultCase):
         self.assertEqual(store.rows("job"), [])
         self.assertEqual(len(store.skipped), 1)
         self.assertIn("left untouched", store.skipped[0][1])
+        self.assertIn("line 4:", store.skipped[0][1])                 # counted from the top of the note
         with self.assertRaises(vault.VaultError):
             store.upsert("job", "J-1", "Head of Product, Mile High Analytics", {"fit": 1})
         self.assertEqual(self.read(row), broken)

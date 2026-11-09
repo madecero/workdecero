@@ -164,14 +164,14 @@ class Found(WarmCase):
         self.assertEqual(job_values["warm_path"], ["[[workdecero/People/Priya Raman|Priya Raman (1st)]]"])
         self.assertTrue(lines["Contact first"].startswith("- **Contact first:** Priya Raman (1st), for a warm "
                                                           "introduction."))
-        self.assertEqual(job_values["contact_first"], lines["Contact first"][len("- **Contact first:** "):])
+        self.assertEqual(job_values["approach"], lines["Contact first"][len("- **Contact first:** "):])
         self.assertEqual(warm.warm, "1st")
         # And the other way round: nobody known means no warm path in any of the three places.
         self.store.upsert("person", "P-1", "Priya Raman", {"relationship": "Not connected"})
         cold = self.build(research)
         self.assertIn("- **Warm paths:** none found.", self.lines(cold))
         self.assertEqual(cold.operations[-1]["values"]["warm_path"], [])
-        self.assertNotIn("warm introduction", cold.operations[-1]["values"]["contact_first"])
+        self.assertNotIn("warm introduction", cold.operations[-1]["values"]["approach"])
 
     def test_second_degree_at_the_company_shows_its_degree(self):
         self.store.upsert("person", "P-1", "Priya Raman", {"relationship": "2nd"})
@@ -244,7 +244,7 @@ class Found(WarmCase):
         self.assertTrue(job.section.startswith("**Fit 87**: background 30/40.\n\n### Warm path\n\n- **Contact first:**"))
         self.assertEqual(job.values["warm_path"], ["[[workdecero/People/Priya Raman|Priya Raman (1st)]]",
                                                    "[[workdecero/People/Aisha Karim|Aisha Karim (1st)]]"])
-        self.assertEqual(job.values["contact_first"],
+        self.assertEqual(job.values["approach"],
                          "Priya Raman (1st), for a warm introduction. A connection of yours who works there.")
         people = dict((row.title, row) for row in self.store.rows("person"))
         self.assertEqual(sorted(people), ["Aisha Karim", "Dana Whitcombe", "Ines Carvalho-Reyes", "Marcus Oyelaran",
@@ -351,6 +351,22 @@ class QuietSearch(WarmCase):
         self.assertEqual(warm.operations[-1]["values"]["warm_path"], [])
         open_profile = dict(self.profile, jobs=dict(self.profile["jobs"], search_visibility="open"))
         self.assertNotIn("Caution", self.build(research, profile=open_profile).text)
+
+    def test_a_flagged_employer_gets_a_caution_and_no_outreach(self):
+        profile = dict(self.profile)
+        profile["exclusions"] = list(profile["exclusions"]) + [
+            {"name": "Front Range Robotics, Inc.", "kind": "employer", "action": "flag",
+             "reason": "Client of my current employer"}]
+        warm = self.build(self.full_research(), profile=profile)
+        lines = self.lines(warm)
+        self.assertEqual(lines[0], "- **Contact first:** No one for now. See the caution below.")
+        self.assertEqual(lines[1], "- **Caution:** check first. Client of my current employer. No outreach is "
+                                   "suggested until you have.")
+        self.assertIn("- **Warm paths:** none found.", lines)
+        self.assertFalse(any(line.startswith("- **Next step") for line in lines))
+        self.assertEqual(warm.operations[-1]["values"]["warm_path"], [])
+        self.assertIsNone(warm.warm)
+        self.assertNotIn("Caution", self.build(self.full_research()).text)     # not flagged: unchanged
 
     def test_confidential_names_are_scrubbed_from_everything_written(self):
         research = self.full_research()

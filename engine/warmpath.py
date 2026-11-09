@@ -287,6 +287,17 @@ def build(job_row, research, people_rows, store, profile, taken_ids=()):
     if caution:
         lines.append("- **Caution:** this company is a %s of your current employer. Reaching out could reveal "
                      "your search, so no outreach is suggested here." % related)
+    else:
+        # An employer the person flagged ("check with me first") gets no outreach suggestion either. This
+        # is how a client or partner of the current employer is handled: the profile lists it as a
+        # flagged exclusion, and research never needs to know the relationship.
+        flagged = scoring.match_exclusion({"title": job_row.values.get("role") or job_row.title}, company,
+                                          [item for item in scoring.active_exclusions(profile, datetime.date.today())
+                                           if item.get("action") == "flag" and item.get("kind") == "employer"])
+        if flagged is not None:
+            caution = True
+            lines.append("- **Caution:** check first. %s. No outreach is suggested until you have."
+                         % (flagged.get("reason") or "You flagged this employer in your profile").rstrip("."))
 
     manager = research.get("hiring_manager")
     lines.append(contact_line("Hiring manager", manager, "Hiring manager") or "- **Hiring manager:** not found.")
@@ -442,7 +453,7 @@ def build(job_row, research, people_rows, store, profile, taken_ids=()):
 
     result.operations.append({"op": "update", "type": "job", "id": job_row.id, "force": [],
                               "values": {"warm_path": [labelled(row, degree) for row, degree, _, _ in warm],
-                                         "contact_first": scoring.scrub_confidential(first + ".", names)},
+                                         "approach": scoring.scrub_confidential(first + ".", names)},
                               "part": (model.PART_WARM_PATH, result.text)})
     return result
 

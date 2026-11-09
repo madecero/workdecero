@@ -1053,6 +1053,11 @@
             "examples": [
               "2027-06-30"
             ]
+          },
+          "confidential": {
+            "type": "boolean",
+            "description": "true if this name must also never be written in a note, digest or draft. Anything found there is then left out entirely, since a note about it would have to name it.",
+            "default": false
           }
         }
       },

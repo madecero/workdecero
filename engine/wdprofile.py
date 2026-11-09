@@ -183,9 +183,11 @@ def warnings(profile, today=None):
         path = "contracts.%s" % key
         if value >= 2000:
             hourly = int(round(value / 2080.0))
-            found.append(Problem(path, "is %s, which looks like a yearly amount. This setting is per hour. "
-                                 "Did you mean %d? (%s a year is about %d an hour.)" % (value, hourly, value, hourly),
-                                 "%s: %d" % (key, hourly)))
+            slipped = int(round(value / 1000.0))
+            # Two honest readings: extra zeros on an hourly rate, or a yearly amount in an hourly setting.
+            found.append(Problem(path, "is %s, which is far too high for an hourly rate. Did you mean %d an hour? "
+                                 "Or, if that was a yearly amount, it is about %d an hour."
+                                 % (value, slipped, hourly), "%s: %d" % (key, slipped)))
         elif value < 5:
             found.append(Problem(path, "is %s, which is very low for an hourly rate. Check the number." % value, None))
 
@@ -219,8 +221,13 @@ def confidential_names(profile):
     """Every name that must never be written into a note, digest or draft."""
     names = list((profile.get("confidential") or {}).get("names") or [])
     employer = (profile.get("person") or {}).get("current_employer")
-    if employer and employer.lower() not in [name.lower() for name in names]:
-        names.append(employer)
+    extra = [employer] if employer else []
+    # An exclusion marked confidential is listed once and covers both jobs: left out, and never named.
+    extra += [item.get("name") for item in profile.get("exclusions") or []
+              if isinstance(item, dict) and item.get("confidential") is True and item.get("name")]
+    for name in extra:
+        if name.lower() not in [known.lower() for known in names]:
+            names.append(name)
     return names
 
 

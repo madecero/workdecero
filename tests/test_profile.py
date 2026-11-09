@@ -280,8 +280,10 @@ class Warnings(unittest.TestCase):
         profile["contracts"] = {"rate_floor_hourly": 160000}
         found = self.warn(profile)
         self.assertEqual(paths(found), ["contracts.rate_floor_hourly"])
-        self.assertIn("per hour", found[0].message)
-        self.assertIn("Did you mean 77?", found[0].message)
+        self.assertIn("far too high for an hourly rate", found[0].message)
+        self.assertIn("Did you mean 160 an hour?", found[0].message)          # extra zeros
+        self.assertIn("if that was a yearly amount, it is about 77 an hour", found[0].message)
+        self.assertEqual(found[0].example, "rate_floor_hourly: 160")
 
     def test_expired_exclusion(self):
         profile = minimal()
@@ -315,6 +317,21 @@ class QuietSearch(unittest.TestCase):
         profile["confidential"] = {"names": ["GRANITE PEAK SOFTWARE"]}
         self.assertEqual(len(wd_profile.effective_exclusions(profile)), 1)
         self.assertEqual(len(wd_profile.confidential_names(profile)), 1)
+
+    def test_a_confidential_exclusion_is_listed_once_and_covers_both(self):
+        profile = minimal()
+        profile["exclusions"] = [
+            {"name": "Northwind Health", "kind": "employer", "action": "flag", "confidential": True,
+             "reason": "Client of my current employer"},
+            {"name": "Gambling", "kind": "industry"},
+            {"name": "Open Client Co", "kind": "employer", "action": "flag", "confidential": False}]
+        profile["confidential"] = {"names": ["Old Client Co", "northwind health"]}
+        self.assertEqual(wd_profile.check(profile), [])
+        self.assertEqual(wd_profile.confidential_names(profile), ["Old Client Co", "northwind health"])
+        profile["confidential"] = {"names": []}
+        self.assertEqual(wd_profile.confidential_names(profile), ["Northwind Health"])
+        profile["exclusions"][0]["confidential"] = "yes"
+        self.assertEqual(paths(wd_profile.check(profile)), ["exclusions[1].confidential"])
 
     def test_nothing_added_without_a_current_employer(self):
         self.assertEqual(wd_profile.effective_exclusions(minimal()), [])

@@ -823,7 +823,7 @@ class FullRun(SweepCase):
         self.assertIn("warm path 12/15", note.section)
         self.assertIn("### Warm path", note.section)
         self.assertIn("Priya Raman (1st)", note.section)
-        self.assertEqual(note.values["contact_first"],
+        self.assertEqual(note.values["approach"],
                          "Priya Raman (1st), for a warm introduction. A connection of yours who works there.")
         self.assertIn("VP of Product at Summit Peak Health. Someone you know can help.", done)
         self.assertNotIn("Priya", done)                                  # the name stays in the vault

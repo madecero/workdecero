@@ -118,7 +118,7 @@ def build(target, folder="workdecero", today=None, backup_dir=None):
                                     "near_reason": "the background fit is 9 of 40, under the 20 that counts as a fit"})
     store.upsert("job", "J-2", "", {
         "warm_path": ["[[%s/People/Jonas Albrecht|Jonas Albrecht (2nd)]]" % folder],
-        "contact_first": "Jonas Albrecht (2nd), through a shared connection. Works there."})
+        "approach": "Jonas Albrecht (2nd), through a shared connection. Works there."})
     user = [
         ("J-5", {"applied_on": day(-14), "next_step": "Nudge the recruiter", "last_touch": day(-14),
                  "contact": link("person", "Lena Fischer")}),

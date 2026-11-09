@@ -572,7 +572,7 @@ def write_digest(state, profile, store, problems, today=None):
         row = rows.get(entry["id"])
         values = row.values if row else {}
         mode = values.get("work_mode") or "work mode not stated"
-        contact = values.get("contact_first")
+        contact = values.get("approach")
         pay = _pay_text(values)
         lines.append("- %s **Fit %d.** %s, %s.%s" % (store.link("job", entry["title"]), entry["fit"], pay[:1].upper() + pay[1:],
                                                      mode.lower(), " Contact first: %s" % contact if contact else ""))

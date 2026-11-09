@@ -480,7 +480,11 @@ def split_front_matter(text):
         return {}, text
     for index in range(1, len(lines)):
         if lines[index].rstrip() == "---":
-            properties = loads("\n".join(lines[1:index]))
+            try:
+                properties = loads("\n".join(lines[1:index]))
+            except YamlError as exc:
+                # Count from the top of the note, where a person will look, not from inside the block.
+                raise YamlError(exc.problem, exc.line + 1 if exc.line is not None else None)
             if properties is None:
                 properties = {}
             if not isinstance(properties, dict):

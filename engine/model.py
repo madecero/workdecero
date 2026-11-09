@@ -148,10 +148,10 @@ JOB = NoteType(
     [
         Field("status", TEXT, "Status", SEED),
         Field("fit", NUMBER, "Fit"),
-        Field("pay_max", NUMBER, "Pay to"),
         Field("pay_min", NUMBER, "Pay from"),
+        Field("pay_max", NUMBER, "Pay to"),
         Field("company", LINK, "Company"),
-        Field("contact_first", TEXT, "Contact first"),
+        Field("approach", TEXT, "Contact first"),
         Field("warm_path", LINKS, "Warm path"),
         # A near miss is written and kept out of the digest's top list: the background is thin, or the
         # posting requires something the person does not have.
