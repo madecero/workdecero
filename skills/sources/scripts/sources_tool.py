@@ -123,10 +123,22 @@ def _off_limits(profile, today):
     return [merge.normalize_company(name) for name in names if name]
 
 
+def _safe(text, profile):
+    """Text for the conversation with every confidential name taken out.
+
+    This skill reads web pages, and a page can carry instructions meant to make
+    an assistant leak what it knows. So the conversation is never given the
+    current employer, confidential names, pay or contact details in the first
+    place. Filtering by those names happens inside this helper.
+    """
+    return scoring.scrub_confidential(text, scoring.confidential_names(profile), "[withheld]")
+
+
 def plan(refresh=False, out=None, today=None):
     out = out or sys.stdout
     today = today or datetime.date.today()
     profile = _profile()
+    hidden = _off_limits(profile, today)
     source_map = sources.load()
     location = profile.get("location") or {}
     tracks = [track for track in sources.TRACKS if (profile.get("tracks") or {}).get(track)]
@@ -138,22 +150,24 @@ def plan(refresh=False, out=None, today=None):
         _area(profile), location.get("radius_miles"), ", ".join(location.get("work_modes") or [])), file=out)
     if location.get("other_areas"):
         print("  Also in reach: %s." % ", ".join(location["other_areas"]), file=out)
-    print("  Field: %s" % (profile.get("person") or {}).get("headline", ""), file=out)
+    print("  Field: %s" % _safe((profile.get("person") or {}).get("headline", ""), profile), file=out)
     jobs, contracts, networking = profile.get("jobs") or {}, profile.get("contracts") or {}, profile.get("networking") or {}
     if "jobs" in tracks:
-        print("  Job titles: %s." % ", ".join(jobs.get("titles") or []), file=out)
+        print("  Job titles: %s." % _safe(", ".join(jobs.get("titles") or []), profile), file=out)
         if jobs.get("preferred_industries"):
-            print("  Preferred industries: %s." % ", ".join(jobs["preferred_industries"]), file=out)
-        if jobs.get("watch_employers"):
-            print("  Employers they asked to watch (include these): %s." % ", ".join(jobs["watch_employers"]), file=out)
+            print("  Preferred industries: %s." % _safe(", ".join(jobs["preferred_industries"]), profile), file=out)
+        watch = [name for name in jobs.get("watch_employers") or [] if merge.normalize_company(name) not in hidden]
+        if watch:
+            print("  Employers they asked to watch (include these): %s." % _safe(", ".join(watch), profile), file=out)
     if "contracts" in tracks:
         print("  Contract services: %s. Ways of working: %s." % (
-            ", ".join(contracts.get("services") or []), ", ".join(contracts.get("engagement_types") or [])), file=out)
+            _safe(", ".join(contracts.get("services") or []), profile),
+            ", ".join(contracts.get("engagement_types") or [])), file=out)
         bids = contracts.get("public_bids") or {}
         print("  Public bids: %s." % ("yes, for %s" % ", ".join(bids.get("regions") or ["their state"])
                                       if bids.get("enabled") else "no, skip bid portals"), file=out)
     if "networking" in tracks:
-        print("  Wants to meet: %s." % ", ".join(networking.get("who_to_meet") or []), file=out)
+        print("  Wants to meet: %s." % _safe(", ".join(networking.get("who_to_meet") or []), profile), file=out)
         print("  Event formats: %s. Areas: %s." % (
             ", ".join(networking.get("formats") or []),
             ", ".join(networking.get("areas") or [location.get("home_base", "")])), file=out)
@@ -310,7 +324,7 @@ def finish(searches, skipped, out=None, today=None):
     source_map = sources.load()
     first = not source_map.get("built_on")
     source_map["area"] = _area(profile)
-    source_map["field"] = (profile.get("person") or {}).get("headline", "")
+    source_map["field"] = _safe((profile.get("person") or {}).get("headline", ""), profile)
     source_map["mode"] = profile.get("mode") or "lite"
     source_map["built_on" if first else "refreshed_on"] = today.isoformat()
     source_map["searches_used"] = searches
