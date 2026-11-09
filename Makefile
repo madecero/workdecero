@@ -1,4 +1,4 @@
-.PHONY: dev-setup test leak-check validate check
+.PHONY: dev-setup test leak-check validate authors check
 
 # One-time wiring after cloning: turns on the leak-guard git hooks.
 dev-setup:
@@ -14,4 +14,7 @@ leak-check:
 validate:
 	python3 dev/validate_manifests.py .
 
-check: leak-check validate test
+authors:
+	python3 dev/check_authors.py HEAD
+
+check: leak-check validate authors test

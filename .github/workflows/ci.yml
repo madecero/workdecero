@@ -35,6 +35,15 @@ jobs:
         run: python3 dev/validate_manifests.py .
       - name: Tests
         run: python3 -m unittest discover -s tests -v
+      - name: Commit identities (pull request commits)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 dev/check_authors.py "origin/$BASE_REF..$HEAD_SHA"
+      - name: Commit identities (whole history)
+        if: github.event_name == 'push'
+        run: python3 dev/check_authors.py HEAD
       - name: Version bump check
         if: github.event_name == 'pull_request'
         run: python3 dev/check_version_bump.py "origin/${{ github.base_ref }}"

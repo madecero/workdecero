@@ -38,7 +38,7 @@ ALLOWED_EMAIL_DOMAINS = (
     "example.net",
     "users.noreply.github.com",
 )
-ALLOWED_EMAILS = ("git@github.com", "noreply@anthropic.com")
+ALLOWED_EMAILS = ("git@github.com", "noreply@github.com", "noreply@anthropic.com")
 
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")
 PHONE_RE = re.compile(r"(?<![\w.-])(?:\+?1[ .-]?)?\(?\d{3}\)?[ .-]\d{3}[ .-]\d{4}(?![\w-])")

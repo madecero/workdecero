@@ -36,6 +36,8 @@ git config user.name <your GitHub handle>
 git config user.email <your GitHub noreply address>
 ```
 
+CI runs `dev/check_authors.py` on every pull request and on `main`. It fails if any commit's author or committer is not an allowed handle with a GitHub noreply address, and it reports the commit hash only. Merges use rebase, because a squash or merge commit made on the website is stamped with the account's profile name.
+
 ## Fixtures and examples
 
 Invented people and companies only, with `example.com` addresses and 555-01xx phone numbers.
@@ -46,7 +48,7 @@ Invented people and companies only, with `example.com` addresses and 555-01xx ph
 make check
 ```
 
-runs the leak guard over the tree, the manifest validator and the tests. Everything runs on the Python standard library, 3.9 or newer, with no installs.
+runs the leak guard over the tree, the manifest validator, the commit identity check and the tests. Everything runs on the Python standard library, 3.9 or newer, with no installs.
 
 ## Versioning
 
