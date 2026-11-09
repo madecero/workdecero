@@ -106,6 +106,33 @@ def replace_section(body, text):
     return before + block + after
 
 
+def split_parts(section):
+    """Split a block's text into (summary, {heading: body}). Headings are lines that start with '### '."""
+    summary, parts, current = [], {}, None
+    for line in (section or "").split("\n"):
+        if line.startswith("### "):
+            current = line[4:].strip()
+            parts.setdefault(current, [])
+        elif current is None:
+            summary.append(line)
+        else:
+            parts[current].append(line)
+    return "\n".join(summary).strip("\n"), dict((name, "\n".join(body).strip("\n")) for name, body in parts.items())
+
+
+def join_parts(summary, parts):
+    """The inverse of split_parts. Known parts come in model order, then any others, with the log last."""
+    names = [name for name in model.PART_ORDER if name in parts and name != model.PART_LOG]
+    names += [name for name in parts if name not in model.PART_ORDER]
+    if model.PART_LOG in parts:
+        names.append(model.PART_LOG)
+    chunks = [summary] if summary else []
+    for name in names:
+        if parts[name]:
+            chunks.append("### %s\n\n%s" % (name, parts[name]))
+    return "\n\n".join(chunks)
+
+
 class VaultStore(object):
     def __init__(self, vault_path, vault_folder="workdecero", backup_dir=None, scrub=True, today=None):
         vault = os.path.realpath(os.path.expanduser(vault_path))
@@ -379,12 +406,18 @@ class VaultStore(object):
             if row is None:
                 continue
             section = None
+            summary, parts = split_parts(row.section)
+            if operation.get("section"):
+                summary = operation["section"]          # a refresh replaces the fit summary only
+            if operation.get("part"):
+                heading, body = operation["part"]
+                parts[heading] = body
             if operation.get("append"):
-                section = (row.section + "\n" if row.section else "") + operation["append"]
-            elif operation.get("section") and not row.section:
-                # A refresh fills an empty block but never replaces one: it may hold dated lines
-                # from earlier checks.
-                section = operation["section"]
+                # Dated lines from checks collect in the log, which stays at the end of the block.
+                earlier = parts.get(model.PART_LOG, "")
+                parts[model.PART_LOG] = (earlier + "\n" if earlier else "") + "- " + operation["append"]
+            if operation.get("section") or operation.get("part") or operation.get("append"):
+                section = join_parts(summary, parts)
             written.append(self.upsert(operation["type"], operation["id"], row.title, operation.get("values", {}),
                                        section=section, force=operation.get("force", ())))
         return written

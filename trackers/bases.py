@@ -310,8 +310,8 @@ def people_base(folder):
     views = [
         _view("Warm paths",
               {"and": ["!%s.isEmpty()" % _key("linked_roles")]},
-              _columns(person, "name", "company", "relationship", "linked_roles", "source_url", "confidence",
-                       "last_contact"),
+              _columns(person, "name", "company", "relationship", "linked_roles", "email", "confidence",
+                       "source_url", "last_contact"),
               _sort(person, ("formula.closeness", "ASC"), ("confidence", "DESC"))),
         _view("Follow-ups due",
               {"and": ["%s <= today() + '7d'" % _key("follow_up_by")]},

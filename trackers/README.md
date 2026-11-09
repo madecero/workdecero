@@ -52,6 +52,8 @@ Why it fits, warm path and caveats, rewritten by each sweep.
 Anything you write here is yours too.
 ```
 
+Inside the block, a job note keeps up to three parts in a fixed order: the fit summary (refreshed by each sweep), `### Warm path` (who to reach and how sure the email is) and `### Log` (dated lines from posting checks, never rewritten).
+
 Properties start with `wd_` so they never collide with a `status`, `type`, `tags` or `company` property you already use. Tables show them under plain names such as Status and Fit.
 
 ## The promises the store keeps

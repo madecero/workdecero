@@ -28,6 +28,12 @@ USER = "user"
 SECTION_START = "<!-- workdecero:start -->"
 SECTION_END = "<!-- workdecero:end -->"
 
+# Headed parts inside the workdecero block of a job or contract note, in the order they are kept.
+# Text before the first heading is the fit summary, refreshed by each sweep.
+PART_WARM_PATH = "Warm path"
+PART_LOG = "Log"
+PART_ORDER = [PART_WARM_PATH, PART_LOG]
+
 # Group label for a status nobody recognises (a typo made in a table cell). It sorts first, so it is seen.
 CHECK_STATUS_STAGE = "0 Check status"
 
@@ -258,8 +264,10 @@ PERSON = NoteType(
         Field("relationship", TEXT, "Relationship"),
         Field("linked_roles", LINKS, "Linked roles"),
         Field("source_url", URL, "Source"),
-        Field("confidence", NUMBER, "Confidence"),
+        Field("email", TEXT, "Email"),
+        Field("confidence", NUMBER, "Email confidence (%)"),
         Field("why", TEXT, "Why"),
+        Field("met", TEXT, "Where met", SEED),
         Field("last_contact", DATE, "Last contact", USER),
         Field("follow_up_by", DATE, "Follow up by", USER),
     ],

@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.join(ROOT, "engine"))
 sys.path.insert(0, os.path.join(ROOT, "trackers"))
 
 import vault  # noqa: E402
+import warmpath  # noqa: E402
 import wdprofile  # noqa: E402
 
 SCRATCH_MARKER = ".workdecero-scratch"
@@ -74,8 +75,7 @@ def build(target, folder="workdecero", today=None, backup_dir=None):
         ("P-3", "Lena Fischer", "Bluebird Health", "Recruiter", "None", 40, "Named on the posting", [], day(10)),
     ]
     for note_id, name, company, role, rel, confidence, why, roles, follow_up in people:
-        values = {"company": link("company", company), "role": role, "relationship": rel, "confidence": confidence,
-                  "why": why, "linked_roles": [link("job", title) for title in roles],
+        values = {"company": link("company", company), "role": role, "relationship": rel, "why": why, "linked_roles": [link("job", title) for title in roles],
                   "source_url": "https://example.com/team"}
         store.upsert("person", note_id, name, values)
         if follow_up:
@@ -107,10 +107,10 @@ def build(target, folder="workdecero", today=None, backup_dir=None):
             values["distance_miles"] = miles
         if closes is not None:
             values["closes"] = day(closes)
-        store.upsert("job", note_id, title, values,
-                     section="**Why it fits:** matches your target level and AI product focus.\n\n"
-                             "**Caveats:** none found.")
-    store.upsert("job", "J-1", "", {"warm_path": [link("person", "Priya Raman")]})
+        # The summary is written once. On a rebuild the block may already hold a warm path, so leave it.
+        summary = None if store.get("job", note_id) else (
+            "**Why it fits:** matches your target level and AI product focus.\n\n**Caveats:** none found.")
+        store.upsert("job", note_id, title, values, section=summary)
     store.upsert("job", "J-2", "", {"warm_path": [link("person", "Jonas Albrecht")]})
     user = [
         ("J-5", {"applied_on": day(-14), "next_step": "Nudge the recruiter", "last_touch": day(-14),
@@ -188,6 +188,29 @@ def build(target, folder="workdecero", today=None, backup_dir=None):
     store.upsert("digest", "D-2", "%s Networking sweep" % day(-8),
                  {"date": day(-8), "track": "Networking", "new": 4, "closed": 0, "touched": []},
                  section="4 new events in the next 30 days.")
+    # Warm paths for two of the new roles, from invented research: one where most things were found
+    # and one where little was.
+    profile = {"person": {"name": "Demo Person"}, "jobs": {"search_visibility": "open"}}
+    research = {
+        "J-1": {
+            "hiring_manager": {"name": "Marcus Oyelaran", "title": "Chief Technology Officer",
+                               "source_url": "https://frontrange.example.com/team"},
+            "recruiter": {"name": "Dana Whitcombe", "title": "Senior Recruiter", "scope": "function",
+                          "source_url": "https://frontrange.example.com/careers"},
+            "email_format": {"domain": "frontrange.example.com", "pattern": "first.last", "evidence": "two-current",
+                             "source_url": "https://frontrange.example.com/press"},
+            "insiders": [{"name": "Ines Carvalho-Reyes", "title": "Director of Design",
+                          "source_url": "https://frontrange.example.com/team"}],
+            "note": "The team doubled this year, per the company blog.",
+            "next_step": "Ask Priya for a short call before you apply.",
+        },
+        "J-3": {
+            "hiring_manager": {"title": "VP of Product"},
+            "email_format": {"domain": "bluebird.example.com", "pattern": "flast", "evidence": "guess"},
+        },
+    }
+    operations, _ = warmpath.plan_warm_paths(research, store, profile)
+    store.apply(operations)
     store.refresh_rollups()
     return store
 
