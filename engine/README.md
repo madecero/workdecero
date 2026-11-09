@@ -10,4 +10,28 @@ Shared logic for the sweeps. Standard library Python only (3.9 or newer), so it 
 | `profile.schema.json` | The profile format: every setting, with a description, an example and a default. |
 | `wdprofile.py` | Loads a profile, fills in defaults, runs the checks. `python3 engine/wdprofile.py validate [PATH]`. |
 
-Still to come: liveness checks, merge and dedupe, scoring, warm paths.
+| `liveness.py` | Checks whether a posting is still open. `python3 engine/liveness.py check URL`. |
+
+Still to come: merge and dedupe, scoring, warm paths.
+
+## Liveness rules
+
+Every answer is `live`, `closed` or `unknown`, with the evidence it rests on.
+
+| Source | How it is checked |
+| --- | --- |
+| Workday | The site's own job API. Closed when applications are off, the posting is not found, or it was unpublished (HTTP 403 with code S22). |
+| Greenhouse, Lever | The public job board API. A 404 means removed. |
+| Ashby | The public job board list. Closed when the posting is no longer on it. |
+| LinkedIn | The public guest view of the posting. Search links are never checked. |
+| SAM.gov | The opportunity record. Closed once the response deadline has passed. |
+| Phenom career sites | These print "has been filled" on every page. Only the embedded Workday apply link or the posting's own status field is trusted. |
+| TEKsystems | The page template always carries closed wording, so only the status code counts: 410 is gone, 200 is live. |
+| Sites that need a real browser | Reported as unknown, for the browser pass. |
+| Any other page | 404 or 410 closes. Closed wording or a redirect to a list page is only a weak sign. |
+
+**A posting is never closed on one weak sign.** Two weak signs together close it, or the same weak sign at two checks on different days. Until then the note is marked `suspect` and a line asks you to look.
+
+When a posting closes, a note you have not applied to moves to Closed with the evidence. A note at Applied or later keeps your status and gets a `POSTING CLOSED` line instead.
+
+Requests are spaced one second apart per site, retried with a growing wait on 429 and 503, time out after 20 seconds, and carry a plain User-Agent with no personal details. The checker plans updates and the vault store applies them. It never writes to the vault itself.

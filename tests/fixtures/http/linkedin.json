@@ -1,0 +1,25 @@
+{
+  "note": "Invented content in the shape each source answers with. No real posting, employer or person. No request headers, cookies or tokens are stored.",
+  "exchanges": [
+    {
+      "url": "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/4000000001",
+      "status": 200,
+      "body": "<section class=\"top-card-layout\"><h2 class=\"top-card-layout__title\">VP of Product</h2><a class=\"topcard__org-name-link\">Example Robotics</a><span class=\"posted-time-ago__text\">2 weeks ago</span><button class=\"top-card-layout__cta\">Apply</button></section>"
+    },
+    {
+      "url": "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/4000000002",
+      "status": 200,
+      "body": "<section class=\"top-card-layout\"><h2 class=\"top-card-layout__title\">VP of Product</h2><figcaption class=\"closed-job__flavor--closed\">No longer accepting applications</figcaption></section>"
+    },
+    {
+      "url": "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/4000000003",
+      "status": 404,
+      "body": ""
+    },
+    {
+      "url": "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/4000000004",
+      "status": 429,
+      "body": ""
+    }
+  ]
+}

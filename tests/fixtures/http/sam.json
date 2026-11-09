@@ -1,0 +1,68 @@
+{
+  "note": "Invented content in the shape each source answers with. No real posting, employer or person. No request headers, cookies or tokens are stored.",
+  "exchanges": [
+    {
+      "url": "https://sam.gov/api/prod/opps/v2/opportunities/0123456789abcdef0123456789abcdef",
+      "status": 200,
+      "json": {
+        "data2": {
+          "title": "Brand refresh for a county library",
+          "solicitation": {
+            "deadlines": {
+              "response": "2026-12-01T17:00:00-05:00"
+            }
+          },
+          "type": "o"
+        },
+        "id": "x",
+        "latest": true
+      }
+    },
+    {
+      "url": "https://sam.gov/api/prod/opps/v2/opportunities/1123456789abcdef0123456789abcdef",
+      "status": 200,
+      "json": {
+        "data2": {
+          "title": "Brand refresh for a county library",
+          "solicitation": {
+            "deadlines": {
+              "response": "2026-10-15T17:00:00-05:00"
+            }
+          },
+          "type": "o"
+        },
+        "id": "x",
+        "latest": true
+      }
+    },
+    {
+      "url": "https://sam.gov/api/prod/opps/v2/opportunities/2123456789abcdef0123456789abcdef",
+      "status": 200,
+      "json": {
+        "data2": {
+          "title": "Brand refresh for a county library",
+          "solicitation": {
+            "deadlines": {
+              "response": null
+            }
+          },
+          "type": "o"
+        },
+        "id": "x",
+        "latest": true
+      }
+    },
+    {
+      "url": "https://sam.gov/api/prod/opps/v2/opportunities/3123456789abcdef0123456789abcdef",
+      "status": 404,
+      "json": {
+        "status": 404
+      }
+    },
+    {
+      "url": "https://sam.gov/api/prod/opps/v2/opportunities/4123456789abcdef0123456789abcdef",
+      "status": 502,
+      "body": ""
+    }
+  ]
+}

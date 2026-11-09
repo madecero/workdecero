@@ -1,0 +1,40 @@
+{
+  "note": "Invented content in the shape each source answers with. No real posting, employer or person. No request headers, cookies or tokens are stored.",
+  "exchanges": [
+    {
+      "url": "https://boards-api.greenhouse.io/v1/boards/exampleco/jobs/4000001",
+      "status": 200,
+      "json": {
+        "id": 4000001,
+        "title": "Brand Designer",
+        "absolute_url": "https://job-boards.greenhouse.io/exampleco/jobs/4000001",
+        "location": {
+          "name": "Portland, OR"
+        },
+        "updated_at": "2026-11-01T10:00:00-05:00",
+        "content": "Design brand systems for small food companies."
+      }
+    },
+    {
+      "url": "https://boards-api.greenhouse.io/v1/boards/exampleco/jobs/4000002",
+      "status": 404,
+      "json": {
+        "status": 404,
+        "error": "Job not found"
+      }
+    },
+    {
+      "url": "https://boards-api.greenhouse.io/v1/boards/exampleco/jobs/4000003",
+      "status": 500,
+      "body": ""
+    },
+    {
+      "url": "https://boards-api.eu.greenhouse.io/v1/boards/exampleco/jobs/4000004",
+      "status": 200,
+      "json": {
+        "id": 4000004,
+        "title": "Product Designer"
+      }
+    }
+  ]
+}

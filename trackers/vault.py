@@ -367,6 +367,20 @@ class VaultStore(object):
         text = (row.section + "\n" if row.section else "") + line
         return self.upsert(type_name, note_id, row.title, {}, section=text)
 
+    def apply(self, operations):
+        """Carry out operations planned by the engine (see liveness.plan_update). Returns the rows written."""
+        written = []
+        for operation in operations:
+            row = self.get(operation["type"], operation["id"])
+            if row is None:
+                continue
+            section = None
+            if operation.get("append"):
+                section = (row.section + "\n" if row.section else "") + operation["append"]
+            written.append(self.upsert(operation["type"], operation["id"], row.title, operation.get("values", {}),
+                                       section=section, force=operation.get("force", ())))
+        return written
+
     def refresh_rollups(self):
         """Recount open roles and known people on every company note."""
         company_type = model.BY_NAME["company"]

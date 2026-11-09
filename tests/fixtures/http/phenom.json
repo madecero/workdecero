@@ -1,0 +1,25 @@
+{
+  "note": "Invented content in the shape each source answers with. No real posting, employer or person. No request headers, cookies or tokens are stored.",
+  "exchanges": [
+    {
+      "url": "https://careers.examplehealth.example.com/us/en/job/R-10231/Nurse-Manager",
+      "status": 200,
+      "body": "<html><head><title>Nurse Manager</title></head><body><h1>Nurse Manager</h1><script>var phApp = {\"i18n\":{\"filled\":\"This position has been filled\",\"gone\":\"This job is no longer available\"},\"jobDetail\":{\"applyUrl\":\"https:\\/\\/examplehealth.wd5.myworkdayjobs.com\\/Careers\\/job\\/Round-Rock-TX\\/Nurse-Manager_R-10231\\/apply\"}};</script></body></html>"
+    },
+    {
+      "url": "https://careers.examplehealth.example.com/us/en/job/R-10233/Unpublished",
+      "status": 200,
+      "body": "<html><head><title>Unpublished</title></head><body><h1>Unpublished</h1><script>var phApp = {\"i18n\":{\"filled\":\"This position has been filled\",\"gone\":\"This job is no longer available\"},\"jobDetail\":{\"applyUrl\":\"https:\\/\\/examplehealth.wd5.myworkdayjobs.com\\/Careers\\/job\\/Round-Rock-TX\\/Unpublished_R-10233\\/apply\"}};</script></body></html>"
+    },
+    {
+      "url": "https://careers.examplehealth.example.com/us/en/job/R-20001/Open-Role",
+      "status": 200,
+      "body": "<html><head><title>Open role</title></head><body><h1>Open role</h1><script>var phApp = {\"i18n\":{\"filled\":\"This position has been filled\",\"gone\":\"This job is no longer available\"},\"jobDetail\":{\"jobStatus\":\"OPEN\"}};</script></body></html>"
+    },
+    {
+      "url": "https://careers.examplehealth.example.com/us/en/job/R-20002/Closed-Role",
+      "status": 200,
+      "body": "<html><head><title>Closed role</title></head><body><h1>Closed role</h1><script>var phApp = {\"i18n\":{\"filled\":\"This position has been filled\",\"gone\":\"This job is no longer available\"},\"jobDetail\":{\"jobStatus\":\"Closed\"}};</script></body></html>"
+    }
+  ]
+}

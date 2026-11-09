@@ -1,0 +1,53 @@
+{
+  "note": "Invented content in the shape each source answers with. No real posting, employer or person. No request headers, cookies or tokens are stored.",
+  "exchanges": [
+    {
+      "url": "https://jobs.smallco.example.com/openings/office-manager",
+      "status": 200,
+      "body": "<html><body><h1>Office Manager</h1><p>Apply by sending a resume.</p></body></html>"
+    },
+    {
+      "url": "https://jobs.smallco.example.com/openings/removed",
+      "status": 404,
+      "body": "<html><body>Page not found</body></html>"
+    },
+    {
+      "url": "https://jobs.smallco.example.com/openings/gone",
+      "status": 410,
+      "body": ""
+    },
+    {
+      "url": "https://jobs.smallco.example.com/openings/one-marker",
+      "status": 200,
+      "body": "<html><body><h1>Bookkeeper</h1><p>This position has been filled.</p></body></html>"
+    },
+    {
+      "url": "https://jobs.smallco.example.com/openings/marker-and-redirect",
+      "status": 200,
+      "final_url": "https://jobs.smallco.example.com/careers",
+      "body": "<html><body><h1>Open roles</h1><p>The job you are looking for is no longer available.</p></body></html>"
+    },
+    {
+      "url": "https://jobs.smallco.example.com/openings/redirect-only",
+      "status": 200,
+      "final_url": "https://jobs.smallco.example.com/careers/",
+      "body": "<html><body><h1>Open roles</h1></body></html>"
+    },
+    {
+      "url": "https://jobs.smallco.example.com/openings/redirect-to-same-job",
+      "status": 200,
+      "final_url": "https://jobs.smallco.example.com/openings/redirect-to-same-job-2026",
+      "body": "<html><body><h1>Dispatcher</h1></body></html>"
+    },
+    {
+      "url": "https://jobs.smallco.example.com/openings/blocked",
+      "status": 403,
+      "body": "Forbidden"
+    },
+    {
+      "url": "https://jobs.smallco.example.com/openings/no-answer",
+      "status": null,
+      "error": "URLError"
+    }
+  ]
+}

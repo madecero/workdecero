@@ -51,10 +51,11 @@ class Field(object):
 class Status(object):
     """`stage` is the label a status is grouped under, numbered so groups sort in pipeline order."""
 
-    def __init__(self, name, stage, kind):
+    def __init__(self, name, stage, kind, engaged=False):
         self.name = name
         self.stage = stage
-        self.kind = kind  # "new", "active" or "done"
+        self.kind = kind        # "new", "active" or "done"
+        self.engaged = engaged  # the user has applied or is further along
 
 
 class NoteType(object):
@@ -95,6 +96,13 @@ class NoteType(object):
         name = self.canonical_status(text)
         return name is not None and name in self.status_names("done")
 
+    def engaged_statuses(self):
+        """Statuses where the user is already in the process. A sweep never changes these."""
+        return [status.name for status in self.statuses if status.engaged]
+
+    def is_engaged(self, text):
+        return self.canonical_status(text) in self.engaged_statuses()
+
     def default_status(self):
         return self.statuses[0].name if self.statuses else None
 
@@ -108,6 +116,8 @@ def _pursuit_fields():
         Field("last_touch", DATE, "Last touch", USER),
         Field("contact", LINK, "Contact", USER),
         Field("reason", TEXT, "Reason", SEED),
+        Field("liveness", TEXT, "Posting check"),
+        Field("last_checked", DATE, "Last checked"),
     ]
 
 
@@ -136,9 +146,9 @@ JOB = NoteType(
     [
         Status("New", "1 New", "new"),
         Status("Interested", "2 Interested", "active"),
-        Status("Applied", "3 Applied", "active"),
-        Status("Interviewing", "4 Interviewing", "active"),
-        Status("Offer", "5 Offer", "active"),
+        Status("Applied", "3 Applied", "active", engaged=True),
+        Status("Interviewing", "4 Interviewing", "active", engaged=True),
+        Status("Offer", "5 Offer", "active", engaged=True),
         Status("Passed", "6 Closed", "done"),
         Status("Rejected", "6 Closed", "done"),
         Status("Closed", "6 Closed", "done"),
@@ -168,9 +178,9 @@ CONTRACT = NoteType(
     [
         Status("New", "1 New", "new"),
         Status("Interested", "2 Interested", "active"),
-        Status("Applied", "3 Applied", "active"),
-        Status("Interviewing", "4 Interviewing", "active"),
-        Status("Negotiating", "5 Negotiating", "active"),
+        Status("Applied", "3 Applied", "active", engaged=True),
+        Status("Interviewing", "4 Interviewing", "active", engaged=True),
+        Status("Negotiating", "5 Negotiating", "active", engaged=True),
         Status("Won", "6 Won", "done"),
         Status("Lost", "7 Closed", "done"),
         Status("Passed", "7 Closed", "done"),

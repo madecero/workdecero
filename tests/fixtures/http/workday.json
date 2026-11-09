@@ -1,0 +1,82 @@
+{
+  "note": "Invented content in the shape each source answers with. No real posting, employer or person. No request headers, cookies or tokens are stored.",
+  "exchanges": [
+    {
+      "url": "https://examplehealth.wd5.myworkdayjobs.com/wday/cxs/examplehealth/Careers/job/Round-Rock-TX/Nurse-Manager_R-10231",
+      "status": 200,
+      "json": {
+        "jobPostingInfo": {
+          "id": "0f1e2d3c4b5a",
+          "title": "Nurse Manager, Medical Surgical",
+          "jobDescription": "<p>Lead a 40-bed unit.</p>",
+          "location": "Round Rock, TX",
+          "postedOn": "Posted 12 Days Ago",
+          "startDate": "2026-10-28",
+          "timeType": "Full time",
+          "jobReqId": "R-10231",
+          "canApply": true,
+          "externalUrl": "https://examplehealth.wd5.myworkdayjobs.com/Careers/job/Round-Rock-TX/Nurse-Manager_R-10231"
+        },
+        "hiringOrganization": {
+          "name": "Example Health"
+        }
+      }
+    },
+    {
+      "url": "https://examplehealth.wd5.myworkdayjobs.com/wday/cxs/examplehealth/Careers/job/Round-Rock-TX/Charge-Nurse_R-10232",
+      "status": 200,
+      "json": {
+        "jobPostingInfo": {
+          "id": "0f1e2d3c4b5a",
+          "title": "Nurse Manager, Medical Surgical",
+          "jobDescription": "<p>Lead a 40-bed unit.</p>",
+          "location": "Round Rock, TX",
+          "postedOn": "Posted 12 Days Ago",
+          "startDate": "2026-10-28",
+          "timeType": "Full time",
+          "jobReqId": "R-10231",
+          "canApply": false,
+          "externalUrl": "https://examplehealth.wd5.myworkdayjobs.com/Careers/job/Round-Rock-TX/Nurse-Manager_R-10231"
+        },
+        "hiringOrganization": {
+          "name": "Example Health"
+        }
+      }
+    },
+    {
+      "url": "https://examplehealth.wd5.myworkdayjobs.com/wday/cxs/examplehealth/Careers/job/Round-Rock-TX/Never-Existed_R-00000",
+      "status": 404,
+      "json": {
+        "errorCode": "S21",
+        "httpStatus": 404,
+        "message": "The requested resource was not found."
+      }
+    },
+    {
+      "url": "https://examplehealth.wd5.myworkdayjobs.com/wday/cxs/examplehealth/Careers/job/Round-Rock-TX/Unpublished_R-10233",
+      "status": 403,
+      "json": {
+        "errorCode": "S22",
+        "httpStatus": 403,
+        "message": "Permission denied."
+      }
+    },
+    {
+      "url": "https://examplehealth.wd5.myworkdayjobs.com/wday/cxs/examplehealth/Careers/job/Round-Rock-TX/Blocked_R-10234",
+      "status": 403,
+      "body": "<html><body>Access denied</body></html>"
+    },
+    {
+      "url": "https://examplehealth.wd5.myworkdayjobs.com/wday/cxs/examplehealth/Careers/job/Round-Rock-TX/Server-Trouble_R-10235",
+      "status": 500,
+      "body": ""
+    },
+    {
+      "url": "https://examplehealth.wd5.myworkdayjobs.com/wday/cxs/examplehealth/Careers/job/Round-Rock-TX/Empty-Answer_R-10236",
+      "status": 200,
+      "json": {
+        "userAuthenticated": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "note": "Invented content in the shape each source answers with. No real posting, employer or person. No request headers, cookies or tokens are stored.",
+  "exchanges": [
+    {
+      "url": "https://api.ashbyhq.com/posting-api/job-board/exampleco",
+      "status": 200,
+      "json": {
+        "apiVersion": "1",
+        "jobs": [
+          {
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "title": "Senior Product Engineer",
+            "location": "Remote",
+            "isListed": true,
+            "jobUrl": "https://jobs.ashbyhq.com/exampleco/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+          },
+          {
+            "id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            "title": "Product Manager",
+            "location": "Remote",
+            "isListed": true
+          }
+        ]
+      }
+    },
+    {
+      "url": "https://api.ashbyhq.com/posting-api/job-board/goneco",
+      "status": 404,
+      "body": "Not Found"
+    },
+    {
+      "url": "https://api.ashbyhq.com/posting-api/job-board/oddco",
+      "status": 200,
+      "body": "<html>maintenance</html>"
+    }
+  ]
+}

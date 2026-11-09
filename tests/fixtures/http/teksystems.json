@@ -1,0 +1,20 @@
+{
+  "note": "Invented content in the shape each source answers with. No real posting, employer or person. No request headers, cookies or tokens are stored.",
+  "exchanges": [
+    {
+      "url": "https://careers.teksystems.com/us/en/job/JP-000001/Product-Owner",
+      "status": 200,
+      "body": "<html><body><h1>Product Owner</h1><div hidden>This job is no longer available</div></body></html>"
+    },
+    {
+      "url": "https://careers.teksystems.com/us/en/job/JP-000002/Scrum-Master",
+      "status": 410,
+      "body": "<html><body><h1>Gone</h1><div hidden>This job is no longer available</div></body></html>"
+    },
+    {
+      "url": "https://careers.teksystems.com/us/en/job/JP-000003/Blocked",
+      "status": 403,
+      "body": "Forbidden"
+    }
+  ]
+}
