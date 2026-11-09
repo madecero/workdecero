@@ -46,6 +46,16 @@ Invented people and companies only, with `example.com` addresses and 555-01xx ph
 
 `python3 dev/make_demo_vault.py SOME_FOLDER` builds a demo vault of invented data. Open it in Obsidian to see every view with rows in it. Never point development at a real vault.
 
+To check the views in a real Obsidian without touching your own, use the regression driver. It starts a second Obsidian with its own settings folder, opens only a demo vault, prints each table as Obsidian rendered it and saves screenshots:
+
+```
+python3 dev/make_demo_vault.py /tmp/wd-demo
+node dev/obsidian_check.mjs --vault /tmp/wd-demo --data-dir /tmp/wd-obsidian-data --out /tmp/wd-shots \
+  "workdecero/Jobs.base#New this week" "workdecero/Jobs.base#Pipeline"
+```
+
+It refuses to run on a vault that was not made by the demo script, on one of your own vaults, or with Obsidian's own settings folder. It needs Node 22 or newer.
+
 ## Checks
 
 ```

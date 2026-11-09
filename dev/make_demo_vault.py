@@ -19,6 +19,8 @@ sys.path.insert(0, os.path.join(ROOT, "trackers"))
 
 import vault  # noqa: E402
 
+SCRATCH_MARKER = ".workdecero-scratch"
+
 USER_NOTES = {
     "Reading list.md": "---\nstatus: reading\ntype: book\ntags:\n  - personal\ncompany: Penguin\n---\n"
                        "# Reading list\n\nMy own note. Nothing here belongs to workdecero.\n",
@@ -34,6 +36,9 @@ def build(target, folder="workdecero", today=None):
         return (today + datetime.timedelta(days=offset)).isoformat()
 
     os.makedirs(target, exist_ok=True)
+    # Marks the folder as a throwaway vault. dev/obsidian_check.mjs refuses any vault without it.
+    with open(os.path.join(target, SCRATCH_MARKER), "w", encoding="utf-8") as handle:
+        handle.write("A demo vault made by dev/make_demo_vault.py. Safe to delete.\n")
     for name, text in USER_NOTES.items():
         path = os.path.join(target, name)
         os.makedirs(os.path.dirname(path), exist_ok=True)
