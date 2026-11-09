@@ -10,11 +10,18 @@ permissions:
 
 jobs:
   checks:
-    runs-on: ubuntu-latest
+    name: checks (${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.13"]
+        include:
+          # 3.9 is the floor (what macOS ships). Newer runner images no
+          # longer offer it, so that job stays on an older image.
+          - python-version: "3.9"
+            os: ubuntu-24.04
+          - python-version: "3.13"
+            os: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
