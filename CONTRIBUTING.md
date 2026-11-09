@@ -42,6 +42,10 @@ CI runs `dev/check_authors.py` on every pull request and on `main`. It fails if 
 
 Invented people and companies only, with `example.com` addresses and 555-01xx phone numbers.
 
+## Looking at the views
+
+`python3 dev/make_demo_vault.py SOME_FOLDER` builds a demo vault of invented data. Open it in Obsidian to see every view with rows in it. Never point development at a real vault.
+
 ## Checks
 
 ```

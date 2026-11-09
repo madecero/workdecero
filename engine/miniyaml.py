@@ -30,6 +30,15 @@ _FLOAT_RE = re.compile(r"^-?(?:0|[1-9][0-9]*)\.[0-9]+$")
 _TRUE = ("true", "True", "TRUE")
 _FALSE = ("false", "False", "FALSE")
 _NULL = ("null", "Null", "NULL", "~", "")
+# Text that stricter or older YAML readers would turn into a number, a time or
+# a boolean. It is always written in quotes so every reader sees text.
+_AMBIGUOUS_RE = re.compile(
+    r"^(?:[-+]?(?:\.[0-9]+|[0-9][0-9_]*(?:\.[0-9_]*)?)(?:[eE][-+]?[0-9]+)?"
+    r"|[-+]?0[xob][0-9A-Fa-f_]+"
+    r"|[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+(?:\.[0-9_]*)?"
+    r"|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN)"
+    r"|y|Y|n|N|yes|Yes|YES|no|No|NO|on|On|ON|off|Off|OFF)$"
+)
 _ESCAPES = {"n": "\n", "t": "\t", '"': '"', "\\": "\\", "/": "/", "0": "\0", "r": "\r"}
 _UNSUPPORTED_START = {
     "|": "multi-line text blocks (|) are not supported. Put the text on one line in quotes",
@@ -360,7 +369,7 @@ def _needs_quotes(text):
         return True  # keeps inline lists unambiguous
     if text in _TRUE or text in _FALSE or text in _NULL:
         return True
-    if _INT_RE.match(text) or _FLOAT_RE.match(text):
+    if _INT_RE.match(text) or _FLOAT_RE.match(text) or _AMBIGUOUS_RE.match(text):
         return True
     return False
 
@@ -437,6 +446,8 @@ def _dump_entry(prefix, item, indent, out):
         else:
             out.append(prefix)
             _dump_node(item, indent + 2, out)
+    elif item is None:
+        out.append(prefix)  # an empty value, which is how Obsidian writes an empty property
     else:
         out.append(prefix + " " + _dump_scalar(item))
 

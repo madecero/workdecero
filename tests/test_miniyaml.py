@@ -165,7 +165,7 @@ class Writing(unittest.TestCase):
             "channels:\n"
             "  - name: Upwork\n"
             "    status: active\n"
-            "none: null\n"
+            "none:\n"
             "empty_list: []\n"
             "empty_map: {}\n"
         ))
@@ -187,6 +187,13 @@ class Writing(unittest.TestCase):
                        "list_of_lists": [["x", "y, z"], [1, True]]},
         }
         self.assertEqual(loads(dumps(doc)), doc)
+
+    def test_text_other_yaml_readers_would_misread_is_quoted(self):
+        for value in ("18:00", "1:30:00", "yes", "No", "on", "1e5", "0x1F", ".5", "+5", "1_000", "5."):
+            text = dumps({"k": value})
+            self.assertEqual(text, 'k: "%s"\n' % value, value)
+            self.assertEqual(loads(text), {"k": value})
+        self.assertEqual(dumps({"d": "2026-11-09", "v": "1.2.3"}), "d: 2026-11-09\nv: 1.2.3\n")
 
     def test_round_trip_top_level_shapes(self):
         for value in ({}, [], ["a", {"b": 1}], "text", 5, None, True):

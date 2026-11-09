@@ -53,6 +53,12 @@ See [examples/profiles](examples/profiles) for three complete examples, and [eng
 python3 engine/wdprofile.py validate path/to/profile.yaml
 ```
 
+## Your tracker
+
+Trackers are plain notes in your Obsidian vault, with table views that update as you work. Everything stays in one folder, and your own writing in a note is never touched. See [trackers/README.md](trackers/README.md) for the layout, the promises the plugin keeps, and how to build a demo vault to look around.
+
+![The Start here note](docs/screenshots/start-here.png)
+
 ## What it does not do
 
 Research only. It never applies, messages, registers or creates accounts for you.
