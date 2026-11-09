@@ -1,0 +1,28 @@
+# Personal data never belongs in this repo. A profile, a source map, tracker
+# notes and sweep output all live on the user's machine, outside the repo.
+profile.yaml
+profile.yml
+profile.*.yaml
+profile.*.yml
+sources.yaml
+sources.yml
+denylist*.txt
+/vault/
+/output/
+/digests/
+/snapshots/
+.obsidian/
+*.xlsx
+*.numbers
+*.csv
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# OS and editors
+.DS_Store
+.idea/
+.vscode/
