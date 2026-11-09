@@ -5,8 +5,8 @@ Used to look at the views in Obsidian and as the fixture for the vault tests.
 Dates are set relative to today, so every view has rows whenever it is built.
 Every person, company, group and event here is made up.
 
-Backups of anything it replaces go to the normal backup folder,
-~/.config/workdecero/backups (set WORKDECERO_HOME to move it), never into the vault.
+Backups of anything it replaces go to a temporary folder (printed at the end),
+never into the vault and never into your real workdecero folder.
 
 Usage: make_demo_vault.py TARGET_DIR [--folder NAME]
 Standard library only, Python 3.9+.
@@ -14,6 +14,7 @@ Standard library only, Python 3.9+.
 
 import argparse
 import datetime
+import tempfile
 import os
 import sys
 
@@ -23,7 +24,6 @@ sys.path.insert(0, os.path.join(ROOT, "trackers"))
 
 import vault  # noqa: E402
 import warmpath  # noqa: E402
-import wdprofile  # noqa: E402
 
 SCRATCH_MARKER = ".workdecero-scratch"
 
@@ -37,7 +37,9 @@ USER_NOTES = {
 def build(target, folder="workdecero", today=None, backup_dir=None):
     """Create the vault at `target` and return the VaultStore used."""
     today = today or datetime.date.today()
-    backup_dir = backup_dir or os.path.join(wdprofile.config_home(), "backups")
+    # A demo must never write into a person's real workdecero folder, so its backups go to the
+    # system's temporary area.
+    backup_dir = backup_dir or os.path.join(tempfile.gettempdir(), "workdecero-demo-backups")
 
     def day(offset):
         return (today + datetime.timedelta(days=offset)).isoformat()
@@ -220,7 +222,7 @@ def build(target, folder="workdecero", today=None, backup_dir=None):
 def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Build a demo Obsidian vault filled with invented tracker notes.",
-        epilog="Backups of replaced files go to ~/.config/workdecero/backups (WORKDECERO_HOME moves it).")
+        epilog="Backups of replaced files go to a temporary folder, never to your real workdecero folder.")
     parser.add_argument("target", metavar="TARGET_DIR", help="folder to create the demo vault in")
     parser.add_argument("--folder", default="workdecero", help="tracker folder inside the vault (default: workdecero)")
     args = parser.parse_args(argv)

@@ -377,17 +377,17 @@ class DemoVault(unittest.TestCase):
             self.assertEqual(result.returncode, 2)
             self.assertEqual(os.listdir(tmp), [])
 
-    def test_backups_go_to_the_config_folder_not_beside_or_inside_the_vault(self):
+    def test_demo_backups_go_to_a_temp_folder_never_the_real_config_or_the_vault(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = os.path.join(tmp, "config")
+            scratch = os.path.join(tmp, "scratch")
+            os.makedirs(scratch)
             target = os.path.join(tmp, "demo")
-            self.assertEqual(self.run_demo(target, WORKDECERO_HOME=home).returncode, 0)
-            with open(os.path.join(target, "workdecero", "Jobs.base"), "a") as handle:
-                handle.write("# changed\n")
-            store = vault.VaultStore(target, backup_dir=os.path.join(home, "backups"))
-            store.ensure_layout(refresh_views=True)
-            self.assertEqual(sorted(os.listdir(tmp)), ["config", "demo"])
-            self.assertGreaterEqual(len(os.listdir(os.path.join(home, "backups"))), 1)
+            result = self.run_demo(target, WORKDECERO_HOME=home, TMPDIR=scratch)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(os.path.exists(home))                    # the config folder is never touched
+            self.assertEqual(os.listdir(scratch), ["workdecero-demo-backups"])
+            self.assertEqual(sorted(os.listdir(tmp)), ["demo", "scratch"])
             self.assertFalse(any("backup" in name.lower() for name in os.listdir(target)))
 
 

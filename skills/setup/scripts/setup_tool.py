@@ -1,39 +1,56 @@
 #!/usr/bin/env python3
 """The helper behind /workdecero:setup.
 
-The setup conversation gathers answers as a draft, held in the conversation
-and never on disk. This script turns the draft into things a person can
-check, and does every write, so nothing is written by hand and nothing is
-written before the person says yes.
+The setup conversation gathers answers as a draft. The assistant writes the
+draft to ONE fixed file with its Write tool, and this script reads it from
+there. No answer ever travels on a command line, so every helper call is a
+fixed command with no arguments.
 
-A draft is JSON passed after --draft in single quotes (or on standard input):
-the profile itself (the same sections as profile.yaml), plus optional helper
-keys that are never saved:
+    The draft file:  ~/.cache/workdecero/setup-draft.json
 
-    "_inferred": ["person.name", "jobs.titles", ...]   settings read from the resume
-    "_new_vault": true                                  the person agreed to create a new vault folder
-    "_confirmed": ["jobs.salary_floor"]                 unusual values the person was asked about and kept
+The draft is temporary and private. This script creates it empty with
+owner-only permissions before any answer exists, keeps it that way, deletes
+it after a save or a cancel, and clears out one left behind by an earlier
+run. It is never copied into backups.
 
-Commands:
-    status                     what exists already: profile, known Obsidian vaults (reads only)
-    fields                     every profile setting with its description, for drafting
-    read-resume PATH           the text of a .txt, .md or .docx resume (reads only)
-    check-vault PATH [FOLDER]  whether a folder can hold the tracker (reads only)
-    preview --draft JSON       draft in, plain-language summary and open questions out (writes nothing)
-    preview --file --draft JSON   the same, plus the profile file as it would be written
-    write --draft JSON         draft in. Validates, then writes the profile and sets up the vault folder
-    import-connections PATH [--include-emails]
-                               add LinkedIn's Connections.csv to the People notes
+A draft is one JSON object: the profile itself (the same sections as
+profile.yaml), plus helper keys that start with an underscore and are never
+saved:
+
+    "_from_resume": {"person.summary": "...", "jobs.titles": [...]}
+                                 what was read from the resume, by setting name
+    "_dropped": ["person.summary"]       resume values the person chose to leave out
+    "_new_vault": true                   the person agreed to create a new vault folder
+    "_confirmed": ["jobs.salary_floor"]  unusual values the person was asked about and kept
+    "_resume_path": "..."                the resume file to read (for read-resume)
+    "_connections_path": "...", "_include_emails": false
+                                         for import-connections
+
+Commands (none takes an argument):
+    status               what exists already: profile, draft, known Obsidian vaults.
+                         Prepares the draft file (seeded from the saved profile on a re-run)
+    fields               every profile setting with its description, for drafting
+    read-resume          the text of the .txt, .md or .docx file named in "_resume_path"
+    check-vault          whether the vault folder in the draft can hold the tracker
+    preview              the short summary card and any open questions (writes nothing but a checksum)
+    preview-details      the full summary card
+    preview-file         the profile file as it would be written
+    write                saves the profile and sets up the vault folder. Refused unless the draft
+                         is exactly what the last preview showed
+    cancel               deletes the draft
+    import-connections   adds the LinkedIn file named in "_connections_path" to the People notes
 
 Exit codes: 0 fine, 1 the draft has problems to fix first, 2 the command could not run.
 Standard library only, Python 3.9+.
 """
 
 import datetime
+import hashlib
 import json
 import os
 import re
 import sys
+import time
 import urllib.parse
 import zipfile
 
@@ -48,13 +65,154 @@ import warmpath  # noqa: E402
 import wdprofile  # noqa: E402
 
 OBSIDIAN_CONFIG_ENV = "WORKDECERO_OBSIDIAN_CONFIG"   # for tests: where to look for Obsidian's vault list
-HELPER_KEYS = ("_inferred", "_new_vault", "_confirmed")
+DRAFT_DIR_ENV = "WORKDECERO_DRAFT_DIR"               # for tests: where the draft file lives
+DRAFT_NAME = "setup-draft.json"
+SHOWN_NAME = "setup-preview.sha256"                  # a checksum of the last draft shown. No answers in it
+RUN_NAME = "setup-run.json"                          # which setup run owns the draft. No answers in it
+RUN_ACTIVE_MINUTES = 30
+DRAFT_MAX_AGE_HOURS = 24
+HELPER_KEYS = ("_run", "_inferred", "_from_resume", "_dropped", "_new_vault", "_confirmed", "_resume_path",
+               "_connections_path", "_include_emails")
 PRIVACY = "Nothing was applied for, sent or posted. Your resume was read, not copied."
 
 
 # --------------------------------------------------------------------------
 # Reading what is already there
 # --------------------------------------------------------------------------
+
+def draft_dir():
+    return os.path.expanduser(os.environ.get(DRAFT_DIR_ENV) or os.path.join("~", ".cache", "workdecero"))
+
+
+def draft_path():
+    return os.path.join(draft_dir(), DRAFT_NAME)
+
+
+def _shown_path():
+    return os.path.join(draft_dir(), SHOWN_NAME)
+
+
+def _run_path():
+    return os.path.join(draft_dir(), RUN_NAME)
+
+
+def current_run():
+    """The run that owns the draft: {'run', 'started'} or None."""
+    try:
+        with open(_run_path(), "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        return data if isinstance(data, dict) and data.get("run") else None
+    except (OSError, ValueError):
+        return None
+
+
+def minutes_since_activity():
+    """Minutes since any setup file was last touched, or None when there are none."""
+    stamps = [os.path.getmtime(path) for path in (draft_path(), _run_path(), _shown_path()) if os.path.isfile(path)]
+    return max(0.0, (time.time() - max(stamps)) / 60.0) if stamps else None
+
+
+def start_run():
+    """Begin a new setup run and return its id. The id goes into every draft this run writes."""
+    folder = draft_dir()
+    os.makedirs(folder, mode=0o700, exist_ok=True)
+    run = hashlib.sha256(("%s-%s" % (time.time(), os.getpid())).encode("utf-8")).hexdigest()[:8]
+    handle = os.open(_run_path(), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(handle, "w", encoding="utf-8") as out:
+        json.dump({"run": run, "started": datetime.datetime.now().isoformat(timespec="seconds")}, out)
+    return run
+
+
+def touch_run():
+    if os.path.isfile(_run_path()):
+        os.utime(_run_path(), None)
+
+
+def _lock_down():
+    """Owner-only on the folder and the draft. Called on every read, in case a write replaced the file."""
+    folder = draft_dir()
+    if os.path.isdir(folder):
+        os.chmod(folder, 0o700)
+    for name in (DRAFT_NAME, SHOWN_NAME, RUN_NAME):
+        path = os.path.join(folder, name)
+        if os.path.isfile(path):
+            os.chmod(path, 0o600)
+
+
+def prepare_draft(content="{}\n"):
+    """Create the private folder and the draft file before any answer exists, with owner-only permissions."""
+    folder = draft_dir()
+    os.makedirs(folder, mode=0o700, exist_ok=True)
+    os.chmod(folder, 0o700)
+    handle = os.open(draft_path(), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(handle, "w", encoding="utf-8") as out:
+        out.write(content)
+    os.chmod(draft_path(), 0o600)
+
+
+def delete_draft():
+    """Remove the draft, its checksum and the folder if nothing else is in it. Returns True if a draft was removed."""
+    removed = False
+    for path in (draft_path(), _shown_path(), _run_path()):
+        if os.path.isfile(path):
+            os.remove(path)
+            removed = removed or path == draft_path()
+    folder = draft_dir()
+    if os.path.isdir(folder) and not os.listdir(folder):
+        os.rmdir(folder)
+    return removed
+
+
+def draft_state():
+    """('none' | 'empty' | 'resumable' | 'stale' | 'unreadable', age in hours, draft or None)."""
+    path = draft_path()
+    if not os.path.isfile(path):
+        return "none", 0.0, None
+    age = max(0.0, (time.time() - os.path.getmtime(path)) / 3600.0)
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.loads(handle.read() or "{}")
+    except (OSError, ValueError):
+        return "unreadable", age, None
+    if not isinstance(data, dict) or not [key for key in data if not key.startswith("_")]:
+        return "empty", age, data if isinstance(data, dict) else None
+    if age > DRAFT_MAX_AGE_HOURS:
+        return "stale", age, data
+    return "resumable", age, data
+
+
+def read_draft():
+    """The draft as the assistant last wrote it. Raises ValueError with what to do when it cannot be used."""
+    path = draft_path()
+    if not os.path.isfile(path):
+        raise ValueError("There is no draft yet. Run the status command first, then write the draft to %s."
+                         % _tilde(path))
+    _lock_down()
+    with open(path, "r", encoding="utf-8") as handle:
+        text = handle.read()
+    try:
+        data = json.loads(text or "{}")
+    except ValueError as exc:
+        raise ValueError("The draft file is not valid JSON (%s). Write the whole draft again as one JSON object."
+                         % exc)
+    if not isinstance(data, dict):
+        raise ValueError("The draft must be one JSON object with the profile sections.")
+    owner = current_run()
+    if owner is None:
+        raise ValueError("No setup run is open. Run the status command first.")
+    if data.get("_run") != owner["run"]:
+        raise ValueError(
+            "This draft does not belong to the setup run that is open (run %s). Another setup session on this "
+            "computer may have taken over. Do not save and do not cancel. Tell the person, and run the status "
+            "command to see what is going on. Every draft must carry \"_run\": \"<the run id status gave you>\"."
+            % owner["run"])
+    touch_run()
+    return data
+
+
+def _checksum(draft):
+    return hashlib.sha256(json.dumps(draft, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+
 
 def _tilde(path):
     home = os.path.expanduser("~")
@@ -194,7 +352,8 @@ def profile_from_draft(draft):
     """Return (profile, inferred paths, new_vault flag). Helper keys are split off and never saved."""
     if not isinstance(draft, dict):
         raise ValueError("The draft must be a JSON object with the profile sections.")
-    inferred = [str(item) for item in draft.get("_inferred") or []]
+    from_resume = draft.get("_from_resume") if isinstance(draft.get("_from_resume"), dict) else {}
+    inferred = [str(item) for item in draft.get("_inferred") or []] + [str(key) for key in from_resume]
     new_vault = bool(draft.get("_new_vault"))
     profile = dict((key, value) for key, value in draft.items() if key not in HELPER_KEYS)
     profile.setdefault("schema_version", 1)
@@ -347,6 +506,82 @@ def summary_card(profile, inferred=()):
     return "\n".join(lines)
 
 
+def short_card(profile, inferred=()):
+    """The summary a person checks before saving: about twenty lines. The full version is summary_card."""
+    full = schema_check.apply_defaults(profile, wdprofile.load_schema())
+    inferred = set(inferred)
+
+    def mark(*paths):
+        return " (from your resume)" if any(path in inferred for path in paths) else ""
+
+    person, location = full.get("person") or {}, full.get("location") or {}
+    tracks, jobs = full.get("tracks") or {}, full.get("jobs") or {}
+    contracts, networking = full.get("contracts") or {}, full.get("networking") or {}
+    lines = []
+
+    def row(label, text):
+        lines.append("%-12s %s" % (label, text))
+
+    row("You", "%s. %s%s" % (person.get("name", "(name missing)"), person.get("headline", ""),
+                             mark("person.name", "person.headline")))
+    skills = (full.get("skills") or {}).get("core") or []
+    if skills:
+        row("", "Strongest in: %s%s" % (_join(skills[:5]), mark("skills.core")))
+    names = {"jobs": "salaried jobs", "contracts": "contract work", "networking": "networking"}
+    row("Sweeps", _join([names[key] for key in wdprofile.TRACKS if tracks.get(key)]) or "none")
+    if tracks.get("jobs") and jobs:
+        row("Jobs", "%s%s" % (_join((jobs.get("titles") or [])[:6]), mark("jobs.titles")))
+        bits = []
+        if jobs.get("levels"):
+            bits.append("Levels: %s" % _join(jobs["levels"]))
+        if jobs.get("salary_floor") is not None:
+            bits.append("Pay floor: %s a year%s" % (_money(jobs["salary_floor"]),
+                                                    ", aiming for %s" % _money(jobs["salary_target"])
+                                                    if jobs.get("salary_target") else ""))
+        if bits:
+            row("", ". ".join(bits) + ".")
+    if tracks.get("contracts") and contracts:
+        row("Contracts", "%s%s" % (_join((contracts.get("services") or [])[:5]), mark("contracts.services")))
+        bits = []
+        if contracts.get("rate_floor_hourly") is not None:
+            bits.append("Hourly floor: %s%s" % (_money(contracts["rate_floor_hourly"]),
+                                                ", aiming for %s" % _money(contracts["rate_target_hourly"])
+                                                if contracts.get("rate_target_hourly") else ""))
+        if contracts.get("engagement_types"):
+            bits.append("Ways of working: %s" % _join(contracts["engagement_types"]))
+        if bits:
+            row("", ". ".join(bits) + ".")
+    if tracks.get("networking") and networking:
+        row("Networking", "Meet: %s%s" % (_join((networking.get("who_to_meet") or [])[:4]),
+                                          mark("networking.who_to_meet")))
+    modes = location.get("work_modes") or []
+    reach = ", within %s miles" % location.get("radius_miles") if any(m in modes for m in ("hybrid", "onsite")) else ""
+    row("Where", "%s%s. %s%s. Relocation: %s." % (
+        location.get("home_base", "(missing)"), mark("location.home_base"), _join(modes) or "(work modes missing)",
+        reach, "yes" if location.get("open_to_relocation") else "no"))
+    employer = person.get("current_employer")
+    quiet = jobs.get("search_visibility") == "quiet"
+    if employer:
+        row("Keep quiet", "Current employer %s is always left out and never written in your notes." % employer)
+    row("" if employer else "Keep quiet", "Quiet search: %s." % ("yes" if quiet else "no"))
+    exclusions = full.get("exclusions") or []
+    left = ["%s%s" % (item.get("name"), " (until %s)" % item["until"] if item.get("until") else "")
+            for item in exclusions if item.get("action", "skip") == "skip"]
+    flagged = [str(item.get("name")) for item in exclusions if item.get("action") == "flag"]
+    row("Leave out", (_join(left) or "nothing") + (". Flag first: %s" % _join(flagged) if flagged else "") + ".")
+    confidential = (full.get("confidential") or {}).get("names") or []
+    if confidential:
+        row("", "Never named in your notes: %s." % _join(confidential))
+    mode = full.get("mode")
+    row("Each sweep", "Up to %s new items in the digest. %s mode." % (
+        (full.get("digest") or {}).get("max_new_items"), "Lite" if mode == "lite" else "Full"))
+    row("", "Browser, signed-in LinkedIn, calendar and spreadsheet copy: off unless you turned them on.")
+    storage = full.get("storage") or {}
+    row("Tracker", "%s, in a folder called %s. Nothing outside that folder is written." % (
+        storage.get("vault_path", "(vault missing)"), storage.get("vault_folder")))
+    return "\n".join(lines)
+
+
 def review(draft):
     """Check a draft. Returns a dict with the summary, blocking problems and questions to ask."""
     profile, inferred, new_vault = profile_from_draft(draft)
@@ -359,13 +594,27 @@ def review(draft):
     if isinstance(storage, dict) and storage.get("vault_path") and not any(p.path.startswith("storage") for p in problems):
         vault_ok, vault_message = check_vault(storage["vault_path"], storage.get("vault_folder") or "workdecero",
                                               allow_new=new_vault)
+    from_resume = draft.get("_from_resume") if isinstance(draft.get("_from_resume"), dict) else {}
+    dropped_ok = set(str(item) for item in draft.get("_dropped") or [])
+    missing = []
+    for dotted, value in from_resume.items():
+        node = profile
+        for key in str(dotted).split("."):
+            node = node.get(key) if isinstance(node, dict) else None
+        if node in (None, "", [], {}) and value not in (None, "", [], {}) and dotted not in dropped_ok:
+            missing.append((str(dotted), value))
     return {"profile": profile, "inferred": inferred, "new_vault": new_vault, "problems": problems,
-            "questions": questions, "vault_ok": vault_ok, "vault_message": vault_message}
+            "questions": questions, "vault_ok": vault_ok, "vault_message": vault_message, "missing": missing}
 
 
-def _print_review(result, show_file=False, out=None):
+def _blocked(result):
+    return bool(result["problems"] or result["questions"] or result.get("missing") or not result["vault_ok"])
+
+
+def _print_review(result, show_file=False, out=None, details=False):
     out = out or sys.stdout
-    print(summary_card(result["profile"], result["inferred"]), file=out)
+    card = summary_card if details else short_card
+    print(card(result["profile"], result["inferred"]), file=out)
     print("", file=out)
     if result["problems"]:
         print("TO FIX BEFORE THIS CAN BE SAVED (%d)" % len(result["problems"]), file=out)
@@ -381,8 +630,17 @@ def _print_review(result, show_file=False, out=None):
         print("QUESTIONS TO ASK BEFORE SAVING (%d)" % len(result["questions"]), file=out)
         for question in result["questions"]:
             print("  %s %s" % (question.path, question.message), file=out)
-    if not (result["problems"] or result["questions"]) and result["vault_ok"]:
-        print("READY TO SAVE. Nothing has been written yet.", file=out)
+    if result.get("missing"):
+        print("READ FROM THE RESUME BUT NO LONGER IN THE DRAFT (%d)" % len(result["missing"]), file=out)
+        for dotted, value in result["missing"]:
+            shown = ", ".join(str(item) for item in value) if isinstance(value, list) else str(value)
+            print("  %s: %s" % (dotted, shown if len(shown) <= 90 else shown[:87] + "..."), file=out)
+        print("  Put each one back in the draft, or ask the person whether to leave it out and then list its "
+              "name under \"_dropped\".", file=out)
+    if _blocked(result):
+        pass
+    else:
+        print("READY TO SAVE. Nothing has been saved yet.", file=out)
     if show_file:
         print("\n----- profile file as it would be written -----", file=out)
         print(profile_text(result["profile"]), file=out)
@@ -416,12 +674,21 @@ def write(draft, out=None):
     """Validate the draft and, only if everything is fine, write the profile and set up the vault folder."""
     out = out or sys.stdout
     result = review(draft)
-    if result["problems"] or not result["vault_ok"] or result["questions"]:
+    if _blocked(result):
         _print_review(result, out=out)
         if result["questions"] and not result["problems"] and result["vault_ok"]:
             print("\nAsk the person each question above. If they keep a value as it is, add its name to "
-                  "\"_confirmed\" in the draft and save again.", file=out)
-        print("\nNothing was written.", file=out)
+                  "\"_confirmed\" in the draft, preview again and then save.", file=out)
+        print("\nNothing was saved.", file=out)
+        return 1
+    shown = None
+    if os.path.isfile(_shown_path()):
+        with open(_shown_path(), "r", encoding="utf-8") as handle:
+            shown = handle.read().strip()
+    if shown != _checksum(draft):
+        print("The draft has changed since the person last saw the summary (or no summary was shown yet). "
+              "Run the preview command, show them the summary, and save only after they agree to it.", file=out)
+        print("\nNothing was saved.", file=out)
         return 1
     profile = result["profile"]
     storage = profile["storage"]
@@ -474,11 +741,16 @@ def write(draft, out=None):
     print(PRIVACY, file=out)
     for line in store.skipped_report():
         print(line, file=out)
+    delete_draft()          # the answers now live in the profile. The temporary copy goes
     return 0
 
 
-def import_connections(path, include_emails=False, out=None):
+def import_connections(out=None):
+    """Add the LinkedIn connections file named in the draft to the People notes, then delete the draft."""
     out = out or sys.stdout
+    draft = read_draft()
+    path = str(draft.get("_connections_path") or "").strip()
+    include_emails = draft.get("_include_emails") is True
     try:
         profile, problems = wdprofile.load()
     except OSError:
@@ -487,9 +759,9 @@ def import_connections(path, include_emails=False, out=None):
         print("Finish setup first: there is no saved profile yet.", file=out)
         return 1
     full = os.path.expanduser(path)
-    if not os.path.isfile(full):
+    if not path or not os.path.isfile(full):
         print("No file at %s. In LinkedIn: Settings, Data privacy, Get a copy of your data, Connections. "
-              "The download contains Connections.csv." % path, file=out)
+              "The download contains Connections.csv." % (path or "(no path given)"), file=out)
         return 1
     with open(full, "r", encoding="utf-8", errors="replace") as handle:
         text = handle.read()
@@ -507,6 +779,7 @@ def import_connections(path, include_emails=False, out=None):
     if plan.skipped_unnamed:
         print("%d rows had no name in LinkedIn's file and were skipped." % plan.skipped_unnamed, file=out)
     print("Email addresses: %s." % ("included, as you asked" if include_emails else "not included"), file=out)
+    delete_draft()
     return 0
 
 
@@ -514,19 +787,116 @@ def import_connections(path, include_emails=False, out=None):
 # Commands
 # --------------------------------------------------------------------------
 
-def status(out=None):
-    out = out or sys.stdout
+def _open_run(out, seed_from_profile=True):
+    """Start a run, prepare the private draft file and describe what the assistant has to work with."""
     existing, problems = load_existing()
-    report = {
-        "profile_path": _tilde(wdprofile.profile_path()),
-        "profile_exists": existing is not None or bool(problems),
-        "profile_problems": problems,
-        "profile": existing,
-        "summary": summary_card(existing) if existing and not problems else None,
-        "known_vaults": known_vaults(),
-        "today": datetime.date.today().isoformat(),
-    }
-    print(json.dumps(report, indent=1), file=out)
+    run = start_run()
+    seeded = False
+    if existing is not None and not problems and seed_from_profile:
+        seed = dict(existing)
+        seed["_run"] = run
+        prepare_draft(json.dumps(seed, indent=1, ensure_ascii=False) + "\n")
+        seeded = True
+    else:
+        prepare_draft(json.dumps({"_run": run}) + "\n")
+    _lock_down()
+    print("RUN ID: %s" % run, file=out)
+    print("  Put \"_run\": \"%s\" in every draft you write. A draft without it is refused." % run, file=out)
+    print("DRAFT FILE: %s" % draft_path(), file=out)
+    print("  Private to this user, and deleted when setup is saved or cancelled.", file=out)
+    print("", file=out)
+    if problems:
+        print("SAVED PROFILE: %s has problems:" % _tilde(wdprofile.profile_path()), file=out)
+        for line in problems:
+            print("  " + line.replace("\n", "\n  "), file=out)
+    elif existing is not None:
+        print("SAVED PROFILE: yes, at %s. This is a change, not a first setup." % _tilde(wdprofile.profile_path()),
+              file=out)
+        if seeded:
+            print("  The draft file now holds the saved profile. Read it, change only what the person asks for, "
+                  "and write it back.", file=out)
+        print("", file=out)
+        print(short_card(existing), file=out)
+    else:
+        print("SAVED PROFILE: none. This is a first setup.", file=out)
+    print("", file=out)
+    vaults = known_vaults()
+    if vaults:
+        print("OBSIDIAN VAULTS ON THIS COMPUTER:", file=out)
+        for item in vaults:
+            print("  %s   (%s)" % (item["name"], item["shown"]), file=out)
+    else:
+        print("OBSIDIAN VAULTS ON THIS COMPUTER: none found. Ask for the vault folder, or offer to create one.",
+              file=out)
+    print("TODAY: %s" % datetime.date.today().isoformat(), file=out)
+    return run
+
+
+def status(out=None):
+    """Open a setup run. Never deletes another run's recent work without being told to."""
+    out = out or sys.stdout
+    state, age_hours, old = draft_state()
+    idle = minutes_since_activity()
+    owner = current_run()
+    if owner is not None and idle is not None and idle < RUN_ACTIVE_MINUTES:
+        print("ANOTHER SETUP IS IN PROGRESS (run %s, last activity %d minute%s ago)." % (
+            owner["run"], int(idle), "" if int(idle) == 1 else "s"), file=out)
+        print("  If %s is the run id you were given earlier in this same conversation, carry on with it." % owner["run"],
+              file=out)
+        print("  Otherwise tell the person that setup is already running in another session on this computer. "
+              "Only if they want to discard that one, run the takeover command.", file=out)
+        return 1
+    note = None
+    if state == "resumable":
+        # Left by a session that ended without saving. Offer it once, then it is this run's draft.
+        name = ((old or {}).get("person") or {}).get("name") or "someone"
+        hours = int(age_hours)
+        note = ("UNFINISHED SETUP FOUND: started for %s, last touched %s ago. Ask the person whether to pick it up "
+                "or start over. To pick it up, read the draft file and write it back with the new run id. To start "
+                "over, run the cancel command and then status again."
+                % (name, "%d hour%s" % (hours, "" if hours == 1 else "s") if hours else "under an hour"))
+        run = start_run()
+        kept = dict(old)
+        kept["_run"] = run
+        prepare_draft(json.dumps(kept, indent=1, ensure_ascii=False) + "\n")
+        if os.path.isfile(_shown_path()):
+            os.remove(_shown_path())
+        print("RUN ID: %s" % run, file=out)
+        print("  Put \"_run\": \"%s\" in every draft you write. A draft without it is refused." % run, file=out)
+        print("DRAFT FILE: %s" % draft_path(), file=out)
+        print("", file=out)
+        print(note, file=out)
+        print("", file=out)
+        vaults = known_vaults()
+        print("OBSIDIAN VAULTS ON THIS COMPUTER: %s" % (
+            "; ".join("%s (%s)" % (item["name"], item["shown"]) for item in vaults) or "none found"), file=out)
+        print("TODAY: %s" % datetime.date.today().isoformat(), file=out)
+        return 0
+    if state in ("stale", "unreadable"):
+        delete_draft()
+        print("An unfinished setup draft from an earlier session was too old to use and has been deleted.", file=out)
+        print("", file=out)
+    elif state == "empty" or owner is not None:
+        delete_draft()
+    _open_run(out)
+    return 0
+
+
+def takeover(out=None):
+    """Discard another session's unfinished setup, at the person's request, and start fresh."""
+    out = out or sys.stdout
+    delete_draft()
+    print("The other setup was discarded. Starting fresh.", file=out)
+    print("", file=out)
+    _open_run(out)
+    return 0
+
+
+def cancel(out=None):
+    out = out or sys.stdout
+    removed = delete_draft()
+    print("Setup cancelled. %s Nothing was saved, and your profile and vault are as they were."
+          % ("The draft was deleted." if removed else "There was no draft."), file=out)
     return 0
 
 
@@ -560,49 +930,73 @@ def fields(out=None):
     return 0
 
 
-def _read_draft(argv=()):
-    """The draft, from --draft '<json>' on the command line or, failing that, from standard input."""
-    argv = list(argv)
-    if "--draft" in argv:
-        index = argv.index("--draft")
-        if index + 1 >= len(argv):
-            raise ValueError("--draft needs the draft JSON after it, in single quotes.")
-        text = argv[index + 1]
-    else:
-        text = sys.stdin.read()
-    try:
-        return json.loads(text)
-    except ValueError as exc:
-        raise ValueError("The draft is not valid JSON (%s). Send the draft as one JSON object." % exc)
+def _mark_shown(draft):
+    """Remember exactly which draft the person was shown, so only that draft can be saved."""
+    handle = os.open(_shown_path(), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(handle, "w", encoding="utf-8") as out:
+        out.write(_checksum(draft))
+
+
+def preview(out=None, details=False, show_file=False):
+    out = out or sys.stdout
+    draft = read_draft()
+    result = review(draft)
+    _print_review(result, show_file=show_file, out=out, details=details)
+    if _blocked(result):
+        if os.path.isfile(_shown_path()):
+            os.remove(_shown_path())
+        return 1
+    _mark_shown(draft)
+    return 0
+
+
+COMMANDS = ("status", "takeover", "fields", "read-resume", "check-vault", "preview", "preview-details",
+            "preview-file", "write", "cancel", "import-connections")
 
 
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     command = argv[0] if argv else ""
+    if len(argv) != 1 or command not in COMMANDS:
+        print(__doc__, file=sys.stderr)
+        if len(argv) > 1:
+            print("This helper takes no arguments. Put paths and answers in the draft file.", file=sys.stderr)
+        return 2
     try:
         if command == "status":
             return status()
+        if command == "takeover":
+            return takeover()
         if command == "fields":
             return fields()
-        if command == "read-resume" and len(argv) == 2:
-            print(read_resume(argv[1]))
+        if command == "cancel":
+            return cancel()
+        if command == "read-resume":
+            path = str(read_draft().get("_resume_path") or "").strip()
+            if not path:
+                raise ValueError("Put the resume file's path in the draft as \"_resume_path\" first.")
+            print(read_resume(path))
             return 0
-        if command == "check-vault" and len(argv) in (2, 3):
-            ok, message = check_vault(argv[1], argv[2] if len(argv) == 3 else "workdecero")
+        if command == "check-vault":
+            draft = read_draft()
+            storage = draft.get("storage") if isinstance(draft.get("storage"), dict) else {}
+            ok, message = check_vault(storage.get("vault_path"), storage.get("vault_folder") or "workdecero",
+                                      allow_new=draft.get("_new_vault") is True)
             print(("OK: " if ok else "REFUSED: ") + message)
             return 0 if ok else 1
         if command == "preview":
-            result = review(_read_draft(argv))
-            _print_review(result, show_file="--file" in argv)
-            return 1 if (result["problems"] or not result["vault_ok"] or result["questions"]) else 0
+            return preview()
+        if command == "preview-details":
+            return preview(details=True)
+        if command == "preview-file":
+            return preview(show_file=True)
         if command == "write":
-            return write(_read_draft(argv))
-        if command == "import-connections" and len(argv) >= 2:
-            return import_connections(argv[1], include_emails="--include-emails" in argv)
+            return write(read_draft())
+        if command == "import-connections":
+            return import_connections()
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 2
-    print(__doc__, file=sys.stderr)
     return 2
 
 

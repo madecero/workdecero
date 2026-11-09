@@ -47,6 +47,7 @@ Nothing personal is stored in this repository or in the plugin folder.
 | --- | --- | --- |
 | Profile and local source map | `~/.config/workdecero/` | Location can be overridden. Untouched by updates and by uninstall. |
 | Trackers (postings, contracts, groups, events, people, companies) | Your Obsidian vault | Plain Markdown notes that you own. |
+| Setup draft | `~/.cache/workdecero/setup-draft.json` | Temporary. Holds your answers only while setup is running, readable by you alone, and deleted when setup is saved or cancelled. |
 | Cache | The plugin data folder managed by Claude Code | Safe to lose. Removed when the plugin is uninstalled. |
 
 ## Your profile
