@@ -1,0 +1,11 @@
+{
+  "name": "workdecero",
+  "owner": { "name": "madecero" },
+  "plugins": [
+    {
+      "name": "workdecero",
+      "source": "./",
+      "description": "Weekly job, contract and networking sweeps driven by your own profile."
+    }
+  ]
+}

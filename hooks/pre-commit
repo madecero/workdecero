@@ -1,0 +1,4 @@
+#!/bin/sh
+# Blocks a commit that contains a denylisted name or personal data.
+root=$(git rev-parse --show-toplevel) || exit 1
+exec python3 "$root/dev/leak_guard.py" --staged

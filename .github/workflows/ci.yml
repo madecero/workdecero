@@ -1,0 +1,33 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.13"]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Leak guard (generic patterns, whole tree)
+        run: python3 dev/leak_guard.py --tree --no-denylist
+      - name: Manifest validation
+        run: python3 dev/validate_manifests.py .
+      - name: Tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Version bump check
+        if: github.event_name == 'pull_request'
+        run: python3 dev/check_version_bump.py "origin/${{ github.base_ref }}"

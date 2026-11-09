@@ -1,0 +1,4 @@
+#!/bin/sh
+# Commit messages become public history, so they get the same scan.
+root=$(git rev-parse --show-toplevel) || exit 1
+exec python3 "$root/dev/leak_guard.py" --message "$1"
