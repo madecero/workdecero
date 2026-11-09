@@ -235,6 +235,19 @@ class Preview(SetupCase):
         self.assertEqual(profile["person"]["resume_path"], os.path.join("~", "Documents", "resume.pdf"))
         self.assertEqual(profile["storage"]["vault_path"], self.vault)      # not under home: left as given
 
+    def test_draft_can_be_passed_on_the_command_line_with_escaped_apostrophes(self):
+        draft = self.draft()
+        draft["person"]["headline"] = "Leader who doesn't ship slideware"
+        text = json.dumps(draft).replace("'", "\\u0027")
+        self.assertNotIn("'", text)
+        self.assertNotIn("\n", text)
+        code, out, _ = self.run_tool("preview", "--draft", text)
+        self.assertEqual(code, 0, out)
+        self.assertIn("  Leader who doesn't ship slideware", out)
+        code, _, err = self.run_tool("preview", "--draft")
+        self.assertEqual(code, 2)
+        self.assertIn("--draft needs the draft JSON", err)
+
     def test_broken_draft_is_reported_not_guessed_at(self):
         out, err = io.StringIO(), io.StringIO()
         stdin, sys.stdin = sys.stdin, io.StringIO("{ not json")
@@ -447,8 +460,16 @@ class SkillText(unittest.TestCase):
         for command in named:
             self.assertIn('command == "%s"' % command, open(setup_tool.__file__, encoding="utf-8").read())
 
-    def test_the_script_path_uses_the_plugin_root(self):
-        self.assertIn('python3 "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup_tool.py"', self.text)
+    def test_only_the_helper_may_run_without_a_prompt(self):
+        front = self.text.split("---")[1]
+        self.assertIn('allowed-tools: Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" *), Read, '
+                      'AskUserQuestion', front)
+        self.assertNotIn("Bash(python3:*)", self.text)
+        self.assertNotIn("Bash(python3 *)", self.text)
+        # Every helper call in the instructions uses the exact form the rule allows.
+        self.assertIn('python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" preview --draft', self.text)
+        self.assertNotIn("<<", self.text)
+        self.assertNotIn("CLAUDE_PLUGIN_ROOT", self.text)
 
 
 if __name__ == "__main__":

@@ -6,8 +6,9 @@ and never on disk. This script turns the draft into things a person can
 check, and does every write, so nothing is written by hand and nothing is
 written before the person says yes.
 
-A draft is JSON on standard input: the profile itself (the same sections as
-profile.yaml), plus two optional helper keys that are never saved:
+A draft is JSON passed after --draft in single quotes (or on standard input):
+the profile itself (the same sections as profile.yaml), plus optional helper
+keys that are never saved:
 
     "_inferred": ["person.name", "jobs.titles", ...]   settings read from the resume
     "_new_vault": true                                  the person agreed to create a new vault folder
@@ -18,9 +19,9 @@ Commands:
     fields                     every profile setting with its description, for drafting
     read-resume PATH           the text of a .txt, .md or .docx resume (reads only)
     check-vault PATH [FOLDER]  whether a folder can hold the tracker (reads only)
-    preview                    draft in, plain-language summary and open questions out (writes nothing)
-    preview --file             the same, plus the profile file as it would be written
-    write                      draft in. Validates, then writes the profile and sets up the vault folder
+    preview --draft JSON       draft in, plain-language summary and open questions out (writes nothing)
+    preview --file --draft JSON   the same, plus the profile file as it would be written
+    write --draft JSON         draft in. Validates, then writes the profile and sets up the vault folder
     import-connections PATH [--include-emails]
                                add LinkedIn's Connections.csv to the People notes
 
@@ -559,8 +560,16 @@ def fields(out=None):
     return 0
 
 
-def _read_draft():
-    text = sys.stdin.read()
+def _read_draft(argv=()):
+    """The draft, from --draft '<json>' on the command line or, failing that, from standard input."""
+    argv = list(argv)
+    if "--draft" in argv:
+        index = argv.index("--draft")
+        if index + 1 >= len(argv):
+            raise ValueError("--draft needs the draft JSON after it, in single quotes.")
+        text = argv[index + 1]
+    else:
+        text = sys.stdin.read()
     try:
         return json.loads(text)
     except ValueError as exc:
@@ -583,11 +592,11 @@ def main(argv=None):
             print(("OK: " if ok else "REFUSED: ") + message)
             return 0 if ok else 1
         if command == "preview":
-            result = review(_read_draft())
+            result = review(_read_draft(argv))
             _print_review(result, show_file="--file" in argv)
             return 1 if (result["problems"] or not result["vault_ok"] or result["questions"]) else 0
         if command == "write":
-            return write(_read_draft())
+            return write(_read_draft(argv))
         if command == "import-connections" and len(argv) >= 2:
             return import_connections(argv[1], include_emails="--include-emails" in argv)
     except ValueError as exc:

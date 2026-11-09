@@ -1,7 +1,7 @@
 ---
 name: setup
 description: First-run setup and later changes for workdecero. Use when the user runs /workdecero:setup, asks to set up workdecero, or wants to change what the job, contract or networking sweeps look for (titles, pay floor, location, leave-outs, vault, digest size).
-allowed-tools: Bash(python3:*), Read, AskUserQuestion
+allowed-tools: Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" *), Read, AskUserQuestion
 ---
 
 # workdecero setup
@@ -24,7 +24,7 @@ You are setting up workdecero for one person: turning their resume and a short c
 Run it with Bash. `TOOL` below means:
 
 ```
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup_tool.py"
+python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py"
 ```
 
 | Command | What it does | Writes? |
@@ -33,18 +33,23 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup_tool.py"
 | `TOOL fields` | Every profile setting with its meaning, choices and defaults | no |
 | `TOOL read-resume "PATH"` | Text of a .txt, .md or .docx resume. For a PDF, use the Read tool on the file instead | no |
 | `TOOL check-vault "PATH" "FOLDER"` | Whether that folder can hold the tracker, with a plain reason if not | no |
-| `TOOL preview` | Draft in on standard input, summary card and open questions out | no |
-| `TOOL preview --file` | The same, plus the profile file as it would be saved. Only when asked | no |
-| `TOOL write` | Draft in. Checks everything, then saves the profile and adds the tracker folder | **yes** |
+| `TOOL preview --draft 'JSON'` | Draft in, summary card and open questions out | no |
+| `TOOL preview --file --draft 'JSON'` | The same, plus the profile file as it would be saved. Only when asked | no |
+| `TOOL write --draft 'JSON'` | Draft in. Checks everything, then saves the profile and adds the tracker folder | **yes** |
 | `TOOL import-connections "PATH" [--include-emails]` | Adds LinkedIn connections to the People notes. Only after `write` | **yes** |
 
-Send a draft like this (a quoted heredoc, so nothing in it is expanded):
+Pass the draft as one line of JSON in single quotes after `--draft`:
 
 ```
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup_tool.py" preview <<'DRAFT'
-{ "person": { "name": "..." }, "...": "..." }
-DRAFT
+python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" preview --draft '{"person":{"name":"..."},"location":{"home_base":"..."}}'
 ```
+
+Two rules keep that command safe and free of permission prompts:
+
+* Keep the JSON on **one line**, with no line breaks.
+* The JSON must contain **no single quote character**. Write an apostrophe inside a value as `\u0027` (so `don't` becomes `don\u0027t`). The helper turns it back.
+
+Always run the helper as a single plain command in exactly this form: no pipes, no `&&`, no heredocs, no `cd`, and nothing before `python3`.
 
 **The draft** is one JSON object with the same sections as the profile (`person`, `location`, `tracks`, `skills`, `jobs`, `contracts`, `networking`, `exclusions`, `confidential`, `storage`, `mode`, `digest`, and so on). Two extra keys help the script and are never saved:
 
