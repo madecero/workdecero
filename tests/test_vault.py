@@ -78,7 +78,8 @@ class RoundTrip(VaultCase):
         self.assertEqual(properties["wd_fit"], 80)
         self.assertIsInstance(properties["wd_pay_max"], int)
         self.assertIn("wd_first_seen: 2026-11-05\n", text)       # a bare date, which Obsidian reads as a date
-        self.assertIn("wd_next_step:\n", text)                    # ready to fill in
+        for unset in ("wd_next_step", "wd_applied_on", "wd_next_step_date", "wd_contact"):
+            self.assertNotIn(unset, text)                          # appears once the user sets it
         self.assertEqual(body, "%s\nWhy it fits: level and focus match.\n%s\n"
                          % (model.SECTION_START, model.SECTION_END))
         self.assertEqual(row.path, "workdecero/Jobs/Head of Product, Mile High Analytics.md")
@@ -129,7 +130,34 @@ class RoundTrip(VaultCase):
         self.store.upsert("job", "J-1", "", {"fit": 50, "closes": "2026-12-01"})
         after = [line.split(":")[0] for line in self.read(row).split("---")[1].strip().splitlines()
                  if not line.startswith(" ")]
-        self.assertEqual(after, before + ["wd_closes"])
+        self.assertEqual([key for key in after if key != "wd_closes"], before)   # nothing else moved
+        self.assertLess(after.index("wd_closes"), after.index("wd_posted"))      # slotted in by model order
+
+    def test_what_a_reader_acts_on_comes_first_and_bookkeeping_last(self):
+        row = self.store.upsert("job", "J-9", "VP of Product, Example Co", {
+            "role": "VP of Product", "fit": 88, "pay_max": 270000, "pay_min": 230000, "work_mode": "Remote",
+            "company": self.store.link("company", "Example Co"), "contact_first": "Pat Example (1st).",
+            "apply_url": "https://jobs.example.com/1", "posted": "2026-11-04", "first_seen": "2026-11-05",
+            "last_seen": "2026-11-09", "updated": "2026-11-09", "source": "Company site", "req_id": "R-1",
+            "liveness": "live", "last_checked": "2026-11-09"})
+        keys = [line.split(":")[0] for line in self.read(row).split("---")[1].strip().splitlines()
+                if not line.startswith(" ")]
+        self.assertEqual(keys[:6], ["wd_status", "wd_fit", "wd_pay_max", "wd_pay_min", "wd_company",
+                                    "wd_contact_first"])
+        self.assertEqual(keys[-2:], ["wd_id", "wd_type"])
+        for early, late in (("wd_apply_url", "wd_posted"), ("wd_role", "wd_first_seen"),
+                            ("wd_work_mode", "wd_last_checked"), ("wd_last_checked", "wd_source")):
+            self.assertLess(keys.index(early), keys.index(late), (early, late))
+
+    def test_a_property_the_user_sets_later_lands_with_its_neighbours(self):
+        row = self.make_job()
+        self.store.upsert("job", "J-1", "", {"applied_on": "2026-11-08", "next_step": "Call"},
+                          force=["applied_on", "next_step"])
+        keys = [line.split(":")[0] for line in self.read(row).split("---")[1].strip().splitlines()
+                if not line.startswith(" ")]
+        self.assertLess(keys.index("wd_applied_on"), keys.index("wd_next_step"))
+        self.assertLess(keys.index("wd_next_step"), keys.index("wd_posted"))
+        self.assertLess(keys.index("wd_next_step"), keys.index("wd_id"))
 
     def test_force_changes_a_user_owned_property(self):
         self.make_job()
@@ -540,6 +568,20 @@ class Views(unittest.TestCase):
     def test_view_files_survive_a_yaml_round_trip(self):
         for name, content in self.files.items():
             self.assertEqual(miniyaml.loads(miniyaml.dumps(content)), content, name)
+
+    def test_people_views_separate_who_you_know_from_who_research_found(self):
+        views = dict((view["name"], view) for view in self.files["People.base"]["views"])
+        self.assertEqual(list(views), ["Warm paths", "Contacts at target companies", "Follow-ups due"])
+        self.assertIn("['1st', '2nd'].contains(wd_relationship)", views["Warm paths"]["filters"]["and"])
+        self.assertIn("!['1st', '2nd'].contains(wd_relationship)",
+                      views["Contacts at target companies"]["filters"]["and"])
+        self.assertIn("wd_email", views["Contacts at target companies"]["order"])
+        self.assertNotIn("wd_email", views["Warm paths"]["order"])
+
+    def test_start_here_mentions_the_setting_without_changing_it(self):
+        text = bases.start_here("workdecero")
+        self.assertIn("Properties in document", text)
+        self.assertIn("workdecero never changes Obsidian's settings", text)
 
     def test_start_here_embeds_views_that_exist(self):
         import re

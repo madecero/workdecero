@@ -113,15 +113,15 @@ class WarmCase(unittest.TestCase):
 class Found(WarmCase):
     def test_facts_come_one_per_bullet_in_the_agreed_order(self):
         labels = [line.split(":**")[0].replace("- **", "") for line in self.lines(self.build(self.full_research()))]
-        self.assertEqual(labels, ["Hiring manager", "Skip-level", "Recruiter", "Email format",
+        self.assertEqual(labels, ["Contact first", "Hiring manager", "Skip-level", "Recruiter", "Email format",
                                   "1st-degree connections", "Insiders", "Warm paths", "Note", "Next step"])
 
     def test_named_people_are_linked_with_an_address_percent_and_basis(self):
         text = self.build(self.full_research()).text
         self.assertIn("- **Hiring manager:** [[workdecero/People/Marcus Oyelaran|Marcus Oyelaran]], Chief Technology "
                       "Officer ([source](https://frontrange.example.com/team)). Email: "
-                      "marcus.oyelaran@frontrange.example.com (75%: format confirmed by two or more current addresses).",
-                      text)
+                      "marcus.oyelaran@frontrange.example.com (email confidence 75%: format confirmed by two or more "
+                      "current addresses).", text)
         self.assertIn("- **Email format:** first.last@frontrange.example.com (format confirmed by two or more "
                       "current addresses) ([source](https://frontrange.example.com/press)).", text)
 
@@ -134,26 +134,89 @@ class Found(WarmCase):
     def test_function_level_recruiter_is_marked_low_confidence(self):
         text = self.build(self.full_research()).text
         recruiter = [line for line in text.split("\n") if line.startswith("- **Recruiter")][0]
-        self.assertTrue(recruiter.endswith("Low confidence: recruits for this kind of role, not confirmed on this "
-                                           "posting."))
+        # The address and the role match are two separate judgements, each labelled.
+        self.assertIn("(email confidence 75%: format confirmed by two or more current addresses).", recruiter)
+        self.assertTrue(recruiter.endswith("Role match: low confidence. Recruits for this kind of role, not "
+                                           "confirmed on this posting."))
         research = self.full_research()
         research["recruiter"]["scope"] = "posting"
-        self.assertNotIn("Low confidence", self.build(research).text)
+        confirmed = [line for line in self.build(research).text.split("\n") if line.startswith("- **Recruiter")][0]
+        self.assertTrue(confirmed.endswith("Role match: named on this posting."))
 
     def test_connections_and_paths_come_from_the_network_only(self):
         text = self.build(self.full_research()).text
         self.assertIn("- **1st-degree connections:** [[workdecero/People/Priya Raman|Priya Raman]], VP Engineering.",
                       text)
-        self.assertIn("[[workdecero/People/Aisha Karim|Aisha Karim]] knows Marcus Oyelaran (same team at a past "
-                      "company)", text)
+        self.assertIn("[[workdecero/People/Aisha Karim|Aisha Karim (1st)]] knows Marcus Oyelaran (same team at a "
+                      "past company)", text)
         self.assertNotIn("Somebody Unknown", text)       # not in the network, so cannot introduce
+
+    def test_someone_you_know_at_the_company_is_a_warm_path_everywhere(self):
+        """The bullet, the property behind the table column and the first line must agree."""
+        research = {"hiring_manager": {"name": "Marcus Oyelaran", "title": "CTO"}}
+        warm = self.build(research)
+        lines = dict((line.split(":**")[0][4:], line) for line in self.lines(warm))
+        self.assertEqual(lines["Warm paths"],
+                         "- **Warm paths:** [[workdecero/People/Priya Raman|Priya Raman (1st)]] works there.")
+        self.assertEqual(lines["1st-degree connections"],
+                         "- **1st-degree connections:** [[workdecero/People/Priya Raman|Priya Raman]], VP Engineering.")
+        job_values = warm.operations[-1]["values"]
+        self.assertEqual(job_values["warm_path"], ["[[workdecero/People/Priya Raman|Priya Raman (1st)]]"])
+        self.assertTrue(lines["Contact first"].startswith("- **Contact first:** Priya Raman (1st), for a warm "
+                                                          "introduction."))
+        self.assertEqual(job_values["contact_first"], lines["Contact first"][len("- **Contact first:** "):])
+        self.assertEqual(warm.warm, "1st")
+        # And the other way round: nobody known means no warm path in any of the three places.
+        self.store.upsert("person", "P-1", "Priya Raman", {"relationship": "Not connected"})
+        cold = self.build(research)
+        self.assertIn("- **Warm paths:** none found.", self.lines(cold))
+        self.assertEqual(cold.operations[-1]["values"]["warm_path"], [])
+        self.assertNotIn("warm introduction", cold.operations[-1]["values"]["contact_first"])
+
+    def test_second_degree_at_the_company_shows_its_degree(self):
+        self.store.upsert("person", "P-1", "Priya Raman", {"relationship": "2nd"})
+        warm = self.build({})
+        self.assertEqual(warm.operations[-1]["values"]["warm_path"],
+                         ["[[workdecero/People/Priya Raman|Priya Raman (2nd)]]"])
+        self.assertIn("Priya Raman (2nd)]] works there, one introduction away.", warm.text)
+        self.assertEqual(warm.warm, "2nd")
+
+    def test_contact_first_line_for_each_situation(self):
+        def first(research, **changes):
+            for name, values in changes.items():
+                self.store.upsert("person", {"priya": "P-1"}[name], "Priya Raman", values)
+            return self.lines(self.build(research))[0][len("- **Contact first:** "):]
+
+        manager = {"name": "Marcus Oyelaran", "title": "CTO"}
+        self.assertEqual(first({"hiring_manager": {"name": "Priya Raman", "title": "VP Engineering"}}),
+                         "Priya Raman, directly. A 1st-degree connection who is on the hiring team.")
+        self.assertEqual(first({"hiring_manager": manager}),
+                         "Priya Raman (1st), for a warm introduction. A connection of yours who works there.")
+        nobody = {"relationship": "Not connected"}
+        self.assertEqual(first({"hiring_manager": manager,
+                                "warm_paths": [{"via": "Aisha Karim", "to": "Marcus Oyelaran"}]}, priya=nobody),
+                         "Aisha Karim (1st), for a warm introduction to Marcus Oyelaran.")
+        self.assertEqual(first({"hiring_manager": manager, "email_format": TWO}),
+                         "Marcus Oyelaran, the hiring manager, directly by email (email confidence 75%). No one in "
+                         "your network works there.")
+        self.assertEqual(first({"recruiter": {"name": "Dana Whitcombe", "scope": "posting"}, "email_format": TWO}),
+                         "Dana Whitcombe, the recruiter on this posting, directly by email (email confidence 75%).")
+        self.assertEqual(first({"hiring_manager": manager}),
+                         "Marcus Oyelaran, the hiring manager, directly. No email was found, so use LinkedIn or the "
+                         "application.")
+        self.assertEqual(first({"hiring_manager": {"title": "VP of Product"}}),
+                         "No one found yet. Apply directly; the hiring manager is likely VP of Product.")
+        self.assertEqual(first({}), "No one found yet. Apply directly.")
+        # A recruiter who only recruits for this kind of role is not who to contact first.
+        self.assertEqual(first({"recruiter": {"name": "Dana Whitcombe", "scope": "function"}, "email_format": TWO}),
+                         "No one found yet. Apply directly.")
 
     def test_warm_tier_for_scoring(self):
         self.assertEqual(self.build(self.full_research()).warm, "1st")
         research = self.full_research()
         research["hiring_manager"]["name"] = "Priya Raman"
         self.assertEqual(self.build(research).warm, "1st-hiring-team")
-        self.store.upsert("person", "P-1", "Priya Raman", {"relationship": "None"})
+        self.store.upsert("person", "P-1", "Priya Raman", {"relationship": "Not connected"})
         self.assertEqual(self.build(self.full_research()).warm, "2nd-hiring-team")
         research = self.full_research()
         research["warm_paths"] = [{"via": "Aisha Karim", "to": "someone in finance"}]
@@ -169,14 +232,17 @@ class Found(WarmCase):
         self.assertEqual(self.store.changed[-1:], self.store.changed[-1:])
         self.store.apply(operations)
         job = self.store.get("job", "J-1")
-        self.assertTrue(job.section.startswith("**Fit 87**: background 30/40.\n\n### Warm path\n\n- **Hiring manager:**"))
-        self.assertEqual(job.values["warm_path"], ["[[workdecero/People/Priya Raman|Priya Raman]]",
-                                                   "[[workdecero/People/Aisha Karim|Aisha Karim]]"])
+        self.assertTrue(job.section.startswith("**Fit 87**: background 30/40.\n\n### Warm path\n\n- **Contact first:**"))
+        self.assertEqual(job.values["warm_path"], ["[[workdecero/People/Priya Raman|Priya Raman (1st)]]",
+                                                   "[[workdecero/People/Aisha Karim|Aisha Karim (1st)]]"])
+        self.assertEqual(job.values["contact_first"],
+                         "Priya Raman (1st), for a warm introduction. A connection of yours who works there.")
         people = dict((row.title, row) for row in self.store.rows("person"))
         self.assertEqual(sorted(people), ["Aisha Karim", "Dana Whitcombe", "Ines Carvalho-Reyes", "Marcus Oyelaran",
                                           "Priya Raman", "Tom Becker"])
         marcus = people["Marcus Oyelaran"]
-        self.assertEqual((marcus.id, marcus.values["relationship"], marcus.values["confidence"]), ("P-4", "None", 75))
+        self.assertEqual((marcus.id, marcus.values["relationship"], marcus.values["confidence"]),
+                         ("P-4", "Not connected", 75))
         self.assertEqual(marcus.values["email"], "marcus.oyelaran@frontrange.example.com")
         self.assertEqual(marcus.values["linked_roles"],
                          ["[[workdecero/Jobs/VP of Product, Front Range Robotics|VP of Product, Front Range Robotics]]"])
@@ -213,9 +279,10 @@ class Found(WarmCase):
 class NotFound(WarmCase):
     def test_nothing_found_still_says_so_plainly(self):
         warm = self.build({}, job_id="J-2", profile=dict(self.profile, jobs=dict(self.profile["jobs"])))
-        self.store.upsert("person", "P-1", "Priya Raman", {"relationship": "None"})
+        self.store.upsert("person", "P-1", "Priya Raman", {"relationship": "Not connected"})
         warm = self.build({}, job_id="J-2")
         self.assertEqual(self.lines(warm), [
+            "- **Contact first:** No one found yet. Apply directly.",
             "- **Hiring manager:** not found.",
             "- **Recruiter:** not found.",
             "- **Email format:** not found.",
@@ -227,6 +294,7 @@ class NotFound(WarmCase):
         self.assertEqual(warm.operations[0]["values"]["warm_path"], [])
 
     def test_named_person_without_a_format_gets_no_address(self):
+        self.store.upsert("person", "P-1", "Priya Raman", {"relationship": "Not connected"})
         text = self.build({"hiring_manager": {"name": "Marcus Oyelaran", "title": "CTO"}}).text
         self.assertIn("[[workdecero/People/Marcus Oyelaran|Marcus Oyelaran]], CTO. Email: not found.", text)
         self.assertNotIn("@", text)
@@ -244,7 +312,10 @@ class NotFound(WarmCase):
             store.apply(operations)
             text = store.get("job", "J-1").section
             self.assertIn("- **Hiring manager:** Likely Chief Nursing Officer (name not found).", text)
-            self.assertIn("Email: gsoto@lonestar.example.org (60%: one published example of the format).", text)
+            self.assertIn("- **Contact first:** Gabriela Soto, the recruiter on this posting, directly by email "
+                          "(email confidence 60%).", text)
+            self.assertIn("Email: gsoto@lonestar.example.org (email confidence 60%: one published example of the "
+                          "format).", text)
             self.assertEqual(results["J-1"].warm, "named-contact")
             self.assertEqual([row.title for row in store.rows("person")], ["Gabriela Soto"])
 
@@ -261,7 +332,8 @@ class QuietSearch(WarmCase):
         research["related_to_current_employer"] = "client"
         warm = self.build(research)
         lines = self.lines(warm)
-        self.assertEqual(lines[0], "- **Caution:** this company is a client of your current employer. Reaching out "
+        self.assertEqual(lines[0], "- **Contact first:** No one for now. See the caution below.")
+        self.assertEqual(lines[1], "- **Caution:** this company is a client of your current employer. Reaching out "
                                    "could reveal your search, so no outreach is suggested here.")
         self.assertIn("- **1st-degree connections:** none in your network at this company.", lines)
         self.assertIn("- **Warm paths:** none found.", lines)

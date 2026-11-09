@@ -72,7 +72,7 @@ def build(target, folder="workdecero", today=None, backup_dir=None):
          ["VP of Product, Front Range Robotics"], day(3)),
         ("P-2", "Jonas Albrecht", "Mile High Analytics", "Chief of Staff", "2nd", 60, "Shared connection",
          ["Head of Product, Mile High Analytics"], None),
-        ("P-3", "Lena Fischer", "Bluebird Health", "Recruiter", "None", 40, "Named on the posting", [], day(10)),
+        ("P-3", "Lena Fischer", "Bluebird Health", "Recruiter", "Not connected", 40, "Named on the posting", [], day(10)),
     ]
     for note_id, name, company, role, rel, confidence, why, roles, follow_up in people:
         values = {"company": link("company", company), "role": role, "relationship": rel, "why": why, "linked_roles": [link("job", title) for title in roles],
@@ -111,7 +111,9 @@ def build(target, folder="workdecero", today=None, backup_dir=None):
         summary = None if store.get("job", note_id) else (
             "**Why it fits:** matches your target level and AI product focus.\n\n**Caveats:** none found.")
         store.upsert("job", note_id, title, values, section=summary)
-    store.upsert("job", "J-2", "", {"warm_path": [link("person", "Jonas Albrecht")]})
+    store.upsert("job", "J-2", "", {
+        "warm_path": ["[[%s/People/Jonas Albrecht|Jonas Albrecht (2nd)]]" % folder],
+        "contact_first": "Jonas Albrecht (2nd), through a shared connection. Works there."})
     user = [
         ("J-5", {"applied_on": day(-14), "next_step": "Nudge the recruiter", "last_touch": day(-14),
                  "contact": link("person", "Lena Fischer")}),

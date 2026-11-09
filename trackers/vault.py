@@ -370,13 +370,7 @@ class VaultStore(object):
                     merged[field.key] = field.default
             elif given and (field.owner == model.SWEEP or field.name in force or field.key not in merged):
                 merged[field.key] = values[field.name]
-        if creating:
-            # New notes list properties in model order, which reads well in Obsidian.
-            ordered = {}
-            for field in note_type.fields:
-                if field.key in merged:
-                    ordered[field.key] = merged[field.key]
-            merged = ordered
+        merged = _in_model_order(merged, note_type, keep=list(properties) if not creating else [])
 
         if section is not None:
             body = replace_section(body, section)
@@ -467,6 +461,29 @@ class VaultStore(object):
             self._write_text(start, bases.start_here(self.folder))
         self.prune_backups()
         return self.changed[before:]
+
+
+def _in_model_order(merged, note_type, keep):
+    """Order a note's properties.
+
+    A new note lists the model's properties in model order. On an update, every
+    property the note already had stays where it was (the user may have arranged
+    them), and each newly added model property is slotted in before the first
+    existing one that comes later in the model, so "Applied on" lands with the
+    other tracking properties and not after the IDs.
+    """
+    rank = dict((field.key, index) for index, field in enumerate(note_type.fields))
+    order = [key for key in keep if key in merged]
+    added = sorted((key for key in merged if key not in order and key in rank), key=lambda key: rank[key])
+    for key in added:
+        position = len(order)
+        for index, existing in enumerate(order):
+            if existing in rank and rank[existing] > rank[key]:
+                position = index
+                break
+        order.insert(position, key)
+    order += [key for key in merged if key not in order]
+    return dict((key, merged[key]) for key in order)
 
 
 def looks_like_vault(path):

@@ -307,12 +307,18 @@ def people_base(folder):
     person = model.PERSON
     rel = _key("relationship")
     formulas = {"closeness": "if(%s == '1st', 1, if(%s == '2nd', 2, 3))" % (rel, rel)}
+    known = "['1st', '2nd'].contains(%s)" % rel
     views = [
+        # People you know, or are one introduction from, who are tied to a role you are looking at.
         _view("Warm paths",
-              {"and": ["!%s.isEmpty()" % _key("linked_roles")]},
-              _columns(person, "name", "company", "relationship", "linked_roles", "email", "confidence",
-                       "source_url", "last_contact"),
-              _sort(person, ("formula.closeness", "ASC"), ("confidence", "DESC"))),
+              {"and": [known, "!%s.isEmpty()" % _key("linked_roles")]},
+              _columns(person, "name", "company", "relationship", "role", "linked_roles", "met", "last_contact"),
+              _sort(person, ("formula.closeness", "ASC"), ("file.name", "ASC"))),
+        # Hiring managers, recruiters and insiders found by research. You do not know them yet.
+        _view("Contacts at target companies",
+              {"and": ["!" + known, "!%s.isEmpty()" % _key("linked_roles")]},
+              _columns(person, "name", "company", "role", "linked_roles", "email", "confidence", "source_url"),
+              _sort(person, ("company", "ASC"), ("confidence", "DESC"))),
         _view("Follow-ups due",
               {"and": ["%s <= today() + '7d'" % _key("follow_up_by")]},
               _columns(person, "name", "company", "why", "follow_up_by", "last_contact"),
@@ -419,13 +425,20 @@ def start_here(folder):
         "- Write anything you like in a note. Sweeps only rewrite the properties that start with `wd_` "
         "and the block between the two `workdecero` markers.",
         "",
+        "## A tidier note",
+        "",
+        "Each tracker note starts with a list of properties, the facts the tables are built from. "
+        "If that list gets in your way, Obsidian can hide it: open Settings, then Editor, and set "
+        "**Properties in document** to Hidden. That is your setting to choose. workdecero never changes "
+        "Obsidian's settings.",
+        "",
         "## Everything else",
         "",
         "- [[%s/Jobs.base|Jobs]]: New this week, Pipeline, Follow up, Decide or drop, Archive" % folder,
         "- [[%s/Contracts.base|Contracts]]: New gigs, Pursuing, Channels" % folder,
         "- [[%s/Events.base|Events]]: Next 30 days, Going, Met and follow up" % folder,
         "- [[%s/Groups.base|Groups]]: Groups to try, Joined" % folder,
-        "- [[%s/People.base|People]]: Warm paths, Follow-ups due" % folder,
+        "- [[%s/People.base|People]]: Warm paths, Contacts at target companies, Follow-ups due" % folder,
         "- [[%s/Companies.base|Companies]]: Companies with openings" % folder,
         "- [[%s/Digests.base|Digests]]: what each sweep found" % folder,
         "",

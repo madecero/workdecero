@@ -170,6 +170,12 @@ def _fold_keep_spaces(text):
     return "".join(ch for ch in decomposed if ord(ch) < 128).lower()
 
 
+def vault_name(title):
+    """The file name the vault store gives a note with this title."""
+    import vault
+    return vault.safe_file_name(title)
+
+
 def _same_company(a, b):
     left, right = merge.normalize_company(a), merge.normalize_company(b)
     return bool(left) and left == right
@@ -245,7 +251,7 @@ def build(job_row, research, people_rows, store, profile, taken_ids=()):
             planned[key]["values"].update(values)
             operation = None
         else:
-            values["relationship"] = relationship or "None"
+            values["relationship"] = relationship or model.NOT_CONNECTED
             note_id = merge.next_id(model.PERSON, people_rows,
                                     [op["id"] for op in planned.values()] + list(taken_ids))
             operation = {"op": "create", "type": "person", "id": note_id, "title": name, "values": values}
@@ -268,7 +274,7 @@ def build(job_row, research, people_rows, store, profile, taken_ids=()):
             line += ", %s" % person["title"].strip()
         line += _source(person) + "."
         if address:
-            line += " Email: %s (%d%%: %s)." % (address, percent, basis)
+            line += " Email: %s (email confidence %d%%: %s)." % (address, percent, basis)
         else:
             line += " Email: not found."
         return line
@@ -280,16 +286,21 @@ def build(job_row, research, people_rows, store, profile, taken_ids=()):
         lines.append("- **Caution:** this company is a %s of your current employer. Reaching out could reveal "
                      "your search, so no outreach is suggested here." % related)
 
-    lines.append(contact_line("Hiring manager", research.get("hiring_manager"), "Hiring manager")
-                 or "- **Hiring manager:** not found.")
+    manager = research.get("hiring_manager")
+    lines.append(contact_line("Hiring manager", manager, "Hiring manager") or "- **Hiring manager:** not found.")
     skip = contact_line("Skip-level", research.get("skip_level"), "Skip-level manager")
     if skip:
         lines.append(skip)
 
     recruiter = research.get("recruiter")
     recruiter_line = contact_line("Recruiter", recruiter, "Recruiter")
-    if recruiter_line and _named(recruiter) and (recruiter.get("scope") or "posting") != "posting":
-        recruiter_line += " Low confidence: recruits for this kind of role, not confirmed on this posting."
+    if recruiter_line and _named(recruiter):
+        # Two separate judgements: is the address right, and is this the recruiter for this posting.
+        if (recruiter.get("scope") or "posting") == "posting":
+            recruiter_line += " Role match: named on this posting."
+        else:
+            recruiter_line += (" Role match: low confidence. Recruits for this kind of role, not confirmed on "
+                               "this posting.")
     lines.append(recruiter_line or "- **Recruiter:** not found.")
 
     if email_format and email_format.get("domain") and FORMATS.get((email_format.get("pattern") or "").lower()):
@@ -327,21 +338,38 @@ def build(job_row, research, people_rows, store, profile, taken_ids=()):
             shown.append("%s%s%s" % (link, ", %s" % person["title"] if person.get("title") else "", _source(person)))
         lines.append("- **Insiders:** " + "; ".join(shown) + ".")
 
-    paths = []
-    for path in research.get("warm_paths") or []:
-        via = (path.get("via") or "").strip()
-        via_row = known.get(_person_key(via))
-        if not via or via_row is None:
-            continue                                       # only people actually in the network can introduce
-        if off_limits(merge.link_label(via_row.values.get("company"))):
-            continue                                       # never route a quiet search through a coworker
-        target = (path.get("to") or "").strip()
-        text = "%s knows %s" % (person_link(via_row.title), target or "someone there")
-        if path.get("how"):
-            text += " (%s)" % path["how"].strip().rstrip(".")
-        paths.append((via_row, target, text))
-    if paths and not caution:
-        lines.append("- **Warm paths:** " + "; ".join(text for _, _, text in paths) + ".")
+    # Every way in through someone the user knows. This one list feeds the Warm paths bullet, the
+    # Warm path property shown in the tables, the Contact first line and the score, so they agree.
+    warm = []          # (People row, degree, what to say about them, who they lead to)
+    if not caution:
+        for row in first_degree:
+            warm.append((row, "1st", "works there", None))
+        for path in research.get("warm_paths") or []:
+            via = (path.get("via") or "").strip()
+            via_row = known.get(_person_key(via))
+            if not via or via_row is None:
+                continue                                   # only people actually in the network can introduce
+            if off_limits(merge.link_label(via_row.values.get("company"))):
+                continue                                   # never route a quiet search through a coworker
+            if any(via_row is entry[0] for entry in warm):
+                continue
+            target = (path.get("to") or "").strip()
+            degree = (via_row.values.get("relationship") or "").strip() or "1st"
+            about = "knows %s" % (target or "someone there")
+            if path.get("how"):
+                about += " (%s)" % path["how"].strip().rstrip(".")
+            warm.append((via_row, degree if degree in ("1st", "2nd") else "1st", about, target))
+        for row in second_degree:
+            if not any(row is entry[0] for entry in warm):
+                warm.append((row, "2nd", "works there, one introduction away", None))
+
+    def labelled(row, degree):
+        """A link that shows the degree, as in 'Priya Raman (1st)'."""
+        return "[[%s/%s/%s|%s (%s)]]" % (store.folder, model.PERSON.folder, vault_name(row.title), row.title, degree)
+
+    if warm:
+        lines.append("- **Warm paths:** " + "; ".join(
+            "%s %s" % (labelled(row, degree), about) for row, degree, about, _ in warm) + ".")
     elif research.get("shared_background") and not caution:
         lines.append("- **Warm paths:** no introduction found. In common: %s."
                      % research["shared_background"].strip().rstrip("."))
@@ -360,14 +388,44 @@ def build(job_row, research, people_rows, store, profile, taken_ids=()):
         result.warm = "1st-hiring-team"
     elif first_degree:
         result.warm = "1st"
-    elif any(_person_key(target) in hiring_team for _, target, _ in paths):
+    elif any(target and _person_key(target) in hiring_team for _, _, _, target in warm):
         result.warm = "2nd-hiring-team"
-    elif paths or second_degree:
+    elif warm:
         result.warm = "2nd"
     elif research.get("shared_background"):
         result.warm = "shared-background"
     elif hiring_team:
         result.warm = "named-contact"
+
+    # Who to contact first, in one sentence. It leads the block and is also a property.
+    manager_email = email_for(manager, email_format) if _named(manager) else (None, None, None)
+    recruiter_email = email_for(recruiter, email_format) if _named(recruiter) else (None, None, None)
+    if caution:
+        first = "No one for now. See the caution below"
+    elif result.warm == "1st-hiring-team":
+        row = [r for r in first_degree if _person_key(r.title) in hiring_team][0]
+        first = "%s, directly. A 1st-degree connection who is on the hiring team" % row.title
+    elif warm:
+        row, degree, about, target = warm[0]
+        if target:
+            first = "%s (%s), for a warm introduction to %s" % (row.title, degree, target)
+        elif degree == "1st":
+            first = "%s (1st), for a warm introduction. A connection of yours who works there" % row.title
+        else:
+            first = "%s (2nd), through a shared connection. Works there" % row.title
+    elif _named(manager) and manager_email[0]:
+        first = ("%s, the hiring manager, directly by email (email confidence %d%%). No one in your network "
+                 "works there" % (manager["name"].strip(), manager_email[1]))
+    elif _named(recruiter) and recruiter_email[0] and (recruiter.get("scope") or "posting") == "posting":
+        first = ("%s, the recruiter on this posting, directly by email (email confidence %d%%)"
+                 % (recruiter["name"].strip(), recruiter_email[1]))
+    elif _named(manager):
+        first = "%s, the hiring manager, directly. No email was found, so use LinkedIn or the application" \
+            % manager["name"].strip()
+    else:
+        title = (manager or {}).get("title") if isinstance(manager, dict) else None
+        first = "No one found yet. Apply directly" + ("; the hiring manager is likely %s" % title.strip() if title else "")
+    lines.insert(0, "- **Contact first:** %s." % first)
 
     result.text = scoring.scrub_confidential("\n".join(lines), names)
     for operation in planned.values():
@@ -377,10 +435,10 @@ def build(job_row, research, people_rows, store, profile, taken_ids=()):
             (key, value if key in ("company", "linked_roles", "source_url", "email") else
              scoring.scrub_confidential(value, names)) for key, value in operation["values"].items())
 
-    warm_links = [] if caution else [person_link(row.title) for row in first_degree] + \
-        [person_link(via_row.title) for via_row, _, _ in paths if via_row not in first_degree]
     result.operations.append({"op": "update", "type": "job", "id": job_row.id, "force": [],
-                              "values": {"warm_path": warm_links}, "part": (model.PART_WARM_PATH, result.text)})
+                              "values": {"warm_path": [labelled(row, degree) for row, degree, _, _ in warm],
+                                         "contact_first": scoring.scrub_confidential(first + ".", names)},
+                              "part": (model.PART_WARM_PATH, result.text)})
     return result
 
 

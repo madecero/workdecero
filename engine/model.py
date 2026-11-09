@@ -12,8 +12,13 @@ has, such as their own status, type, tags or company.
 Who may write a property:
     SWEEP  rewritten by every sweep that sees the item
     SEED   written once when the note is created, then the user's to change
-    USER   never written by a sweep. Created empty when `seed_empty` is set,
-           so the row is ready to fill in from Obsidian.
+    USER   never written by a sweep. It appears in the note once the user sets
+           it, in a table or in the note. Checkboxes are the exception: they
+           start unticked (`seed_empty`), so there is a box to tick.
+
+The order of the fields below is the order of the properties in a new note:
+what a reader acts on first, then the facts, then the user's own tracking,
+then bookkeeping such as check dates, sources and IDs.
 
 Standard library only, Python 3.9+.
 """
@@ -70,7 +75,8 @@ class NoteType(object):
         self.folder = folder
         self.id_prefix = id_prefix
         self.title_display = title_display
-        self.fields = [Field("id", TEXT, "ID"), Field("type", TEXT, "Type")] + list(fields)
+        # What a reader cares about comes first. The ID and type are bookkeeping and go last.
+        self.fields = list(fields) + [Field("id", TEXT, "ID"), Field("type", TEXT, "Type")]
         self.statuses = list(statuses)
         self._by_name = dict((field.name, field) for field in self.fields)
 
@@ -116,12 +122,22 @@ class NoteType(object):
 def _pursuit_fields():
     """Properties the user fills in while chasing a job or a contract."""
     return [
-        Field("applied_on", DATE, "Applied on", USER, seed_empty=True),
-        Field("next_step", TEXT, "Next step", USER, seed_empty=True),
-        Field("next_step_date", DATE, "Next step date", USER, seed_empty=True),
+        Field("applied_on", DATE, "Applied on", USER),
+        Field("next_step", TEXT, "Next step", USER),
+        Field("next_step_date", DATE, "Next step date", USER),
         Field("last_touch", DATE, "Last touch", USER),
         Field("contact", LINK, "Contact", USER),
         Field("reason", TEXT, "Reason", SEED),
+    ]
+
+
+def _bookkeeping_fields():
+    """Dates and sources a sweep keeps. Useful to the views, rarely read in the note."""
+    return [
+        Field("posted", DATE, "Posted"),
+        Field("first_seen", DATE, "First seen", SEED),
+        Field("last_seen", DATE, "Last seen"),
+        Field("updated", DATE, "Last updated"),
         Field("liveness", TEXT, "Posting check"),
         Field("last_checked", DATE, "Last checked"),
     ]
@@ -131,24 +147,22 @@ JOB = NoteType(
     "job", "Jobs", "J", "Role",
     [
         Field("status", TEXT, "Status", SEED),
-        Field("role", TEXT, "Role title"),
-        Field("company", LINK, "Company"),
         Field("fit", NUMBER, "Fit"),
-        Field("pay_min", NUMBER, "Pay from"),
         Field("pay_max", NUMBER, "Pay to"),
+        Field("pay_min", NUMBER, "Pay from"),
+        Field("company", LINK, "Company"),
+        Field("contact_first", TEXT, "Contact first"),
+        Field("warm_path", LINKS, "Warm path"),
+        Field("role", TEXT, "Role title"),
         Field("work_mode", TEXT, "Work mode"),
         Field("distance_miles", NUMBER, "Miles from home"),
         Field("location", TEXT, "Location"),
-        Field("posted", DATE, "Posted"),
-        Field("first_seen", DATE, "First seen", SEED),
-        Field("last_seen", DATE, "Last seen"),
         Field("closes", DATE, "Closes"),
         Field("apply_url", URL, "Apply link"),
-        Field("warm_path", LINKS, "Warm path"),
+    ] + _pursuit_fields() + _bookkeeping_fields() + [
         Field("source", TEXT, "Found on"),
         Field("req_id", TEXT, "Posting ID"),
-        Field("updated", DATE, "Last updated"),
-    ] + _pursuit_fields(),
+    ],
     [
         Status("New", "1 New", "new"),
         Status("Interested", "2 Interested", "active"),
@@ -165,22 +179,18 @@ CONTRACT = NoteType(
     "contract", "Contracts", "C", "Gig",
     [
         Field("status", TEXT, "Status", SEED),
+        Field("fit", NUMBER, "Win odds"),
+        Field("rate_max", NUMBER, "Rate ($/hr)"),
+        Field("rate_min", NUMBER, "Rate from ($/hr)"),
         Field("client", TEXT, "Client or platform"),
         Field("via", TEXT, "Via"),
-        Field("fit", NUMBER, "Win odds"),
-        Field("rate_min", NUMBER, "Rate from ($/hr)"),
-        Field("rate_max", NUMBER, "Rate ($/hr)"),
         Field("hours_per_week", NUMBER, "Hours per week"),
         Field("length_weeks", NUMBER, "Length (weeks)"),
         Field("remote", CHECKBOX, "Remote"),
         Field("engagement", TEXT, "Engagement"),
-        Field("link", URL, "Link"),
-        Field("posted", DATE, "Posted"),
-        Field("first_seen", DATE, "First seen", SEED),
-        Field("last_seen", DATE, "Last seen"),
         Field("closes", DATE, "Closes"),
-        Field("updated", DATE, "Last updated"),
-    ] + _pursuit_fields(),
+        Field("link", URL, "Link"),
+    ] + _pursuit_fields() + _bookkeeping_fields(),
     [
         Status("New", "1 New", "new"),
         Status("Interested", "2 Interested", "active"),
@@ -298,5 +308,6 @@ DIGEST = NoteType(
 TYPES = [JOB, CONTRACT, CHANNEL, EVENT, GROUP, PERSON, COMPANY, DIGEST]
 BY_NAME = dict((note_type.name, note_type) for note_type in TYPES)
 
-RELATIONSHIPS = ["1st", "2nd", "None"]
+NOT_CONNECTED = "Not connected"
+RELATIONSHIPS = ["1st", "2nd", NOT_CONNECTED]
 WORK_MODES = ["Remote", "Hybrid", "Onsite"]
