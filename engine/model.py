@@ -161,7 +161,7 @@ CONTRACT = NoteType(
         Field("status", TEXT, "Status", SEED),
         Field("client", TEXT, "Client or platform"),
         Field("via", TEXT, "Via"),
-        Field("fit", NUMBER, "Fit"),
+        Field("fit", NUMBER, "Win odds"),
         Field("rate_min", NUMBER, "Rate from ($/hr)"),
         Field("rate_max", NUMBER, "Rate ($/hr)"),
         Field("hours_per_week", NUMBER, "Hours per week"),

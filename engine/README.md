@@ -12,7 +12,10 @@ Shared logic for the sweeps. Standard library Python only (3.9 or newer), so it 
 
 | `liveness.py` | Checks whether a posting is still open. `python3 engine/liveness.py check URL`. |
 
-Still to come: merge and dedupe, scoring, warm paths.
+| `merge.py` | Decides which finds are the same posting, merges them, matches them against the vault and plans the writes. |
+| `scoring.py` | Fit for jobs and Win odds for contracts, 0 to 100, from the profile. Applies exclusions. |
+
+Still to come: warm paths.
 
 ## Liveness rules
 

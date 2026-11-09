@@ -371,12 +371,20 @@ class VaultStore(object):
         """Carry out operations planned by the engine (see liveness.plan_update). Returns the rows written."""
         written = []
         for operation in operations:
+            if operation.get("op") == "create":
+                written.append(self.upsert(operation["type"], operation["id"], operation["title"],
+                                           operation.get("values", {}), section=operation.get("section")))
+                continue
             row = self.get(operation["type"], operation["id"])
             if row is None:
                 continue
             section = None
             if operation.get("append"):
                 section = (row.section + "\n" if row.section else "") + operation["append"]
+            elif operation.get("section") and not row.section:
+                # A refresh fills an empty block but never replaces one: it may hold dated lines
+                # from earlier checks.
+                section = operation["section"]
             written.append(self.upsert(operation["type"], operation["id"], row.title, operation.get("values", {}),
                                        section=section, force=operation.get("force", ())))
         return written
