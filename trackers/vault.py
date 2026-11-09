@@ -111,10 +111,15 @@ class VaultStore(object):
         vault = os.path.realpath(os.path.expanduser(vault_path))
         if not os.path.isdir(vault):
             raise VaultError("The vault folder %s does not exist." % vault_path)
-        folder = vault_folder.replace("\\", "/").strip("/")
+        given = (vault_folder or "").replace("\\", "/")
+        if given.startswith(("/", "~")) or re.match(r"^[A-Za-z]:", given):
+            raise VaultError("The folder must be a name inside the vault, such as workdecero, not a full path. "
+                             "You gave %s." % vault_folder)
+        folder = given.strip("/")
         parts = folder.split("/")
         if not folder or any(part in ("", ".", "..") or part.startswith(".") for part in parts):
-            raise VaultError("vault_folder must be a plain folder name inside the vault, not %r." % vault_folder)
+            raise VaultError("The folder must be a plain folder name inside the vault, such as workdecero. "
+                             "You gave %r." % vault_folder)
         self.vault = vault
         self.folder = folder
         self.root = os.path.join(vault, *parts)
@@ -244,6 +249,23 @@ class VaultStore(object):
                 return row
         return None
 
+    def scan(self):
+        """Read every tracker note once. Returns the number read; unreadable ones are in self.skipped."""
+        return sum(len(self.rows(note_type.name)) for note_type in model.TYPES)
+
+    def skipped_report(self):
+        """Plain-language lines about notes that were left untouched, or an empty list."""
+        if not self.skipped:
+            return []
+        count = len(self.skipped)
+        lines = ["%d note%s could not be read and %s left untouched:"
+                 % (count, "" if count == 1 else "s", "was" if count == 1 else "were")]
+        for path, reason in self.skipped:
+            lines.append("  %s: %s" % (path, reason))
+        lines.append("Fix the properties block at the top of each note (the part between the --- lines), "
+                     "then run again.")
+        return lines
+
     def _skip(self, path, exc):
         entry = (self.relative(path), "its properties could not be read (%s). It was left untouched." % exc)
         if entry not in self.skipped:
@@ -350,10 +372,10 @@ class VaultStore(object):
         company_type = model.BY_NAME["company"]
         open_counts, people_counts = {}, {}
         for type_name in ("job", "contract"):
-            done = set(model.BY_NAME[type_name].status_names("done"))
+            note_type = model.BY_NAME[type_name]
             for row in self.rows(type_name):
                 target = _link_target(row.values.get("company"))
-                if target and row.values.get("status") not in done:
+                if target and not note_type.is_done(row.values.get("status")):
                     open_counts[target] = open_counts.get(target, 0) + 1
         for row in self.rows("person"):
             target = _link_target(row.values.get("company"))
@@ -392,6 +414,11 @@ class VaultStore(object):
         return self.changed[before:]
 
 
+def looks_like_vault(path):
+    """True when the folder has been opened as an Obsidian vault before."""
+    return os.path.isdir(os.path.join(os.path.expanduser(path), ".obsidian"))
+
+
 def _link_target(value):
     """The path inside [[path|label]], or None."""
     if not isinstance(value, str):
@@ -409,18 +436,35 @@ def main(argv=None):
     init.add_argument("--vault", required=True, help="path to the Obsidian vault")
     init.add_argument("--folder", default="workdecero", help="folder inside the vault (default: workdecero)")
     init.add_argument("--refresh-views", action="store_true", help="replace existing view files with current ones")
+    init.add_argument("--new-vault", action="store_true",
+                      help="allow a folder that Obsidian has not opened yet (it has no .obsidian folder)")
     args = parser.parse_args(argv)
     if args.command != "init":
         parser.print_help(sys.stderr)
         return 2
+    target = os.path.expanduser(args.vault)
     try:
+        if not os.path.isdir(target):
+            if not args.new_vault:
+                raise VaultError("The vault folder %s does not exist. Check the path, or add --new-vault to "
+                                 "create it." % args.vault)
+            os.makedirs(target)
+        elif not looks_like_vault(target) and not args.new_vault:
+            # The wrong-folder guard: a typo in the path must not scatter tracker files into some other folder.
+            raise VaultError("%s does not look like an Obsidian vault (it has no .obsidian folder). Check the path. "
+                             "If this really is a new vault that Obsidian has not opened yet, add --new-vault."
+                             % args.vault)
         import wdprofile
-        store = VaultStore(args.vault, args.folder, backup_dir=os.path.join(wdprofile.config_home(), "backups"))
+        store = VaultStore(target, args.folder, backup_dir=os.path.join(wdprofile.config_home(), "backups"))
         created = store.ensure_layout(refresh_views=args.refresh_views)
+        read = store.scan()
     except VaultError as exc:
         print(str(exc), file=sys.stderr)
         return 1
-    print("workdecero folder ready at %s (%d file(s) written)." % (store.relative(store.root), len(created)))
+    print("workdecero folder ready at %s (%d file(s) written, %d tracker note(s) found)."
+          % (store.relative(store.root), len(created), read))
+    for line in store.skipped_report():
+        print(line)
     return 0
 
 

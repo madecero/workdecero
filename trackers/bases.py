@@ -28,18 +28,31 @@ def _key(name):
     return model.PREFIX + name
 
 
-def _quoted_list(names):
-    return "[" + ", ".join("'%s'" % name for name in names) + "]"
+STATUS_KEY = "formula.status_key"
 
 
-def stage_formula(note_type):
-    """Nested if() that maps each status to its numbered stage label."""
-    last = note_type.statuses[-1].stage
-    expression = "'%s'" % last
+def status_key_formula():
+    """The status as typed, trimmed and lower-cased, so 'applied ' and 'APPLIED' both count as Applied."""
+    return "if(%(s)s.isEmpty(), '', %(s)s.toString().trim().lower())" % {"s": _key("status")}
+
+
+def _status_is(name):
+    return "%s == '%s'" % (STATUS_KEY, name.lower())
+
+
+def _status_in(names):
+    return "[%s].contains(%s)" % (", ".join("'%s'" % name.lower() for name in names), STATUS_KEY)
+
+
+def stage_formula(note_type, key=STATUS_KEY):
+    """Nested if() that maps each status to its numbered stage label.
+
+    Every known status is named. Anything else, such as a typo, lands in the
+    "Check status" group. It is never treated as closed.
+    """
+    expression = "'%s'" % model.CHECK_STATUS_STAGE
     for status in reversed(note_type.statuses):
-        if status.stage == last and status.kind == "done":
-            continue
-        expression = "if(%s == '%s', '%s', %s)" % (_key("status"), status.name, status.stage, expression)
+        expression = "if(%s == '%s', '%s', %s)" % (key, status.name.lower(), status.stage, expression)
     return expression
 
 
@@ -75,8 +88,8 @@ def _sort(note_type, *pairs):
 
 _KIND_WIDTH = {model.NUMBER: 70, model.DATE: 120, model.CHECKBOX: 80, model.URL: 130, model.LINK: 150,
                model.LINKS: 190, model.TEXT: 150}
-_FORMULA_WIDTH = {"formula.role": 200, "formula.pay_top_k": 110, "formula.work": 120,
-                  "formula.days_since_touch": 110, "formula.days_waiting": 110, "formula.day_time": 110,
+_FORMULA_WIDTH = {"formula.role": 200, "formula.pay_top_k": 120, "formula.work": 120,
+                  "formula.days_since_touch": 110, "formula.days_waiting": 110, "formula.day_time": 130,
                   "formula.kind": 110, "formula.place": 180}
 _FIELD_WIDTH = {"status": 120, "next_step": 200, "why": 260, "reason": 180, "focus": 190, "client": 180,
                 "where": 180, "track": 110}
@@ -128,9 +141,10 @@ def _is(note_type):
 
 def jobs_base(folder):
     job = model.JOB
-    status, done = _key("status"), _quoted_list(job.status_names("done"))
-    not_active = _quoted_list(job.status_names("new") + job.status_names("done"))
+    done = job.status_names("done")
+    not_active = job.status_names("new") + done
     formulas = {
+        "status_key": status_key_formula(),
         # The note is named "Role, Company" so file names stay unique. Tables show the role alone,
         # still as a link to the note, because the company has its own column.
         "role": "if(!%(r)s.isEmpty(), file.asLink(%(r)s), file.asLink())" % {"r": _key("role")},
@@ -149,25 +163,26 @@ def jobs_base(folder):
             % {"t": _key("last_touch"), "a": _key("applied_on"), "f": _key("first_seen")}),
         "days_waiting": "if(!%(a)s.isEmpty(), %(d)s)" % {"a": _key("applied_on"), "d": _DAYS % _key("applied_on")},
     }
-    displays = {"role": "Role", "stage": "Stage", "pay_top_k": "Pay to ($K)", "pay_range": "Pay range", "work": "Work mode",
+    displays = {"status_key": "Status (normalised)", "role": "Role", "stage": "Stage", "pay_top_k": "Max pay ($K)", "pay_range": "Pay range", "work": "Work mode",
                 "days_since_touch": "Days since last touch", "days_waiting": "Days waiting"}
     views = [
         _view("New this week",
-              {"and": ["%s == 'New'" % status, "%s >= today() - '7d'" % _key("first_seen")]},
-              _columns(job, "formula.role", "company", "fit", "formula.pay_top_k", "formula.work", "posted", "apply_url",
-                       "warm_path"),
+              {"and": [_status_is("New"), "%s >= today() - '7d'" % _key("first_seen")]},
+              # Fit and pay come right after the role so they stay in sight in a narrow pane.
+              _columns(job, "formula.role", "fit", "formula.pay_top_k", "status", "company", "formula.work",
+                       "apply_url", "warm_path"),
               _sort(job, ("fit", "DESC"))),
         _view("Pipeline",
-              {"and": ["!%s.contains(%s)" % (not_active, status)]},
+              {"and": ["!" + _status_in(not_active)]},
               _columns(job, "formula.role", "company", "status", "next_step", "next_step_date",
                        "formula.days_since_touch", "contact"),
               _sort(job, ("next_step_date", "ASC")), group="formula.stage"),
         _view("Follow up",
               {"or": [
-                  {"and": ["%s == 'Applied'" % status, "%s <= today() - '10d'" % _key("applied_on"),
+                  {"and": [_status_is("Applied"), "%s <= today() - '10d'" % _key("applied_on"),
                            {"or": ["%s.isEmpty()" % _key("last_touch"),
                                    "%s <= %s" % (_key("last_touch"), _key("applied_on"))]}]},
-                  {"and": ["!%s.contains(%s)" % (not_active, status),
+                  {"and": ["!" + _status_in(not_active),
                            "%s <= today() + '3d'" % _key("next_step_date")]},
               ]},
               _columns(job, "formula.role", "company", "status", "applied_on", "formula.days_waiting", "next_step_date",
@@ -175,14 +190,14 @@ def jobs_base(folder):
               _sort(job, ("next_step_date", "ASC"))),
         _view("Decide or drop",
               {"or": [
-                  {"and": ["%s == 'New'" % status, "%s < today() - '14d'" % _key("first_seen")]},
-                  {"and": ["!%s.contains(%s)" % (done, status), "%s >= today()" % _key("closes"),
+                  {"and": [_status_is("New"), "%s < today() - '14d'" % _key("first_seen")]},
+                  {"and": ["!" + _status_in(done), "%s >= today()" % _key("closes"),
                            "%s <= today() + '7d'" % _key("closes")]},
               ]},
-              _columns(job, "formula.role", "company", "fit", "formula.pay_top_k", "closes", "apply_url"),
+              _columns(job, "formula.role", "fit", "formula.pay_top_k", "status", "company", "closes", "apply_url"),
               _sort(job, ("closes", "ASC"))),
         _view("Archive",
-              {"and": ["%s.contains(%s)" % (done, status)]},
+              {"and": [_status_in(done)]},
               _columns(job, "formula.role", "company", "status", "reason", "updated"),
               _sort(job, ("updated", "DESC"))),
     ]
@@ -196,23 +211,24 @@ def jobs_base(folder):
 
 def contracts_base(folder):
     contract, channel = model.CONTRACT, model.CHANNEL
-    status = _key("status")
-    not_active = _quoted_list(contract.status_names("new") + contract.status_names("done"))
+    not_active = contract.status_names("new") + contract.status_names("done")
     formulas = {
+        "status_key": status_key_formula(),
         "stage": stage_formula(contract),
         "channel_stage": stage_formula(channel),
     }
-    displays = {"stage": "Stage", "channel_stage": "Stage"}
+    displays = {"status_key": "Status (normalised)", "stage": "Stage", "channel_stage": "Stage"}
     names = _display_names(contract, "Name", displays)
     for field in channel.fields:
         names.setdefault("note." + field.key, {"displayName": field.display})
     views = [
         _view("New gigs",
-              {"and": [_is(contract), "%s == 'New'" % status, "%s >= today() - '7d'" % _key("first_seen")]},
-              _columns(contract, "name", "client", "rate_max", "hours_per_week", "length_weeks", "remote", "link"),
+              {"and": [_is(contract), _status_is("New"), "%s >= today() - '7d'" % _key("first_seen")]},
+              _columns(contract, "name", "rate_max", "status", "client", "hours_per_week", "length_weeks", "remote",
+                       "link"),
               _sort(contract, ("fit", "DESC"))),
         _view("Pursuing",
-              {"and": [_is(contract), "!%s.contains(%s)" % (not_active, status)]},
+              {"and": [_is(contract), "!" + _status_in(not_active)]},
               _columns(contract, "name", "client", "status", "rate_max", "next_step", "next_step_date"),
               _sort(contract, ("next_step_date", "ASC")), group="formula.stage"),
         _view("Channels",
@@ -235,6 +251,7 @@ def events_base(folder):
     event = model.EVENT
     date = _key("date")
     formulas = {
+        # The time is kept as the text people read, such as "6:00 PM".
         "day_time": "if(!%(t)s.isEmpty(), %(d)s.format('ddd') + ' ' + %(t)s, %(d)s.format('ddd'))"
                     % {"d": date, "t": _key("time")},
         "kind": "if(%s == true, 'Virtual', if(%s == true, 'Evening', 'Daytime'))" % (_key("virtual"), _key("evening")),
@@ -267,21 +284,21 @@ def events_base(folder):
 
 def groups_base(folder):
     group = model.GROUP
-    status = _key("status")
-    out = _quoted_list(["Joined"] + group.status_names("done"))
+    out = ["Joined"] + group.status_names("done")
     views = [
         _view("Groups to try",
-              {"and": ["!%s.contains(%s)" % (out, status)]},
+              {"and": ["!" + _status_in(out)]},
               _columns(group, "name", "focus", "cadence", "next_meeting", "virtual", "cost_per_year", "link"),
               _sort(group, ("fit", "DESC"))),
         _view("Joined",
-              {"and": ["%s == 'Joined'" % status]},
+              {"and": [_status_is("Joined")]},
               _columns(group, "name", "next_meeting", "last_attended"),
               _sort(group, ("next_meeting", "ASC"))),
     ]
     return {
         "filters": {"and": [_in_folder(folder, group), _is(group)]},
-        "properties": _display_names(group, group.title_display, {}),
+        "formulas": {"status_key": status_key_formula()},
+        "properties": _display_names(group, group.title_display, {"status_key": "Status (normalised)"}),
         "views": views,
     }
 
@@ -392,8 +409,10 @@ def start_here(folder):
         "",
         "## How to use the tables",
         "",
-        "- **Change Status right in a table.** Click the cell and type, for example `Applied` or `Passed`. "
-        "The row moves to the right group at once, and the next sweep respects your change.",
+        "- **Change Status right in a table.** Click the cell and type, for example `Interested`, `Applied` or "
+        "`Passed`. The row moves to the right group at once, and the next sweep respects your change. "
+        "Capital letters and stray spaces do not matter. A status the tracker does not know shows up under "
+        "**Check status** in the Pipeline view, so a typo is never lost.",
         "- Job statuses, in order: " + ", ".join(model.JOB.status_names()) + ".",
         "- Contract statuses, in order: " + ", ".join(model.CONTRACT.status_names()) + ".",
         "- Fill in Next step, Next step date and Applied on as you go. Sweeps never overwrite them.",

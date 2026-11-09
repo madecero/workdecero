@@ -318,15 +318,146 @@ class DemoVault(unittest.TestCase):
     def test_demo_vault_builds_and_leaves_user_notes_alone(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = os.path.join(tmp, "demo")
-            store = make_demo_vault.build(target, today=TODAY)
+            backups = os.path.join(tmp, "backups")
+            store = make_demo_vault.build(target, today=TODAY, backup_dir=backups)
             self.assertEqual(len(store.rows("job")), 9)
             self.assertEqual(len(store.rows("event")), 6)
             self.assertEqual(store.skipped, [])
             self.assertFalse(os.path.exists(os.path.join(target, ".obsidian")))
             with open(os.path.join(target, "Reading list.md")) as handle:
                 self.assertEqual(handle.read(), make_demo_vault.USER_NOTES["Reading list.md"])
-            again = make_demo_vault.build(target, today=TODAY)
+            again = make_demo_vault.build(target, today=TODAY, backup_dir=backups)
             self.assertEqual(again.changed, [])   # building twice changes nothing
+            times = sorted(row.values["time"] for row in store.rows("event"))
+            self.assertTrue(all(value.endswith(("AM", "PM")) for value in times), times)
+
+    def run_demo(self, *args, **env):
+        import subprocess
+        script = os.path.join(_paths.REPO_ROOT, "dev", "make_demo_vault.py")
+        environment = dict(os.environ)
+        environment.update(env)
+        return subprocess.run([sys.executable, script] + list(args), env=environment, stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE, universal_newlines=True)
+
+    def test_help_prints_help_and_creates_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = subprocess_in(tmp, self.run_demo, "--help")
+            self.assertEqual(result.returncode, 0)
+            self.assertIn("TARGET_DIR", result.stdout)
+            self.assertEqual(os.listdir(tmp), [])
+            result = subprocess_in(tmp, self.run_demo)
+            self.assertEqual(result.returncode, 2)
+            self.assertEqual(os.listdir(tmp), [])
+
+    def test_backups_go_to_the_config_folder_not_beside_or_inside_the_vault(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = os.path.join(tmp, "config")
+            target = os.path.join(tmp, "demo")
+            self.assertEqual(self.run_demo(target, WORKDECERO_HOME=home).returncode, 0)
+            with open(os.path.join(target, "workdecero", "Jobs.base"), "a") as handle:
+                handle.write("# changed\n")
+            store = vault.VaultStore(target, backup_dir=os.path.join(home, "backups"))
+            store.ensure_layout(refresh_views=True)
+            self.assertEqual(sorted(os.listdir(tmp)), ["config", "demo"])
+            self.assertGreaterEqual(len(os.listdir(os.path.join(home, "backups"))), 1)
+            self.assertFalse(any("backup" in name.lower() for name in os.listdir(target)))
+
+
+def subprocess_in(folder, runner, *args):
+    """Run a command with `folder` as the working directory."""
+    previous = os.getcwd()
+    os.chdir(folder)
+    try:
+        return runner(*args)
+    finally:
+        os.chdir(previous)
+
+
+class InitCommand(VaultCase):
+    def run_init(self, *args):
+        import io
+        from contextlib import redirect_stderr, redirect_stdout
+        out, err = io.StringIO(), io.StringIO()
+        old = os.environ.get("WORKDECERO_HOME")
+        os.environ["WORKDECERO_HOME"] = os.path.join(self.tmp.name, "config")
+        try:
+            with redirect_stdout(out), redirect_stderr(err):
+                code = vault.main(["init"] + list(args))
+        finally:
+            if old is None:
+                os.environ.pop("WORKDECERO_HOME")
+            else:
+                os.environ["WORKDECERO_HOME"] = old
+        return code, out.getvalue(), err.getvalue()
+
+    def test_init_on_a_real_looking_vault(self):
+        code, out, _ = self.run_init("--vault", self.vault_dir)
+        self.assertEqual(code, 0)
+        self.assertIn("workdecero folder ready at workdecero (8 file(s) written, 0 tracker note(s) found).", out)
+
+    def test_full_path_as_folder_is_refused_with_a_clear_message(self):
+        for bad in ("/abs/path", "~/somewhere", "C:\\Users\\x"):
+            code, _, err = self.run_init("--vault", self.vault_dir, "--folder", bad)
+            self.assertEqual(code, 1, bad)
+            self.assertIn("not a full path", err)
+        self.assertFalse(os.path.exists(os.path.join(self.vault_dir, "abs")))
+        with self.assertRaises(vault.VaultError):
+            vault.VaultStore(self.vault_dir, "/abs/path")
+
+    def test_folder_that_is_not_a_vault_is_refused_unless_told_it_is_new(self):
+        plain = os.path.join(self.tmp.name, "Documents")
+        os.makedirs(plain)
+        code, _, err = self.run_init("--vault", plain)
+        self.assertEqual(code, 1)
+        self.assertIn("does not look like an Obsidian vault", err)
+        self.assertIn("--new-vault", err)
+        self.assertEqual(os.listdir(plain), [])
+        code, out, _ = self.run_init("--vault", plain, "--new-vault")
+        self.assertEqual(code, 0)
+        self.assertTrue(os.path.isdir(os.path.join(plain, "workdecero", "Jobs")))
+        self.assertFalse(os.path.exists(os.path.join(plain, ".obsidian")))   # never created by us
+
+    def test_missing_folder_is_refused_unless_told_it_is_new(self):
+        missing = os.path.join(self.tmp.name, "typo-vault")
+        code, _, err = self.run_init("--vault", missing)
+        self.assertEqual(code, 1)
+        self.assertIn("does not exist", err)
+        self.assertFalse(os.path.exists(missing))
+        self.assertEqual(self.run_init("--vault", missing, "--new-vault")[0], 0)
+
+    def test_unreadable_notes_are_counted_and_named_in_the_output(self):
+        self.store.ensure_layout()
+        self.make_job()
+        for name in ("Broken one.md", "Broken two.md"):
+            with open(os.path.join(self.store.root, "Jobs", name), "w") as handle:
+                handle.write("---\nwd_id: X\nwd_type: job\nnotes: |\n  block\n---\n")
+        code, out, _ = self.run_init("--vault", self.vault_dir)
+        self.assertEqual(code, 0)
+        self.assertIn("1 tracker note(s) found", out)
+        self.assertIn("2 notes could not be read and were left untouched:", out)
+        self.assertIn("workdecero/Jobs/Broken one.md", out)
+        self.assertIn("workdecero/Jobs/Broken two.md", out)
+        self.assertEqual(self.new_store().skipped_report(), [])
+
+
+class StatusMatching(VaultCase):
+    def test_hand_typed_statuses_are_matched_loosely_and_typos_are_never_done(self):
+        job = model.JOB
+        self.assertEqual(job.canonical_status("offer "), "Offer")
+        self.assertEqual(job.canonical_status(" APPLIED"), "Applied")
+        self.assertIsNone(job.canonical_status("Intervewing"))
+        self.assertIsNone(job.canonical_status(None))
+        self.assertTrue(job.is_done(" passed "))
+        self.assertFalse(job.is_done("Intervewing"))
+        self.assertFalse(job.is_done("offer "))
+
+    def test_rollups_count_a_typo_status_as_still_open(self):
+        link = self.store.link
+        self.store.upsert("company", "O-1", "Acme Robotics", {})
+        self.store.upsert("job", "J-1", "A", {"company": link("company", "Acme Robotics"), "status": "Intervewing"})
+        self.store.upsert("job", "J-2", "B", {"company": link("company", "Acme Robotics"), "status": " closed "})
+        self.store.refresh_rollups()
+        self.assertEqual(self.store.get("company", "O-1").values["open_roles"], 1)
 
 
 class Views(unittest.TestCase):
@@ -372,12 +503,39 @@ class Views(unittest.TestCase):
 
     def test_stage_labels_follow_the_status_order_in_the_model(self):
         formula = bases.stage_formula(model.JOB)
-        positions = [formula.index("'%s'" % status.stage) for status in model.JOB.statuses
-                     if status.kind != "done"]
+        positions = [formula.index("== '%s'" % status.name.lower()) for status in model.JOB.statuses]
         self.assertEqual(positions, sorted(positions))
-        self.assertTrue(formula.endswith("'6 Closed'" + ")" * 5))
         stages = [status.stage for status in model.JOB.statuses]
         self.assertEqual(stages, sorted(stages))
+
+    def test_unknown_status_goes_to_check_status_and_never_to_closed(self):
+        for note_type in (model.JOB, model.CONTRACT, model.CHANNEL, model.GROUP):
+            formula = bases.stage_formula(note_type)
+            # Every known status is matched by name, in lower case. The fallback is the check group.
+            for status in note_type.statuses:
+                self.assertIn("formula.status_key == '%s', '%s'" % (status.name.lower(), status.stage), formula)
+            self.assertTrue(formula.endswith("'%s'%s" % (model.CHECK_STATUS_STAGE, ")" * len(note_type.statuses))))
+        self.assertLess(model.CHECK_STATUS_STAGE, model.JOB.statuses[0].stage)   # sorts first, so it is seen
+
+    def test_status_is_compared_trimmed_and_in_lower_case_everywhere(self):
+        self.assertEqual(bases.status_key_formula(),
+                         "if(wd_status.isEmpty(), '', wd_status.toString().trim().lower())")
+        for name, content in self.files.items():
+            text = miniyaml.dumps({"filters": content.get("filters"), "views": content["views"]})
+            self.assertNotIn("wd_status ==", text, name)
+            self.assertNotIn("contains(wd_status)", text, name)
+            if "status_key" in text:
+                self.assertIn("status_key", content["formulas"], name)
+
+    def test_views_the_start_note_points_to_let_the_user_set_status(self):
+        jobs = dict((view["name"], view) for view in self.files["Jobs.base"]["views"])
+        for name in ("New this week", "Decide or drop"):
+            self.assertIn("wd_status", jobs[name]["order"], name)
+        new = jobs["New this week"]["order"]
+        self.assertEqual(new[:4], ["formula.role", "wd_fit", "formula.pay_top_k", "wd_status"])
+        self.assertIn("wd_warm_path", new)
+        self.assertIn("wd_status", self.files["Contracts.base"]["views"][0]["order"])
+        self.assertEqual(self.files["Jobs.base"]["properties"]["formula.pay_top_k"]["displayName"], "Max pay ($K)")
 
     def test_view_files_survive_a_yaml_round_trip(self):
         for name, content in self.files.items():

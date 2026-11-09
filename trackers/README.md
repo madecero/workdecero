@@ -83,3 +83,13 @@ python3 dev/make_demo_vault.py ~/Desktop/demo-vault
 ```
 
 builds a vault full of invented jobs, gigs, events and people with dates around today. Open the folder as a vault in Obsidian and start with `workdecero/Start here`.
+
+## Setting up a real vault
+
+```
+python3 trackers/vault.py init --vault "~/Documents/My Vault" --folder workdecero
+```
+
+`init` refuses a folder that has no `.obsidian` folder, so a mistyped path cannot scatter tracker files somewhere else. Add `--new-vault` only for a vault Obsidian has not opened yet. The folder name must be a name inside the vault, not a full path. If any tracker note cannot be read, `init` and the sweeps say how many and list the files.
+
+Status values are matched without regard to capitals or stray spaces. A status that matches nothing shows in a **Check status** group in the Pipeline view and is never treated as closed.

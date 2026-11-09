@@ -5,10 +5,14 @@ Used to look at the views in Obsidian and as the fixture for the vault tests.
 Dates are set relative to today, so every view has rows whenever it is built.
 Every person, company, group and event here is made up.
 
+Backups of anything it replaces go to the normal backup folder,
+~/.config/workdecero/backups (set WORKDECERO_HOME to move it), never into the vault.
+
 Usage: make_demo_vault.py TARGET_DIR [--folder NAME]
 Standard library only, Python 3.9+.
 """
 
+import argparse
 import datetime
 import os
 import sys
@@ -18,6 +22,7 @@ sys.path.insert(0, os.path.join(ROOT, "engine"))
 sys.path.insert(0, os.path.join(ROOT, "trackers"))
 
 import vault  # noqa: E402
+import wdprofile  # noqa: E402
 
 SCRATCH_MARKER = ".workdecero-scratch"
 
@@ -28,9 +33,10 @@ USER_NOTES = {
 }
 
 
-def build(target, folder="workdecero", today=None):
+def build(target, folder="workdecero", today=None, backup_dir=None):
     """Create the vault at `target` and return the VaultStore used."""
     today = today or datetime.date.today()
+    backup_dir = backup_dir or os.path.join(wdprofile.config_home(), "backups")
 
     def day(offset):
         return (today + datetime.timedelta(days=offset)).isoformat()
@@ -46,7 +52,7 @@ def build(target, folder="workdecero", today=None):
             with open(path, "w", encoding="utf-8") as handle:
                 handle.write(text)
 
-    store = vault.VaultStore(target, folder, backup_dir=os.path.join(target + "-backups"), today=today)
+    store = vault.VaultStore(target, folder, backup_dir=backup_dir, today=today)
     store.ensure_layout()
     link = store.link
 
@@ -158,12 +164,12 @@ def build(target, folder="workdecero", today=None):
                                                "link": "https://groups.example.com/" + note_id.lower()})
 
     events = [
-        ("E-1", "AI Builders demo night", 4, "18:00", True, False, "Union Station, Denver", 0, "Front Range AI Builders", 84),
-        ("E-2", "Product Leaders breakfast", 9, "07:30", False, False, "LoDo, Denver", 25, "Denver Product Leaders", 88),
-        ("E-3", "Remote roundtable: pricing AI features", 2, "12:00", False, True, "", 0, "Remote Product Roundtable", 70),
-        ("E-4", "Founders Circle fall mixer", 23, "17:30", True, False, "RiNo, Denver", 40, "Rocky Mountain Founders Circle", 77),
-        ("E-5", "Product Leaders happy hour", -6, "17:00", True, False, "Cherry Creek, Denver", 0, "Denver Product Leaders", 80),
-        ("E-6", "Regional product conference", 55, "09:00", False, False, "Boulder", 350, "Denver Product Leaders", 65),
+        ("E-1", "AI Builders demo night", 4, "6:00 PM", True, False, "Union Station, Denver", 0, "Front Range AI Builders", 84),
+        ("E-2", "Product Leaders breakfast", 9, "7:30 AM", False, False, "LoDo, Denver", 25, "Denver Product Leaders", 88),
+        ("E-3", "Remote roundtable: pricing AI features", 2, "12:00 PM", False, True, "", 0, "Remote Product Roundtable", 70),
+        ("E-4", "Founders Circle fall mixer", 23, "5:30 PM", True, False, "RiNo, Denver", 40, "Rocky Mountain Founders Circle", 77),
+        ("E-5", "Product Leaders happy hour", -6, "5:00 PM", True, False, "Cherry Creek, Denver", 0, "Denver Product Leaders", 80),
+        ("E-6", "Regional product conference", 55, "9:00 AM", False, False, "Boulder", 350, "Denver Product Leaders", 65),
     ]
     for note_id, title, offset, time, evening, virtual, where, cost, group, fit in events:
         store.upsert("event", note_id, title, {"date": day(offset), "time": time, "evening": evening,
@@ -187,18 +193,23 @@ def build(target, folder="workdecero", today=None):
 
 
 def main(argv=None):
-    argv = sys.argv[1:] if argv is None else argv
-    if not argv:
-        print(__doc__, file=sys.stderr)
-        return 2
-    folder = "workdecero"
-    if "--folder" in argv:
-        index = argv.index("--folder")
-        folder = argv[index + 1]
-        del argv[index:index + 2]
-    store = build(argv[0], folder)
+    parser = argparse.ArgumentParser(
+        description="Build a demo Obsidian vault filled with invented tracker notes.",
+        epilog="Backups of replaced files go to ~/.config/workdecero/backups (WORKDECERO_HOME moves it).")
+    parser.add_argument("target", metavar="TARGET_DIR", help="folder to create the demo vault in")
+    parser.add_argument("--folder", default="workdecero", help="tracker folder inside the vault (default: workdecero)")
+    args = parser.parse_args(argv)
+    if args.target.startswith("-"):
+        parser.error("TARGET_DIR must be a folder path")
+    try:
+        store = build(args.target, args.folder)
+    except vault.VaultError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     print("Demo vault ready at %s (%d files written). Open it in Obsidian and start with '%s/Start here'."
-          % (argv[0], len(store.changed), folder))
+          % (args.target, len(store.changed), args.folder))
+    for line in store.skipped_report():
+        print(line)
     return 0
 
 

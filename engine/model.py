@@ -28,6 +28,9 @@ USER = "user"
 SECTION_START = "<!-- workdecero:start -->"
 SECTION_END = "<!-- workdecero:end -->"
 
+# Group label for a status nobody recognises (a typo made in a table cell). It sorts first, so it is seen.
+CHECK_STATUS_STAGE = "0 Check status"
+
 TEXT, NUMBER, DATE, CHECKBOX, LINK, LINKS, URL = "text", "number", "date", "checkbox", "link", "links", "url"
 
 
@@ -78,6 +81,19 @@ class NoteType(object):
             if status.name == status_name:
                 return status.stage
         return self.statuses[-1].stage if self.statuses else None
+
+    def canonical_status(self, text):
+        """The status name a hand-typed value means ("applied " is Applied), or None if it matches nothing."""
+        wanted = text.strip().lower() if isinstance(text, str) else ""
+        for status in self.statuses:
+            if status.name.lower() == wanted:
+                return status.name
+        return None
+
+    def is_done(self, text):
+        """True only for a recognised finished status. A typo is never treated as finished."""
+        name = self.canonical_status(text)
+        return name is not None and name in self.status_names("done")
 
     def default_status(self):
         return self.statuses[0].name if self.statuses else None
