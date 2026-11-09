@@ -2,7 +2,7 @@
 
 A Claude Code plugin that runs weekly job, contract and networking sweeps from your own profile and keeps the results in your Obsidian vault.
 
-**Under construction.** The plugin installs, but setup and the sweeps are not built yet.
+**Under construction.** Setup works. The sweeps themselves are still being built.
 
 ## Install
 
@@ -21,6 +21,12 @@ claude plugin install workdecero@workdecero
 ```
 
 Then start a new session and run `/workdecero:setup`.
+
+## Setup
+
+`/workdecero:setup` takes about 15 minutes. It reads your resume, asks a dozen or so short questions (what you want, where, what to leave out, how much to show you, which Obsidian vault), shows you a plain-language summary, and only then saves anything. Stop at any point before that and nothing has changed on your computer. Run it again later to change an answer.
+
+Your answers stay in a file on your computer. Sweeps search the public web. Nothing is ever applied for, sent or posted for you.
 
 While this repository is private you need read access to it and working git credentials for GitHub (an SSH key, or `gh auth login` followed by `gh auth setup-git`).
 
