@@ -1,0 +1,131 @@
+# Example profile: a freelance brand designer in Portland who wants contract
+# work and local networking, and no salaried job.
+# Every person, client and address in this file is invented.
+schema_version: 1
+
+person:
+  name: Marisol Okafor
+  headline: Freelance brand and web designer for small food and drink companies
+  summary: Nine years in design, five running a one-person studio. Brand identities, packaging and small websites for food, drink and hospitality clients.
+  years_experience: 9
+  website: https://okafor-studio.example.com
+  business_name: Okafor Studio
+  work_authorization: US permanent resident
+
+location:
+  home_base: Portland, OR
+  radius_miles: 15
+  work_modes: [remote, hybrid]
+  timezone: America/Los_Angeles
+
+tracks:
+  jobs: false
+  contracts: true
+  networking: true
+
+skills:
+  core:
+    - Brand identity
+    - Packaging design
+    - Web design
+  secondary:
+    - Illustration
+    - Art direction for photo shoots
+  not_held:
+    - Motion design reel
+
+contracts:
+  services:
+    - Brand identity
+    - Packaging design
+    - Small business websites
+  titles:
+    - Brand Designer
+    - Freelance Graphic Designer
+    - Fractional Design Lead
+  engagement_types: [independent-1099, fixed-price, retainer]
+  rate_floor_hourly: 70
+  rate_target_hourly: 105
+  fixed_price_min: 2500
+  retainer_monthly_min: 3000
+  hours_per_week_min: 8
+  hours_per_week_max: 30
+  min_duration_weeks: 2
+  has_business_entity: true
+  channels:
+    - name: Upwork
+      status: active
+      url: https://www.upwork.example.com/okafor
+    - name: Dribbble
+      status: in-progress
+    - name: Local creative staffing agency
+      status: not-started
+  public_bids:
+    enabled: false
+
+networking:
+  goals:
+    - Meet owners of food and drink startups before they hire an agency
+    - Find two agencies that subcontract overflow work
+  who_to_meet:
+    - Founders of food and drink brands
+    - Agency creative directors
+    - Other freelance designers
+  topics:
+    - Rebranding on a small budget
+  areas:
+    - Portland, OR
+    - Beaverton, OR
+  stretch_areas:
+    - Seattle, WA
+  formats: [in-person]
+  skip:
+    - Multi-level marketing
+    - Pay-to-pitch events
+  max_cost_per_event: 40
+  max_cost_per_year: 300
+  max_events_per_month: 3
+  unavailable:
+    - Weekday mornings before 10
+    - Sundays
+  memberships:
+    - Rose City Design Collective
+  speaking:
+    interested: true
+    talk_ideas:
+      - What a brand refresh really costs
+
+exclusions:
+  - name: Tobacco and vaping
+    kind: industry
+  - name: unpaid
+    kind: keyword
+    reason: No spec work
+
+confidential:
+  names:
+    - Cascadia Cold Brew Co.
+
+writing:
+  tagline: I design brands for small food and drink companies that want to look bigger than they are.
+  avoid_labels:
+    - ninja
+    - rockstar
+  style_rules:
+    - No exclamation marks
+
+manual_sources:
+  - Referrals that arrive in my studio inbox
+
+storage:
+  vault_path: ~/Documents/Studio Vault
+  vault_folder: workdecero
+
+mode: lite
+
+schedule:
+  day: monday
+  networking_every_weeks: 2
+
+integrations:
+  calendar: google

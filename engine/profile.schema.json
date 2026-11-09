@@ -1,0 +1,1287 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/madecero/workdecero/blob/main/engine/profile.schema.json",
+  "title": "workdecero profile",
+  "description": "Everything personal that drives the sweeps. Lives on your machine, never in the plugin.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "person",
+    "location",
+    "tracks",
+    "skills",
+    "storage"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "description": "Version of this file format.",
+      "enum": [
+        1
+      ]
+    },
+    "person": {
+      "type": "object",
+      "description": "Who you are, as the sweeps should describe you.",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "headline"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Your name as you want it written.",
+          "minLength": 1,
+          "examples": [
+            "Dana Whitfield"
+          ]
+        },
+        "headline": {
+          "type": "string",
+          "description": "One line on what you do.",
+          "minLength": 1,
+          "examples": [
+            "Nurse manager with 12 years in acute care"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "description": "Two or three sentences on your background. Used to judge fit and to explain why a role suits you.",
+          "minLength": 1,
+          "examples": [
+            "Twelve years in acute care nursing, six leading a 40-bed unit."
+          ]
+        },
+        "years_experience": {
+          "type": "integer",
+          "description": "Years of professional experience.",
+          "minimum": 0,
+          "maximum": 70,
+          "examples": [
+            12
+          ]
+        },
+        "resume_path": {
+          "type": "string",
+          "description": "Where your resume file is. Read, never changed.",
+          "minLength": 1,
+          "examples": [
+            "~/Documents/resume.pdf"
+          ]
+        },
+        "linkedin_url": {
+          "type": "string",
+          "description": "Your public LinkedIn profile address.",
+          "minLength": 1,
+          "pattern": "^https?://",
+          "patternHint": "must be a web address starting with https://",
+          "examples": [
+            "https://www.linkedin.com/in/example"
+          ]
+        },
+        "linkedin_connections_path": {
+          "type": "string",
+          "description": "A LinkedIn connections export, used to find people you already know at an employer.",
+          "minLength": 1,
+          "examples": [
+            "~/Documents/Connections.csv"
+          ]
+        },
+        "website": {
+          "type": "string",
+          "description": "Your website or portfolio.",
+          "minLength": 1,
+          "pattern": "^https?://",
+          "patternHint": "must be a web address starting with https://",
+          "examples": [
+            "https://example.com"
+          ]
+        },
+        "business_name": {
+          "type": "string",
+          "description": "Your business name, if you contract through one.",
+          "minLength": 1,
+          "examples": [
+            "Whitfield Design Studio"
+          ]
+        },
+        "work_authorization": {
+          "type": "string",
+          "description": "Your work authorization, in your own words.",
+          "minLength": 1,
+          "examples": [
+            "US citizen"
+          ]
+        }
+      }
+    },
+    "location": {
+      "type": "object",
+      "description": "Where you are and how far you will go.",
+      "additionalProperties": false,
+      "required": [
+        "home_base",
+        "work_modes"
+      ],
+      "properties": {
+        "home_base": {
+          "type": "string",
+          "description": "Your town and state or region. This is how the sweeps describe where you live.",
+          "minLength": 1,
+          "examples": [
+            "Round Rock, TX"
+          ]
+        },
+        "metro": {
+          "type": "string",
+          "description": "The larger metro area you are part of, if your town is not the metro itself.",
+          "minLength": 1,
+          "examples": [
+            "Austin"
+          ]
+        },
+        "country": {
+          "type": "string",
+          "description": "Two-letter country code.",
+          "minLength": 2,
+          "default": "US",
+          "examples": [
+            "US"
+          ]
+        },
+        "radius_miles": {
+          "type": "integer",
+          "description": "How far from home you will commute for hybrid or onsite work.",
+          "minimum": 0,
+          "maximum": 500,
+          "default": 25,
+          "examples": [
+            30
+          ]
+        },
+        "work_modes": {
+          "type": "array",
+          "description": "The ways of working you accept.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "remote",
+              "hybrid",
+              "onsite"
+            ]
+          },
+          "uniqueItems": true,
+          "minItems": 1,
+          "examples": [
+            [
+              "remote",
+              "hybrid"
+            ]
+          ]
+        },
+        "other_areas": {
+          "type": "array",
+          "description": "Other towns or metros you would commute to or work from.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "San Antonio, TX"
+            ]
+          ]
+        },
+        "open_to_relocation": {
+          "type": "boolean",
+          "description": "Whether you would move for the right role.",
+          "default": false
+        },
+        "relocation_targets": {
+          "type": "array",
+          "description": "Places you would move to.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "Denver, CO"
+            ]
+          ]
+        },
+        "max_travel_percent": {
+          "type": "integer",
+          "description": "The most work travel you accept, as a percent of your time.",
+          "minimum": 0,
+          "maximum": 100,
+          "examples": [
+            10
+          ]
+        },
+        "timezone": {
+          "type": "string",
+          "description": "Your time zone.",
+          "minLength": 1,
+          "examples": [
+            "America/Chicago"
+          ]
+        }
+      }
+    },
+    "tracks": {
+      "type": "object",
+      "description": "Which sweeps are switched on.",
+      "additionalProperties": false,
+      "required": [
+        "jobs",
+        "contracts",
+        "networking"
+      ],
+      "properties": {
+        "jobs": {
+          "type": "boolean",
+          "description": "Salaried (W-2) jobs.",
+          "default": false
+        },
+        "contracts": {
+          "type": "boolean",
+          "description": "Contract, freelance and fractional work.",
+          "default": false
+        },
+        "networking": {
+          "type": "boolean",
+          "description": "Local groups and events.",
+          "default": false
+        }
+      },
+      "examples": [
+        {
+          "jobs": true,
+          "contracts": false,
+          "networking": false
+        }
+      ]
+    },
+    "skills": {
+      "type": "object",
+      "description": "What you are good at. Drives searches and fit scoring.",
+      "additionalProperties": false,
+      "required": [
+        "core"
+      ],
+      "properties": {
+        "core": {
+          "type": "array",
+          "description": "Your strongest skills, most important first.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "examples": [
+            [
+              "Staff scheduling",
+              "Patient safety"
+            ]
+          ]
+        },
+        "secondary": {
+          "type": "array",
+          "description": "Skills you have but would not lead with.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "Budgeting"
+            ]
+          ]
+        },
+        "certifications": {
+          "type": "array",
+          "description": "Licenses and certifications you hold.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "RN",
+              "BLS"
+            ]
+          ]
+        },
+        "not_held": {
+          "type": "array",
+          "description": "Credentials you do not hold. Roles that require them are skipped.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "CPA"
+            ]
+          ]
+        }
+      }
+    },
+    "jobs": {
+      "type": "object",
+      "description": "Settings for the salaried job sweep. Required when tracks.jobs is true.",
+      "additionalProperties": false,
+      "required": [
+        "titles",
+        "salary_floor"
+      ],
+      "properties": {
+        "titles": {
+          "type": "array",
+          "description": "Job titles you are aiming for.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "examples": [
+            [
+              "Nurse Manager",
+              "Director of Nursing"
+            ]
+          ]
+        },
+        "levels": {
+          "type": "array",
+          "description": "Seniority levels you accept.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "entry",
+              "mid",
+              "senior",
+              "lead",
+              "manager",
+              "director",
+              "vp",
+              "executive"
+            ]
+          },
+          "uniqueItems": true,
+          "examples": [
+            [
+              "manager",
+              "director"
+            ]
+          ]
+        },
+        "functions": {
+          "type": "array",
+          "description": "The kinds of work or departments you want.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "Inpatient nursing",
+              "Clinical operations"
+            ]
+          ]
+        },
+        "search_keywords": {
+          "type": "array",
+          "description": "Extra search terms. Setup suggests these from your titles and skills.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "nurse manager",
+              "nursing director"
+            ]
+          ]
+        },
+        "exclude_title_keywords": {
+          "type": "array",
+          "description": "Skip postings whose title contains any of these.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "travel",
+              "per diem"
+            ]
+          ]
+        },
+        "salary_floor": {
+          "type": "integer",
+          "description": "Lowest base salary you would consider, per year. Postings that top out below it are dropped.",
+          "minimum": 0,
+          "examples": [
+            95000
+          ]
+        },
+        "salary_target": {
+          "type": "integer",
+          "description": "The base salary you are aiming for, per year.",
+          "minimum": 0,
+          "examples": [
+            115000
+          ]
+        },
+        "currency": {
+          "type": "string",
+          "description": "Three-letter currency code for the salary numbers.",
+          "minLength": 3,
+          "default": "USD",
+          "examples": [
+            "USD"
+          ]
+        },
+        "employment_types": {
+          "type": "array",
+          "description": "Kinds of employment you accept.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "full-time",
+              "part-time",
+              "contract-to-hire",
+              "temporary"
+            ]
+          },
+          "uniqueItems": true,
+          "default": [
+            "full-time"
+          ],
+          "examples": [
+            [
+              "full-time"
+            ]
+          ]
+        },
+        "industries_prefer": {
+          "type": "array",
+          "description": "Industries that are a plus.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "Hospitals",
+              "Health systems"
+            ]
+          ]
+        },
+        "employers_watch": {
+          "type": "array",
+          "description": "Employers to check every sweep even when nothing matches a search.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "Lone Star Regional Health"
+            ]
+          ]
+        },
+        "deal_breakers": {
+          "type": "array",
+          "description": "Anything else that rules a posting out, in your own words.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "Rotating night shifts"
+            ]
+          ]
+        },
+        "max_posting_age_days": {
+          "type": "integer",
+          "description": "Ignore postings older than this many days.",
+          "minimum": 1,
+          "default": 30,
+          "examples": [
+            30
+          ]
+        }
+      }
+    },
+    "contracts": {
+      "type": "object",
+      "description": "Settings for the contract sweep. Required when tracks.contracts is true.",
+      "additionalProperties": false,
+      "required": [
+        "services",
+        "engagement_types",
+        "rate_floor_hourly"
+      ],
+      "properties": {
+        "services": {
+          "type": "array",
+          "description": "What you sell, most important first.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "examples": [
+            [
+              "Brand identity",
+              "Web design"
+            ]
+          ]
+        },
+        "titles": {
+          "type": "array",
+          "description": "Role titles that contract postings use for your work.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "Brand Designer",
+              "Fractional Design Lead"
+            ]
+          ]
+        },
+        "search_keywords": {
+          "type": "array",
+          "description": "Extra search terms. Setup suggests these from your services.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "freelance brand designer"
+            ]
+          ]
+        },
+        "engagement_types": {
+          "type": "array",
+          "description": "How you are willing to be engaged.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "independent-1099",
+              "corp-to-corp",
+              "w2-contract",
+              "fixed-price",
+              "retainer",
+              "fractional",
+              "expert-call",
+              "public-bid"
+            ]
+          },
+          "uniqueItems": true,
+          "minItems": 1,
+          "examples": [
+            [
+              "independent-1099",
+              "fixed-price"
+            ]
+          ]
+        },
+        "rate_floor_hourly": {
+          "type": "number",
+          "description": "Lowest hourly rate you would consider.",
+          "minimum": 0,
+          "examples": [
+            75
+          ]
+        },
+        "rate_target_hourly": {
+          "type": "number",
+          "description": "The hourly rate you are aiming for.",
+          "minimum": 0,
+          "examples": [
+            110
+          ]
+        },
+        "fixed_price_min": {
+          "type": "number",
+          "description": "Smallest fixed-price project worth your time.",
+          "minimum": 0,
+          "examples": [
+            3000
+          ]
+        },
+        "retainer_monthly_min": {
+          "type": "number",
+          "description": "Smallest monthly retainer worth your time.",
+          "minimum": 0,
+          "examples": [
+            4000
+          ]
+        },
+        "currency": {
+          "type": "string",
+          "description": "Three-letter currency code for the rate numbers.",
+          "minLength": 3,
+          "default": "USD",
+          "examples": [
+            "USD"
+          ]
+        },
+        "hours_per_week_min": {
+          "type": "integer",
+          "description": "Fewest hours a week you want.",
+          "minimum": 0,
+          "maximum": 80,
+          "examples": [
+            10
+          ]
+        },
+        "hours_per_week_max": {
+          "type": "integer",
+          "description": "Most hours a week you can give.",
+          "minimum": 1,
+          "maximum": 80,
+          "examples": [
+            30
+          ]
+        },
+        "min_duration_weeks": {
+          "type": "integer",
+          "description": "Shortest engagement worth your time, in weeks.",
+          "minimum": 0,
+          "examples": [
+            4
+          ]
+        },
+        "max_posting_age_days": {
+          "type": "integer",
+          "description": "Ignore postings older than this many days.",
+          "minimum": 1,
+          "default": 21,
+          "examples": [
+            21
+          ]
+        },
+        "has_business_entity": {
+          "type": "boolean",
+          "description": "Whether you can invoice through your own company (needed for corp-to-corp).",
+          "default": false
+        },
+        "channels": {
+          "type": "array",
+          "description": "Marketplaces, agencies and networks where you have or want a profile.",
+          "items": {
+            "type": "object",
+            "description": "One channel.",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "status"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "The platform or agency.",
+                "minLength": 1,
+                "examples": [
+                  "Upwork"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "description": "Where your profile stands.",
+                "enum": [
+                  "not-started",
+                  "in-progress",
+                  "submitted",
+                  "vetting",
+                  "active",
+                  "skip"
+                ],
+                "examples": [
+                  "active"
+                ]
+              },
+              "url": {
+                "type": "string",
+                "description": "Your profile address there.",
+                "minLength": 1,
+                "pattern": "^https?://",
+                "patternHint": "must be a web address starting with https://",
+                "examples": [
+                  "https://example.com/profile"
+                ]
+              }
+            }
+          },
+          "examples": [
+            [
+              {
+                "name": "Upwork",
+                "status": "active"
+              }
+            ]
+          ]
+        },
+        "public_bids": {
+          "type": "object",
+          "description": "Government and public-sector bids.",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Whether to look for public bids.",
+              "default": false
+            },
+            "regions": {
+              "type": "array",
+              "description": "States, provinces or regions whose bid portals to check.",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "examples": [
+                [
+                  "Oregon",
+                  "Washington"
+                ]
+              ]
+            },
+            "max_contract_value": {
+              "type": "number",
+              "description": "Skip bids larger than this.",
+              "minimum": 0,
+              "examples": [
+                100000
+              ]
+            },
+            "category_codes": {
+              "type": "array",
+              "description": "Procurement category codes (such as NAICS) that match your work. Write them in quotes.",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "examples": [
+                [
+                  "541430"
+                ]
+              ]
+            }
+          }
+        }
+      }
+    },
+    "networking": {
+      "type": "object",
+      "description": "Settings for the networking sweep. Required when tracks.networking is true.",
+      "additionalProperties": false,
+      "required": [
+        "goals",
+        "who_to_meet"
+      ],
+      "properties": {
+        "goals": {
+          "type": "array",
+          "description": "What you want networking to do for you.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "examples": [
+            [
+              "Meet agency owners who hire freelancers"
+            ]
+          ]
+        },
+        "who_to_meet": {
+          "type": "array",
+          "description": "The kinds of people you want to meet, most important first.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "examples": [
+            [
+              "Marketing directors",
+              "Agency owners"
+            ]
+          ]
+        },
+        "topics": {
+          "type": "array",
+          "description": "Subjects you care about or could speak on.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "Brand strategy"
+            ]
+          ]
+        },
+        "areas": {
+          "type": "array",
+          "description": "Towns you will go to for an ordinary event. Defaults to your home base and radius.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "Portland, OR",
+              "Beaverton, OR"
+            ]
+          ]
+        },
+        "stretch_areas": {
+          "type": "array",
+          "description": "Places you would travel to for something bigger, such as a conference.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "Seattle, WA"
+            ]
+          ]
+        },
+        "formats": {
+          "type": "array",
+          "description": "Kinds of events you attend.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "in-person",
+              "virtual"
+            ]
+          },
+          "uniqueItems": true,
+          "default": [
+            "in-person",
+            "virtual"
+          ],
+          "examples": [
+            [
+              "in-person"
+            ]
+          ]
+        },
+        "skip": {
+          "type": "array",
+          "description": "Kinds of groups and events to leave out.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "Multi-level marketing",
+              "Pay-to-pitch events"
+            ]
+          ]
+        },
+        "max_cost_per_event": {
+          "type": "number",
+          "description": "Flag events that cost more than this.",
+          "minimum": 0,
+          "examples": [
+            40
+          ]
+        },
+        "max_cost_per_year": {
+          "type": "number",
+          "description": "Flag memberships that cost more than this a year.",
+          "minimum": 0,
+          "examples": [
+            250
+          ]
+        },
+        "max_events_per_month": {
+          "type": "integer",
+          "description": "How many events a month you want suggested at most.",
+          "minimum": 0,
+          "examples": [
+            4
+          ]
+        },
+        "unavailable": {
+          "type": "array",
+          "description": "Times you cannot do, in your own words.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "Weekday mornings before 9",
+              "Sundays"
+            ]
+          ]
+        },
+        "memberships": {
+          "type": "array",
+          "description": "Groups you already belong to.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "AIGA Portland"
+            ]
+          ]
+        },
+        "speaking": {
+          "type": "object",
+          "description": "Speaking opportunities.",
+          "additionalProperties": false,
+          "properties": {
+            "interested": {
+              "type": "boolean",
+              "description": "Whether to look for calls for speakers.",
+              "default": false
+            },
+            "talk_ideas": {
+              "type": "array",
+              "description": "Talks you could give.",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "examples": [
+                [
+                  "Rebranding on a small budget"
+                ]
+              ]
+            }
+          }
+        }
+      }
+    },
+    "exclusions": {
+      "type": "array",
+      "description": "Employers, industries or words to leave out or flag, in every sweep.",
+      "items": {
+        "type": "object",
+        "description": "One exclusion.",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "kind"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The employer, industry or word.",
+            "minLength": 1,
+            "examples": [
+              "Staffing agencies"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "description": "What kind of thing it is.",
+            "enum": [
+              "employer",
+              "industry",
+              "keyword"
+            ],
+            "examples": [
+              "industry"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "description": "skip leaves matches out. flag keeps them with a warning to check first.",
+            "enum": [
+              "skip",
+              "flag"
+            ],
+            "default": "skip",
+            "examples": [
+              "skip"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why, in your own words. Shown next to a flagged match.",
+            "minLength": 1,
+            "examples": [
+              "Non-compete"
+            ]
+          },
+          "until": {
+            "type": "string",
+            "description": "Last day the exclusion applies. Leave out if it never ends.",
+            "minLength": 1,
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "patternHint": "must be a date written as YEAR-MONTH-DAY",
+            "examples": [
+              "2027-06-30"
+            ]
+          }
+        }
+      },
+      "examples": [
+        [
+          {
+            "name": "Staffing agencies",
+            "kind": "industry",
+            "action": "skip"
+          }
+        ]
+      ]
+    },
+    "confidential": {
+      "type": "object",
+      "description": "Things the sweeps must never write down outside this file.",
+      "additionalProperties": false,
+      "properties": {
+        "names": {
+          "type": "array",
+          "description": "Client, employer or people names that must never appear in a note, digest, pitch or draft. They are described by industry and size instead.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "Acme Health Partners"
+            ]
+          ]
+        }
+      }
+    },
+    "writing": {
+      "type": "object",
+      "description": "How drafts and notes written for you should sound.",
+      "additionalProperties": false,
+      "properties": {
+        "tagline": {
+          "type": "string",
+          "description": "How you describe what you do, in one sentence.",
+          "minLength": 1,
+          "examples": [
+            "I help small clinics run calmer units."
+          ]
+        },
+        "avoid_labels": {
+          "type": "array",
+          "description": "Words or titles you never want used to describe you.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "guru"
+            ]
+          ]
+        },
+        "style_rules": {
+          "type": "array",
+          "description": "Writing rules to follow in anything drafted for you.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "No exclamation marks"
+            ]
+          ]
+        }
+      }
+    },
+    "manual_sources": {
+      "type": "array",
+      "description": "Places you get leads that the sweeps cannot read. You are asked about them each sweep.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "examples": [
+        [
+          "A recruiter newsletter in my personal inbox"
+        ]
+      ]
+    },
+    "storage": {
+      "type": "object",
+      "description": "Where your trackers are kept.",
+      "additionalProperties": false,
+      "required": [
+        "vault_path"
+      ],
+      "properties": {
+        "vault_path": {
+          "type": "string",
+          "description": "The folder of your Obsidian vault.",
+          "minLength": 1,
+          "examples": [
+            "~/Documents/Obsidian Vault"
+          ]
+        },
+        "vault_folder": {
+          "type": "string",
+          "description": "The folder inside the vault that workdecero owns. Nothing outside it is ever written.",
+          "minLength": 1,
+          "default": "workdecero",
+          "examples": [
+            "workdecero"
+          ]
+        },
+        "spreadsheet_snapshot": {
+          "type": "boolean",
+          "description": "Whether to write a read-only spreadsheet copy of the trackers after each sweep.",
+          "default": false
+        }
+      }
+    },
+    "mode": {
+      "type": "string",
+      "description": "lite keeps each sweep small enough for a Pro plan. full searches wider and uses more.",
+      "enum": [
+        "lite",
+        "full"
+      ],
+      "default": "lite",
+      "examples": [
+        "lite"
+      ]
+    },
+    "schedule": {
+      "type": "object",
+      "description": "When you run the sweeps. Used for reminders and for judging what is new.",
+      "additionalProperties": false,
+      "properties": {
+        "day": {
+          "type": "string",
+          "description": "The day you usually run them.",
+          "enum": [
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday",
+            "saturday",
+            "sunday"
+          ],
+          "default": "monday",
+          "examples": [
+            "monday"
+          ]
+        },
+        "networking_every_weeks": {
+          "type": "integer",
+          "description": "Run the networking sweep every this many weeks.",
+          "minimum": 1,
+          "maximum": 12,
+          "default": 2,
+          "examples": [
+            2
+          ]
+        }
+      }
+    },
+    "integrations": {
+      "type": "object",
+      "description": "Optional connections. Everything is off unless you turn it on.",
+      "additionalProperties": false,
+      "properties": {
+        "browser": {
+          "type": "object",
+          "description": "Browsing through Claude in Chrome, for sites that need a real browser.",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Whether the sweeps may use your browser.",
+              "default": false
+            },
+            "linkedin_signed_in": {
+              "type": "boolean",
+              "description": "Whether the sweeps may search LinkedIn while signed in as you. This carries a risk to your account.",
+              "default": false
+            },
+            "linkedin_risk_acknowledged": {
+              "type": "boolean",
+              "description": "Set to true once you have read the LinkedIn risk warning and accept it.",
+              "default": false
+            }
+          }
+        },
+        "calendar": {
+          "type": "string",
+          "description": "Calendar used to check for conflicts and to add events you register for.",
+          "enum": [
+            "none",
+            "outlook",
+            "google"
+          ],
+          "default": "none",
+          "examples": [
+            "google"
+          ]
+        },
+        "task_tracker": {
+          "type": "object",
+          "description": "Where to post a short summary after each sweep.",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "description": "The task tracker.",
+              "enum": [
+                "none",
+                "linear"
+              ],
+              "default": "none",
+              "examples": [
+                "linear"
+              ]
+            },
+            "jobs_issue": {
+              "type": "string",
+              "description": "Issue that receives the job sweep summary.",
+              "minLength": 1,
+              "examples": [
+                "TEAM-12"
+              ]
+            },
+            "contracts_issue": {
+              "type": "string",
+              "description": "Issue that receives the contract sweep summary.",
+              "minLength": 1,
+              "examples": [
+                "TEAM-13"
+              ]
+            },
+            "networking_issue": {
+              "type": "string",
+              "description": "Issue that receives the networking sweep summary.",
+              "minLength": 1,
+              "examples": [
+                "TEAM-14"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

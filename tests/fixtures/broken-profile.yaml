@@ -1,0 +1,37 @@
+# A profile with one of each common mistake. Used by the tests.
+schema_version: 1
+
+person:
+  name: Sam Example
+  # headline is missing
+
+location:
+  home_base: Tulsa, OK
+  radius_miles: thirty
+  work_modes: remote
+
+tracks:
+  jobs: true
+  contracts: true
+  networking: false
+
+skills:
+  core: []
+
+jobs:
+  titles:
+    - Office Manager
+  levels: [manger]
+  salery_floor: 50000
+  salary_floor: 60000
+  salary_target: 55000
+
+storage:
+  vault_path: ~/Vault
+  vault_folder: /absolute/path
+
+mode: turbo
+
+integrations:
+  browser:
+    linkedin_signed_in: true

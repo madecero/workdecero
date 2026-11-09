@@ -1,0 +1,157 @@
+# Example profile: a senior product leader in Denver who wants a salaried job
+# first, is open to fractional contract work, and does a little networking.
+# Every person, employer and address in this file is invented.
+schema_version: 1
+
+person:
+  name: Theo Lindqvist
+  headline: Product leader for B2B software, 16 years, recently focused on AI features
+  summary: Sixteen years in product management, the last seven leading teams of 8 to 20. Took two B2B products from first customer to scale and shipped AI features that customers pay for.
+  years_experience: 16
+  resume_path: ~/Documents/Career/resume-theo-lindqvist.pdf
+  linkedin_url: https://www.linkedin.com/in/example-theo-lindqvist
+  linkedin_connections_path: ~/Documents/Career/Connections.csv
+  website: https://theo-lindqvist.example.com
+  business_name: Lindqvist Product Advisory LLC
+
+location:
+  home_base: Denver, CO
+  radius_miles: 30
+  work_modes: [remote, hybrid]
+  other_areas:
+    - Boulder, CO
+  open_to_relocation: true
+  relocation_targets:
+    - Seattle, WA
+  max_travel_percent: 20
+  timezone: America/Denver
+
+tracks:
+  jobs: true
+  contracts: true
+  networking: true
+
+skills:
+  core:
+    - Product strategy
+    - Leading product teams
+    - AI product development
+    - Pricing and packaging
+  secondary:
+    - User research
+    - SQL and product analytics
+  certifications:
+    - Certified Scrum Product Owner
+
+jobs:
+  titles:
+    - VP of Product
+    - Head of Product
+    - Senior Director of Product Management
+    - Chief Product Officer
+  levels: [director, vp, executive]
+  functions:
+    - Product management
+    - AI products
+  search_keywords:
+    - head of product AI
+    - vp product b2b saas
+  exclude_title_keywords:
+    - marketing
+    - associate
+  salary_floor: 210000
+  salary_target: 260000
+  industries_prefer:
+    - B2B software
+    - Climate technology
+  employers_watch:
+    - Front Range Robotics
+    - Mile High Analytics
+  deal_breakers:
+    - Fully onsite five days a week
+  max_posting_age_days: 21
+
+contracts:
+  services:
+    - Fractional head of product
+    - AI product strategy
+    - Product team coaching
+  titles:
+    - Fractional CPO
+    - Fractional Head of Product
+    - Product Advisor
+  engagement_types: [fractional, retainer, corp-to-corp, expert-call]
+  rate_floor_hourly: 175
+  rate_target_hourly: 250
+  retainer_monthly_min: 8000
+  hours_per_week_max: 15
+  min_duration_weeks: 8
+  has_business_entity: true
+  channels:
+    - name: Fractional executive marketplace
+      status: submitted
+    - name: Expert network
+      status: active
+
+networking:
+  goals:
+    - Stay visible to founders and investors who hire product leaders
+  who_to_meet:
+    - Startup founders and CEOs
+    - Venture investors
+    - Other product executives
+  topics:
+    - Shipping AI features customers pay for
+  formats: [in-person, virtual]
+  max_cost_per_event: 75
+  max_events_per_month: 2
+  unavailable:
+    - Tuesday and Thursday evenings
+  speaking:
+    interested: true
+
+exclusions:
+  - name: Summit Ledger Software
+    kind: employer
+    action: skip
+    reason: Non-solicit agreement with a former employer
+    until: 2027-03-31
+  - name: Gambling
+    kind: industry
+  - name: Consulting firms
+    kind: industry
+    action: flag
+    reason: Check for conflicts with advisory clients first
+
+confidential:
+  names:
+    - Summit Ledger Software
+    - Alpenglow Freight Systems
+
+writing:
+  tagline: I build product teams that ship AI features customers pay for.
+  avoid_labels:
+    - thought leader
+
+manual_sources:
+  - Introductions from two executive recruiters by email
+
+storage:
+  vault_path: ~/Documents/Notes
+  vault_folder: Career/workdecero
+  spreadsheet_snapshot: false
+
+mode: full
+
+schedule:
+  day: monday
+  networking_every_weeks: 4
+
+integrations:
+  browser:
+    enabled: true
+    linkedin_signed_in: true
+    linkedin_risk_acknowledged: true
+  calendar: google
+  task_tracker:
+    kind: none

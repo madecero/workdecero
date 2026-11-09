@@ -1,0 +1,93 @@
+# Example profile: a nurse manager near Austin who wants a salaried job only.
+# Every person, employer and address in this file is invented.
+schema_version: 1
+
+person:
+  name: Dana Whitfield
+  headline: Nurse manager with 12 years in acute care
+  summary: Twelve years in acute care nursing, six of them leading a 40-bed medical-surgical unit. Known for cutting agency staffing and for calm units.
+  years_experience: 12
+  resume_path: ~/Documents/resume-dana-whitfield.pdf
+  linkedin_url: https://www.linkedin.com/in/example-dana-whitfield
+  work_authorization: US citizen
+
+location:
+  home_base: Round Rock, TX
+  metro: Austin
+  radius_miles: 35
+  work_modes: [onsite, hybrid]
+  other_areas:
+    - Temple, TX
+  open_to_relocation: false
+  max_travel_percent: 5
+  timezone: America/Chicago
+
+tracks:
+  jobs: true
+  contracts: false
+  networking: false
+
+skills:
+  core:
+    - Nurse staffing and scheduling
+    - Patient safety and quality
+    - Unit budgeting
+    - Coaching new managers
+  secondary:
+    - Electronic health record rollouts
+  certifications:
+    - RN (Texas)
+    - BSN
+    - CNML
+  not_held:
+    - MSN
+
+jobs:
+  titles:
+    - Nurse Manager
+    - Director of Nursing
+    - Clinical Operations Manager
+  levels: [manager, director]
+  functions:
+    - Inpatient nursing
+    - Clinical operations
+  exclude_title_keywords:
+    - travel
+    - per diem
+    - PRN
+  salary_floor: 98000
+  salary_target: 120000
+  employment_types: [full-time]
+  industries_prefer:
+    - Hospitals and health systems
+    - Rehabilitation
+  employers_watch:
+    - Lone Star Regional Health
+    - Brushy Creek Medical Center
+  deal_breakers:
+    - Rotating night shifts
+  max_posting_age_days: 30
+
+exclusions:
+  - name: Staffing agencies
+    kind: industry
+    action: skip
+    reason: Wants a permanent role
+  - name: Hill Country Community Hospital
+    kind: employer
+    action: flag
+    reason: Former employer, check with a past colleague first
+
+confidential:
+  names:
+    - Hill Country Community Hospital
+
+storage:
+  vault_path: ~/Documents/Obsidian Vault
+  vault_folder: workdecero
+  spreadsheet_snapshot: true
+
+mode: lite
+
+schedule:
+  day: sunday

@@ -43,6 +43,16 @@ Nothing personal is stored in this repository or in the plugin folder.
 | Trackers (postings, contracts, groups, events, people, companies) | Your Obsidian vault | Plain Markdown notes that you own. |
 | Cache | The plugin data folder managed by Claude Code | Safe to lose. Removed when the plugin is uninstalled. |
 
+## Your profile
+
+One file, `~/.config/workdecero/profile.yaml`, holds what you are looking for, where, what to leave out and where your trackers live. Setup will write it for you. Set `WORKDECERO_HOME` to keep it in another folder.
+
+See [examples/profiles](examples/profiles) for three complete examples, and [engine/profile.schema.json](engine/profile.schema.json) for every setting. To check a profile:
+
+```
+python3 engine/wdprofile.py validate path/to/profile.yaml
+```
+
 ## What it does not do
 
 Research only. It never applies, messages, registers or creates accounts for you.
