@@ -131,6 +131,16 @@ class Refusing(unittest.TestCase):
     def test_mapping_line_after_top_level_list(self):
         self.fails("- a\nb: 1\n", 2, "expected a list item")
 
+    def test_pasted_bullets_and_missing_space_after_dash(self):
+        for bullet in (chr(0x2022), chr(0x25E6), "*", chr(0x2013)):
+            self.fails("items:\n  " + bullet + " one\n", 2, "must start with '- '")
+        self.fails("items:\n  - one\n  " + chr(0x2022) + " two\n", 3, "must start with '- '")
+        self.fails("items:\n  -one\n", 2, "space after the dash")
+        self.fails(chr(0x2022) + " one\n", 1, "must start with '- '")
+
+    def test_negative_numbers_are_not_mistaken_for_bad_list_items(self):
+        self.assertEqual(loads("a: -5\nb: [-1, -2]\n"), {"a": -5, "b": [-1, -2]})
+
     def test_list_item_in_mapping(self):
         self.fails("a: 1\n- b\n", 2, "list item cannot appear here")
 

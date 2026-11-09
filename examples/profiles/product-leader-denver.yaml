@@ -8,6 +8,7 @@ person:
   headline: Product leader for B2B software, 16 years, recently focused on AI features
   summary: Sixteen years in product management, the last seven leading teams of 8 to 20. Took two B2B products from first customer to scale and shipped AI features that customers pay for.
   years_experience: 16
+  current_employer: Granite Peak Software
   resume_path: ~/Documents/Career/resume-theo-lindqvist.pdf
   linkedin_url: https://www.linkedin.com/in/example-theo-lindqvist
   linkedin_connections_path: ~/Documents/Career/Connections.csv
@@ -53,6 +54,7 @@ jobs:
   functions:
     - Product management
     - AI products
+  search_visibility: quiet
   search_keywords:
     - head of product AI
     - vp product b2b saas
@@ -61,10 +63,10 @@ jobs:
     - associate
   salary_floor: 210000
   salary_target: 260000
-  industries_prefer:
+  preferred_industries:
     - B2B software
     - Climate technology
-  employers_watch:
+  watch_employers:
     - Front Range Robotics
     - Mile High Analytics
   deal_breakers:
@@ -141,17 +143,14 @@ storage:
   vault_folder: Career/workdecero
   spreadsheet_snapshot: false
 
-mode: full
+mode: lite
+
+digest:
+  max_new_items: 8
 
 schedule:
   day: monday
-  networking_every_weeks: 4
+  networking_interval_weeks: 4
 
 integrations:
-  browser:
-    enabled: true
-    linkedin_signed_in: true
-    linkedin_risk_acknowledged: true
   calendar: google
-  task_tracker:
-    kind: none

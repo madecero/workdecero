@@ -103,6 +103,19 @@ class ExampleProfiles(unittest.TestCase):
             mixes.add(tuple(profile["tracks"][track] for track in wd_profile.TRACKS))
         self.assertEqual(mixes, {(True, False, False), (False, True, True), (True, True, True)})
 
+    def test_examples_keep_risky_and_heavy_options_off(self):
+        for name in EXAMPLE_FILES:
+            profile, _ = wd_profile.load(os.path.join(EXAMPLES, name))
+            browser = profile.get("integrations", {}).get("browser", {})
+            self.assertFalse(browser.get("linkedin_signed_in"), name)
+            self.assertFalse(browser.get("linkedin_risk_acknowledged"), name)
+            self.assertEqual(profile["mode"], "lite", name)
+
+    def test_examples_raise_no_warnings(self):
+        for name in EXAMPLE_FILES:
+            profile, _ = wd_profile.load(os.path.join(EXAMPLES, name))
+            self.assertEqual(wd_profile.warnings(profile), [], name)
+
     def test_examples_survive_a_write_and_read_round_trip(self):
         for name in EXAMPLE_FILES:
             with open(os.path.join(EXAMPLES, name), encoding="utf-8") as handle:
@@ -116,6 +129,9 @@ class ExampleProfiles(unittest.TestCase):
         self.assertEqual(profile["storage"]["vault_folder"], "workdecero")
         self.assertEqual(profile["mode"], "lite")
         self.assertNotIn("contracts", profile)
+        portland, _ = wd_profile.load(os.path.join(EXAMPLES, "freelance-designer-portland.yaml"))
+        self.assertEqual(portland["digest"]["max_new_items"], 10)
+        self.assertEqual(profile["jobs"]["search_visibility"], "quiet")
 
 
 class BrokenProfile(unittest.TestCase):
@@ -215,6 +231,95 @@ class Rules(unittest.TestCase):
     def test_not_a_mapping(self):
         self.assertEqual(len(self.check(["a", "b"])), 1)
 
+    def test_text_with_a_colon_gets_a_quotes_hint(self):
+        profile = minimal()
+        profile["jobs"]["deal_breakers"] = [{"Note": "onsite more than two days a week"}]
+        problems = self.check(profile)
+        self.assertEqual(paths(problems), ["jobs.deal_breakers[1]"])
+        self.assertIn("Put the whole value in quotes", problems[0].message)
+        self.assertEqual(problems[0].example, '"Note: onsite more than two days a week"')
+
+    def test_search_visibility_and_digest_size(self):
+        profile = minimal()
+        profile["jobs"]["search_visibility"] = "secret"
+        profile["digest"] = {"max_new_items": 0}
+        self.assertEqual(sorted(paths(self.check(profile))), ["digest.max_new_items", "jobs.search_visibility"])
+
+
+class Warnings(unittest.TestCase):
+    def warn(self, profile):
+        import datetime
+        return wd_profile.warnings(profile, today=datetime.date(2026, 11, 9))
+
+    def test_plausible_numbers_raise_nothing(self):
+        profile = minimal()
+        profile["jobs"].update({"salary_floor": 98000, "salary_target": 120000})
+        profile["contracts"] = {"rate_floor_hourly": 70, "rate_target_hourly": 250.5}
+        self.assertEqual(self.warn(profile), [])
+
+    def test_salary_written_in_thousands(self):
+        profile = minimal()
+        profile["jobs"]["salary_floor"] = 210
+        found = self.warn(profile)
+        self.assertEqual(paths(found), ["jobs.salary_floor"])
+        self.assertIn("Did you mean 210000?", found[0].message)
+        self.assertEqual(found[0].example, "salary_floor: 210000")
+
+    def test_salary_missing_a_digit(self):
+        profile = minimal()
+        profile["jobs"]["salary_floor"] = 21000
+        self.assertIn("Did you mean 210000?", self.warn(profile)[0].message)
+
+    def test_salary_with_an_extra_digit(self):
+        profile = minimal()
+        profile["jobs"]["salary_target"] = 21000000
+        self.assertIn("Did you mean 2100000?", self.warn(profile)[0].message)
+
+    def test_yearly_amount_in_an_hourly_setting(self):
+        profile = minimal()
+        profile["contracts"] = {"rate_floor_hourly": 160000}
+        found = self.warn(profile)
+        self.assertEqual(paths(found), ["contracts.rate_floor_hourly"])
+        self.assertIn("per hour", found[0].message)
+        self.assertIn("Did you mean 77?", found[0].message)
+
+    def test_expired_exclusion(self):
+        profile = minimal()
+        profile["exclusions"] = [{"name": "A", "kind": "employer", "until": "2026-11-08"},
+                                 {"name": "B", "kind": "employer", "until": "2026-11-09"},
+                                 {"name": "C", "kind": "employer"}]
+        self.assertEqual(paths(self.warn(profile)), ["exclusions[1].until"])
+
+    def test_warnings_do_not_fail_validation(self):
+        profile = minimal()
+        profile["jobs"]["salary_floor"] = 210
+        self.assertEqual(wd_profile.check(profile), [])
+
+
+class QuietSearch(unittest.TestCase):
+    def test_current_employer_is_excluded_and_confidential(self):
+        profile = minimal()
+        profile["person"]["current_employer"] = "Granite Peak Software"
+        profile["exclusions"] = [{"name": "Gambling", "kind": "industry"}]
+        profile["confidential"] = {"names": ["Old Client Co"]}
+        self.assertEqual(wd_profile.check(profile), [])
+        self.assertEqual(wd_profile.effective_exclusions(profile)[-1],
+                         {"name": "Granite Peak Software", "kind": "employer", "action": "skip",
+                          "reason": "Current employer"})
+        self.assertEqual(wd_profile.confidential_names(profile), ["Old Client Co", "Granite Peak Software"])
+
+    def test_no_duplicates_when_already_listed(self):
+        profile = minimal()
+        profile["person"]["current_employer"] = "Granite Peak Software"
+        profile["exclusions"] = [{"name": "granite peak software", "kind": "employer", "action": "flag"}]
+        profile["confidential"] = {"names": ["GRANITE PEAK SOFTWARE"]}
+        self.assertEqual(len(wd_profile.effective_exclusions(profile)), 1)
+        self.assertEqual(len(wd_profile.confidential_names(profile)), 1)
+
+    def test_nothing_added_without_a_current_employer(self):
+        self.assertEqual(wd_profile.effective_exclusions(minimal()), [])
+        self.assertEqual(wd_profile.confidential_names(minimal()), [])
+
 
 class LoadingAndCommandLine(unittest.TestCase):
     def setUp(self):
@@ -238,6 +343,31 @@ class LoadingAndCommandLine(unittest.TestCase):
         self.assertIsNone(profile)
         self.assertEqual(paths(problems), ["line 3"])
         self.assertIn("spaces, not tabs", problems[0].message)
+
+    def test_curly_quotes_and_special_spaces_are_read_as_plain_ones(self):
+        text = miniyaml.dumps(minimal())
+        text = text.replace("name: Sam Example", "name: " + chr(0x201C) + "Sam Example" + chr(0x201D))
+        text = text.replace("headline: ", "headline:" + chr(0x00A0))
+        text = text.replace("- onsite", "- " + chr(0x2018) + "onsite" + chr(0x2019))
+        profile, problems = wd_profile.load(self.write(text))
+        self.assertEqual(problems, [])
+        self.assertEqual(profile["person"]["name"], "Sam Example")
+        self.assertEqual(profile["person"]["headline"], "Office manager")
+        self.assertEqual(profile["location"]["work_modes"], ["onsite"])
+
+    def test_pasted_bullet_message_reaches_the_user(self):
+        text = miniyaml.dumps(minimal()).replace("  - Scheduling", "  " + chr(0x2022) + " Scheduling")
+        _, problems = wd_profile.load(self.write(text))
+        self.assertIn("must start with '- '", problems[0].message)
+
+    def test_cli_prints_warnings_and_still_exits_zero(self):
+        profile = minimal()
+        profile["jobs"]["salary_floor"] = 210
+        code, out, _ = self.run_cli("validate", self.write(miniyaml.dumps(profile)))
+        self.assertEqual(code, 0)
+        self.assertIn("is valid.", out)
+        self.assertIn("1 thing to double-check", out)
+        self.assertIn("Did you mean 210000?", out)
 
     def test_empty_file(self):
         profile, problems = wd_profile.load(self.write("# nothing yet\n"))

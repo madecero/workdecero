@@ -31,7 +31,7 @@ skills:
   secondary:
     - Illustration
     - Art direction for photo shoots
-  not_held:
+  credentials_missing:
     - Motion design reel
 
 contracts:
@@ -125,7 +125,7 @@ mode: lite
 
 schedule:
   day: monday
-  networking_every_weeks: 2
+  networking_interval_weeks: 2
 
 integrations:
   calendar: google

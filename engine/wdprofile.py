@@ -13,10 +13,12 @@ Command line:
     wdprofile.py validate [PATH]   check a profile and explain any problems
     wdprofile.py path            print where the profile is expected
 
-Exit codes: 0 valid, 1 problems found, 2 file missing or unreadable.
+Exit codes: 0 valid (warnings may still be printed), 1 problems found,
+2 file missing or unreadable.
 Standard library only, Python 3.9+.
 """
 
+import datetime
 import json
 import os
 import sys
@@ -34,7 +36,7 @@ TRACKS = ("jobs", "contracts", "networking")
 
 def config_home():
     """The folder that holds the profile and the local source map."""
-    return os.path.expanduser(os.environ.get(HOME_ENV) or DEFAULT_HOME)
+    return os.path.normpath(os.path.expanduser(os.environ.get(HOME_ENV) or DEFAULT_HOME))
 
 
 def profile_path():
@@ -127,6 +129,101 @@ def cross_checks(profile, schema):
     return problems
 
 
+# Characters that word processors and web pages swap in, and their plain forms.
+_PASTED = {
+    0x00A0: " ", 0x202F: " ", 0x2007: " ", 0x2009: " ", 0x200B: "", 0xFEFF: "",
+    0x201C: '"', 0x201D: '"', 0x201E: '"', 0x2033: '"',
+    0x2018: "'", 0x2019: "'", 0x201A: "'", 0x2032: "'",
+}
+
+
+def normalize_pasted(text):
+    """Swap curly quotes and special spaces for plain ones.
+
+    A profile is typed by hand or pasted from a document, where these look
+    identical to the plain characters but would not be read the same way.
+    """
+    return text.translate(_PASTED)
+
+
+def _guess_message(value, guess):
+    return "Did you mean %s?" % guess if guess != value else "Check the number."
+
+
+def warnings(profile, today=None):
+    """Things that are allowed but look like mistakes. They never block a sweep."""
+    found = []
+    if not isinstance(profile, dict):
+        return found
+    today = today or datetime.date.today()
+
+    def number(section, key):
+        value = (profile.get(section) or {}).get(key) if isinstance(profile.get(section), dict) else None
+        return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+    for key in ("salary_floor", "salary_target"):
+        value = number("jobs", key)
+        if value is None or value == 0:
+            continue
+        path = "jobs.%s" % key
+        if value < 1000:
+            found.append(Problem(path, "is %s, which is very low for a yearly salary. Write the full amount. "
+                                 "Did you mean %d?" % (value, value * 1000), "%s: %d" % (key, value * 1000)))
+        elif value < 25000:
+            found.append(Problem(path, "is %s, which is low for a yearly salary. Is a digit missing? "
+                                 "Did you mean %d?" % (value, value * 10), "%s: %d" % (key, value * 10)))
+        elif value > 5000000:
+            found.append(Problem(path, "is %s, which is very high for a yearly salary. Is there an extra digit? "
+                                 "Did you mean %d?" % (value, value // 10), "%s: %d" % (key, value // 10)))
+
+    for key in ("rate_floor_hourly", "rate_target_hourly"):
+        value = number("contracts", key)
+        if value is None or value == 0:
+            continue
+        path = "contracts.%s" % key
+        if value >= 2000:
+            hourly = int(round(value / 2080.0))
+            found.append(Problem(path, "is %s, which looks like a yearly amount. This setting is per hour. "
+                                 "Did you mean %d? (%s a year is about %d an hour.)" % (value, hourly, value, hourly),
+                                 "%s: %d" % (key, hourly)))
+        elif value < 5:
+            found.append(Problem(path, "is %s, which is very low for an hourly rate. Check the number." % value, None))
+
+    exclusions = profile.get("exclusions")
+    if isinstance(exclusions, list):
+        for index, item in enumerate(exclusions, start=1):
+            until = item.get("until") if isinstance(item, dict) else None
+            if isinstance(until, str):
+                try:
+                    ended = datetime.date(*[int(part) for part in until.split("-")])
+                except (ValueError, TypeError):
+                    continue
+                if ended < today:
+                    found.append(Problem("exclusions[%d].until" % index,
+                                         "is %s, which has passed, so this exclusion no longer applies. "
+                                         "Remove it or set a later date." % until, None))
+    return found
+
+
+def effective_exclusions(profile):
+    """The exclusions list plus the current employer, which is always skipped."""
+    items = list(profile.get("exclusions") or [])
+    employer = (profile.get("person") or {}).get("current_employer")
+    if employer and not any(item.get("kind") == "employer" and item.get("name", "").lower() == employer.lower()
+                            for item in items):
+        items.append({"name": employer, "kind": "employer", "action": "skip", "reason": "Current employer"})
+    return items
+
+
+def confidential_names(profile):
+    """Every name that must never be written into a note, digest or draft."""
+    names = list((profile.get("confidential") or {}).get("names") or [])
+    employer = (profile.get("person") or {}).get("current_employer")
+    if employer and employer.lower() not in [name.lower() for name in names]:
+        names.append(employer)
+    return names
+
+
 def check(profile, schema=None):
     """Return a list of Problem for an already parsed profile."""
     schema = schema or load_schema()
@@ -147,7 +244,7 @@ def load(path=None):
     with open(path, "r", encoding="utf-8") as handle:
         text = handle.read()
     try:
-        raw = miniyaml.loads(text)
+        raw = miniyaml.loads(normalize_pasted(text))
     except miniyaml.YamlError as exc:
         where = "line %d" % exc.line if exc.line else "the file"
         return None, [Problem(where, "this line cannot be read: %s." % exc.problem, None)]
@@ -159,9 +256,12 @@ def load(path=None):
     return profile, problems
 
 
-def render_problems(problems, path):
+def render_problems(problems, path, kind="problem"):
     count = len(problems)
-    lines = ["%s has %d problem%s to fix:" % (path, count, "" if count == 1 else "s"), ""]
+    if kind == "problem":
+        lines = ["%s has %d problem%s to fix:" % (path, count, "" if count == 1 else "s"), ""]
+    else:
+        lines = ["%d thing%s to double-check (the profile still works):" % (count, "" if count == 1 else "s"), ""]
     for number, problem in enumerate(problems, start=1):
         rendered = problem.render().splitlines()
         lines.append("%d. %s" % (number, rendered[0]))
@@ -193,6 +293,9 @@ def main(argv=None):
         return 1
     on = [name for name in TRACKS if profile["tracks"].get(name)]
     print("%s is valid. Sweeps on: %s. Mode: %s." % (shown, ", ".join(on), profile["mode"]))
+    notes = warnings(profile)
+    if notes:
+        print("\n" + render_problems(notes, shown, kind="warning"))
     return 0
 
 

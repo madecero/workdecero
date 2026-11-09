@@ -137,6 +137,12 @@ def validate(value, schema, path=""):
         words = " or ".join(_TYPE_WORDS.get(name, name) for name in wanted if name != "null")
         if value is None:
             message = "is empty, but it needs %s." % words
+        elif "string" in wanted and isinstance(value, dict) and len(value) == 1:
+            key, rest = list(value.items())[0]
+            written = "%s: %s" % (key, "" if rest is None else miniyaml.dumps(rest).strip())
+            message = ("contains a colon followed by a space, so it was read as a setting instead of text. "
+                       "Put the whole value in quotes.")
+            return [Problem(path, message, '"%s"' % written.strip().replace('"', "'"))]
         elif "array" in wanted and _type_of(value) != "object":
             message = "must be a list, but you wrote a single value (%s). Put it in a list." % _show(value)
         else:
@@ -210,7 +216,12 @@ def validate(value, schema, path=""):
 
 
 def apply_defaults(value, schema):
-    """Return a copy of `value` with schema defaults filled in for missing or empty settings."""
+    """Return a copy of `value` with schema defaults filled in for missing or empty settings.
+
+    Optional sections with no required settings (digest, schedule, integrations)
+    are created so callers can read their defaults without checking first.
+    Sections that have required settings (jobs, contracts, networking) are not.
+    """
     if isinstance(value, dict):
         result = dict(value)
         for key, child in schema.get("properties", {}).items():
@@ -218,6 +229,8 @@ def apply_defaults(value, schema):
                 result.pop(key, None)
                 if "default" in child:
                     result[key] = _copy(child["default"])
+                elif child.get("type") == "object" and not child.get("required"):
+                    result[key] = {}  # an optional section: fill it with its own defaults
             if key in result:
                 result[key] = apply_defaults(result[key], child)
         return result

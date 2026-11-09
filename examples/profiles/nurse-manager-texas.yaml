@@ -7,6 +7,7 @@ person:
   headline: Nurse manager with 12 years in acute care
   summary: Twelve years in acute care nursing, six of them leading a 40-bed medical-surgical unit. Known for cutting agency staffing and for calm units.
   years_experience: 12
+  current_employer: Hill Country Community Hospital
   resume_path: ~/Documents/resume-dana-whitfield.pdf
   linkedin_url: https://www.linkedin.com/in/example-dana-whitfield
   work_authorization: US citizen
@@ -39,7 +40,7 @@ skills:
     - RN (Texas)
     - BSN
     - CNML
-  not_held:
+  credentials_missing:
     - MSN
 
 jobs:
@@ -51,6 +52,7 @@ jobs:
   functions:
     - Inpatient nursing
     - Clinical operations
+  search_visibility: quiet
   exclude_title_keywords:
     - travel
     - per diem
@@ -58,10 +60,10 @@ jobs:
   salary_floor: 98000
   salary_target: 120000
   employment_types: [full-time]
-  industries_prefer:
+  preferred_industries:
     - Hospitals and health systems
     - Rehabilitation
-  employers_watch:
+  watch_employers:
     - Lone Star Regional Health
     - Brushy Creek Medical Center
   deal_breakers:
@@ -73,14 +75,10 @@ exclusions:
     kind: industry
     action: skip
     reason: Wants a permanent role
-  - name: Hill Country Community Hospital
+  - name: Brazos Valley Health Network
     kind: employer
     action: flag
     reason: Former employer, check with a past colleague first
-
-confidential:
-  names:
-    - Hill Country Community Hospital
 
 storage:
   vault_path: ~/Documents/Obsidian Vault
@@ -88,6 +86,9 @@ storage:
   spreadsheet_snapshot: true
 
 mode: lite
+
+digest:
+  max_new_items: 5
 
 schedule:
   day: sunday

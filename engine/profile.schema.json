@@ -63,6 +63,14 @@
             12
           ]
         },
+        "current_employer": {
+          "type": "string",
+          "description": "Where you work now, if anywhere. Postings there are left out automatically, and the name is never written into a note, digest or draft.",
+          "minLength": 1,
+          "examples": [
+            "Granite Peak Software"
+          ]
+        },
         "resume_path": {
           "type": "string",
           "description": "Where your resume file is. Read, never changed.",
@@ -315,9 +323,9 @@
             ]
           ]
         },
-        "not_held": {
+        "credentials_missing": {
           "type": "array",
-          "description": "Credentials you do not hold. Roles that require them are skipped.",
+          "description": "Credentials that postings in your field often ask for and you do not hold. Roles that require them are skipped.",
           "items": {
             "type": "string",
             "minLength": 1
@@ -356,7 +364,7 @@
         },
         "levels": {
           "type": "array",
-          "description": "Seniority levels you accept.",
+          "description": "Seniority levels you accept. Titles do not always match: Head of usually means director or vp, Principal and Staff are senior individual roles (use lead), Partner and Founding roles are usually executive.",
           "items": {
             "type": "string",
             "enum": [
@@ -392,6 +400,18 @@
             ]
           ]
         },
+        "search_visibility": {
+          "type": "string",
+          "description": "open means you do not mind who knows you are looking. quiet is for searching while employed: nothing is suggested that could signal your search in public, such as an Open to Work banner or a post.",
+          "enum": [
+            "open",
+            "quiet"
+          ],
+          "default": "open",
+          "examples": [
+            "quiet"
+          ]
+        },
         "search_keywords": {
           "type": "array",
           "description": "Extra search terms. Setup suggests these from your titles and skills.",
@@ -422,7 +442,7 @@
         },
         "salary_floor": {
           "type": "integer",
-          "description": "Lowest base salary you would consider, per year. Postings that top out below it are dropped.",
+          "description": "Lowest base salary you would consider, per year, written in full (95000, not 95). Postings that top out below it are dropped. Postings that list no pay are kept and marked as pay not listed.",
           "minimum": 0,
           "examples": [
             95000
@@ -467,9 +487,9 @@
             ]
           ]
         },
-        "industries_prefer": {
+        "preferred_industries": {
           "type": "array",
-          "description": "Industries that are a plus.",
+          "description": "Industries that are a plus. To leave an industry out, use exclusions.",
           "items": {
             "type": "string",
             "minLength": 1
@@ -481,7 +501,7 @@
             ]
           ]
         },
-        "employers_watch": {
+        "watch_employers": {
           "type": "array",
           "description": "Employers to check every sweep even when nothing matches a search.",
           "items": {
@@ -1164,6 +1184,23 @@
         "lite"
       ]
     },
+    "digest": {
+      "type": "object",
+      "description": "How much each sweep digest shows you.",
+      "additionalProperties": false,
+      "properties": {
+        "max_new_items": {
+          "type": "integer",
+          "description": "The most new items a digest lists, best first. The rest stay in your trackers.",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 10,
+          "examples": [
+            10
+          ]
+        }
+      }
+    },
     "schedule": {
       "type": "object",
       "description": "When you run the sweeps. Used for reminders and for judging what is new.",
@@ -1186,7 +1223,7 @@
             "monday"
           ]
         },
-        "networking_every_weeks": {
+        "networking_interval_weeks": {
           "type": "integer",
           "description": "Run the networking sweep every this many weeks.",
           "minimum": 1,

@@ -44,6 +44,19 @@ _UNSUPPORTED_START = {
 }
 
 
+# Bullet characters that arrive when a list is pasted from a document.
+_PASTED_BULLETS = "".join(chr(code) for code in (0x2022, 0x2023, 0x25E6, 0x25AA, 0x25CF, 0x2043, 0x2013, 0x2014, 0x00B7))
+
+
+def _line_shape_hint(content):
+    """A specific message for a line that is neither 'key: value' nor '- item', or None."""
+    if content[0] in _PASTED_BULLETS or content.startswith("* "):
+        return "list items must start with '- ' (a dash, then a space). Replace the pasted bullet character"
+    if content[0] == "-" and len(content) > 1 and content[1] not in " -":
+        return "put a space after the dash that starts a list item"
+    return None
+
+
 class YamlError(ValueError):
     """A problem in the YAML text. `line` is the 1-based line number, or None."""
 
@@ -237,6 +250,8 @@ class _Parser(object):
         if indent != 0:
             raise YamlError("the first line must not be indented", line)
         if not content.startswith("- ") and content != "-" and _find_key_end(content) == -1:
+            if _line_shape_hint(content):
+                raise YamlError(_line_shape_hint(content), line)
             if len(self.lines) > 1:
                 raise YamlError("expected 'key: value' or '- item'", self.lines[1][2])
             self.pos = 1
@@ -273,12 +288,12 @@ class _Parser(object):
             if line_indent < indent:
                 break
             if line_indent > indent:
-                raise YamlError("unexpected indentation", line)
+                raise YamlError(_line_shape_hint(content) or "unexpected indentation", line)
             if content == "-" or content.startswith("- "):
                 raise YamlError("a list item cannot appear here. Check the indentation", line)
             end = _find_key_end(content)
             if end == -1:
-                raise YamlError("expected 'key: value' (a colon followed by a space)", line)
+                raise YamlError(_line_shape_hint(content) or "expected 'key: value' (a colon followed by a space)", line)
             key_text = content[:end].strip()
             if not key_text:
                 raise YamlError("a key is missing before the colon", line)
@@ -300,8 +315,10 @@ class _Parser(object):
             if line_indent < indent:
                 break
             if line_indent > indent:
-                raise YamlError("unexpected indentation", line)
+                raise YamlError(_line_shape_hint(content) or "unexpected indentation", line)
             if not (content == "-" or content.startswith("- ")):
+                if _line_shape_hint(content):
+                    raise YamlError(_line_shape_hint(content), line)
                 break  # the list ended; the enclosing mapping continues
             rest = content[1:].strip()
             if not rest:
