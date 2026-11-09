@@ -1,0 +1,234 @@
+{
+  "note": "Invented content in the shape each source answers with. No real employer, posting or person. No request headers, cookies or tokens are stored.",
+  "exchanges": [
+    {
+      "url": "https://summitpeakhealth.wd1.myworkdayjobs.com/wday/cxs/summitpeakhealth/Careers/jobs",
+      "status": 200,
+      "json": {
+        "total": 5,
+        "jobPostings": [
+          {
+            "title": "VP of Product",
+            "externalPath": "/job/Denver-CO/VP-of-Product_R-100",
+            "locationsText": "Denver, CO",
+            "postedOn": "Posted 3 Days Ago",
+            "bulletFields": [
+              "R-100"
+            ]
+          },
+          {
+            "title": "Senior Director of Product Management, Platform",
+            "externalPath": "/job/Remote/Senior-Director-Product_R-101",
+            "locationsText": "Remote - US",
+            "postedOn": "Posted 10 Days Ago",
+            "bulletFields": [
+              "R-101"
+            ]
+          },
+          {
+            "title": "Product Marketing Lead",
+            "externalPath": "/job/Denver-CO/Product-Marketing-Lead_R-102",
+            "locationsText": "Denver, CO",
+            "postedOn": "Posted Today",
+            "bulletFields": [
+              "R-102"
+            ]
+          },
+          {
+            "title": "Nurse Manager",
+            "externalPath": "/job/Denver-CO/Nurse-Manager_R-103",
+            "locationsText": "Denver, CO",
+            "postedOn": "Posted Yesterday",
+            "bulletFields": [
+              "R-103"
+            ]
+          },
+          {
+            "title": "Head of Product",
+            "externalPath": "/job/Miami-FL/Head-of-Product_R-104",
+            "locationsText": "Miami, FL",
+            "postedOn": "Posted 30+ Days Ago",
+            "bulletFields": [
+              "R-104"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "url": "https://boards-api.greenhouse.io/v1/boards/alpinedata/jobs",
+      "status": 200,
+      "json": {
+        "jobs": [
+          {
+            "id": 7001,
+            "title": "Head of Product",
+            "absolute_url": "https://job-boards.greenhouse.io/alpinedata/jobs/7001",
+            "location": {
+              "name": "Remote"
+            },
+            "updated_at": "2026-11-05T10:00:00-05:00"
+          },
+          {
+            "id": 7002,
+            "title": "Staff Engineer",
+            "absolute_url": "https://job-boards.greenhouse.io/alpinedata/jobs/7002",
+            "location": {
+              "name": "Remote"
+            },
+            "updated_at": "2026-11-05T10:00:00-05:00"
+          },
+          {
+            "id": 7003,
+            "title": "VP of Product, Platform",
+            "absolute_url": "https://job-boards.greenhouse.io/alpinedata/jobs/7003",
+            "location": {
+              "name": "Boulder, CO"
+            },
+            "updated_at": "2026-10-28T10:00:00-05:00"
+          }
+        ]
+      }
+    },
+    {
+      "url": "https://api.lever.co/v0/postings/granitepeaksoftware?mode=json",
+      "status": 200,
+      "json": [
+        {
+          "id": "99999999-9999-4999-8999-999999999999",
+          "text": "VP of Product",
+          "hostedUrl": "https://jobs.lever.co/granitepeaksoftware/99999999-9999-4999-8999-999999999999",
+          "categories": {
+            "location": "Denver, CO"
+          },
+          "createdAt": 1794000000000
+        }
+      ]
+    },
+    {
+      "url": "https://api.ashbyhq.com/posting-api/job-board/ridgelineai",
+      "status": 200,
+      "json": {
+        "jobs": [
+          {
+            "id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "title": "Chief Product Officer",
+            "location": "Denver, CO",
+            "isRemote": true,
+            "isListed": true,
+            "jobUrl": "https://jobs.ashbyhq.com/ridgelineai/dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "publishedAt": "2026-11-07T09:00:00.000Z"
+          },
+          {
+            "id": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+            "title": "Head of Product",
+            "location": "Denver, CO",
+            "isListed": false,
+            "jobUrl": "https://jobs.ashbyhq.com/ridgelineai/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+            "publishedAt": "2026-11-07T09:00:00.000Z"
+          }
+        ]
+      }
+    },
+    {
+      "url": "https://api.smartrecruiters.com/v1/companies/HighPlainsLogistics/postings?limit=50&q=product",
+      "status": 200,
+      "json": {
+        "totalFound": 1,
+        "content": [
+          {
+            "id": "744000001",
+            "name": "Head of Product",
+            "refNumber": "REF55",
+            "releasedDate": "2026-11-02T12:00:00.000Z",
+            "location": {
+              "city": "Denver",
+              "region": "CO",
+              "remote": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "url": "https://api.smartrecruiters.com/v1/companies/HighPlainsLogistics/postings?limit=50&q=ai%20products",
+      "status": 200,
+      "json": {
+        "totalFound": 0,
+        "content": []
+      }
+    },
+    {
+      "url": "https://apply.workable.com/api/v1/widget/accounts/bluesprucelabs",
+      "status": 200,
+      "json": {
+        "name": "Blue Spruce Labs",
+        "jobs": [
+          {
+            "title": "Head of Product",
+            "shortcode": "BSL123",
+            "url": "https://apply.workable.com/bluesprucelabs/j/BSL123",
+            "city": "Fort Collins",
+            "state": "Colorado",
+            "telecommuting": true,
+            "published_on": "2026-11-06"
+          }
+        ]
+      }
+    },
+    {
+      "url": "https://api.lever.co/v0/postings/downco?mode=json",
+      "status": 503,
+      "body": "down"
+    },
+    {
+      "url": "https://summitpeakhealth.wd1.myworkdayjobs.com/wday/cxs/summitpeakhealth/Careers/job/Denver-CO/VP-of-Product_R-100",
+      "status": 200,
+      "json": {
+        "jobPostingInfo": {
+          "title": "VP of Product",
+          "startDate": "2026-11-01",
+          "canApply": true
+        }
+      }
+    },
+    {
+      "url": "https://summitpeakhealth.wd1.myworkdayjobs.com/wday/cxs/summitpeakhealth/Careers/job/Remote/Senior-Director-Product_R-101",
+      "status": 200,
+      "json": {
+        "jobPostingInfo": {
+          "title": "Senior Director of Product Management, Platform",
+          "startDate": "2026-11-01",
+          "canApply": true
+        }
+      }
+    },
+    {
+      "url": "https://summitpeakhealth.wd1.myworkdayjobs.com/wday/cxs/summitpeakhealth/Careers/job/Miami-FL/Head-of-Product_R-104",
+      "status": 200,
+      "json": {
+        "jobPostingInfo": {
+          "title": "Head of Product",
+          "startDate": "2026-11-01",
+          "canApply": true
+        }
+      }
+    },
+    {
+      "url": "https://boards-api.greenhouse.io/v1/boards/alpinedata/jobs/7001",
+      "status": 200,
+      "json": {
+        "id": 7001,
+        "title": "Head of Product"
+      }
+    },
+    {
+      "url": "https://boards-api.greenhouse.io/v1/boards/alpinedata/jobs/7003",
+      "status": 200,
+      "json": {
+        "id": 7003,
+        "title": "VP of Product, Platform"
+      }
+    }
+  ]
+}

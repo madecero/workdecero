@@ -15,6 +15,8 @@ Shared logic for the sweeps. Standard library Python only (3.9 or newer), so it 
 | `merge.py` | Decides which finds are the same posting, merges them, matches them against the vault and plans the writes. |
 | `scoring.py` | Fit for jobs and Win odds for contracts, 0 to 100, from the profile. Applies exclusions. |
 
+| `harvest.py` | Reads open postings straight from the job lists of employers in the local map and keeps the ones whose titles match the profile. |
+| `sweep.py` | The job sweep: liveness, harvest, intake, warm paths, verification and the digest note. Keeps everything private out of the research conversation. |
 | `sources.py` | The local source map: checks each proposed source with a live call, removes duplicates, re-checks old entries, and keeps `sources.yaml`. |
 | `handoff.py` | The private temporary folder the helpers share with the assistant, and whether a skill has a run open. Commands that change saved data only work during a run. |
 | `harvest.py` | Reads the job lists of employers in the map and keeps the postings whose titles match the profile. |

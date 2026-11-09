@@ -2,7 +2,7 @@
 
 A Claude Code plugin that runs weekly job, contract and networking sweeps from your own profile and keeps the results in your Obsidian vault.
 
-**Under construction.** Setup works. The sweeps themselves are still being built.
+**Under construction.** Setup, the local map and the job sweep work. The contract and networking sweeps are still being built.
 
 ## Install
 
@@ -49,11 +49,18 @@ Nothing personal is stored in this repository or in the plugin folder.
 | Trackers (postings, contracts, groups, events, people, companies) | Your Obsidian vault | Plain Markdown notes that you own. |
 | Setup draft | `~/.cache/workdecero/` (`setup-answers.json`, `setup-state.json`) | Temporary. Holds your answers only while setup is running, in a folder only you can open, and is deleted when setup is saved or cancelled. |
 | Source hand-off | `~/.cache/workdecero/` (`sources-entries.json`, `sources-run.json`) | Temporary. Holds public names and links found while your local map is being built. Each batch is deleted as soon as it is checked, and the folder goes when the run ends. |
+| Sweep hand-off and state | `~/.cache/workdecero/sweep-handoff.json`, `sweep-state.json` | Temporary. Hold public postings found during a sweep, and are deleted when the sweep finishes. |
 | Cache | The plugin data folder managed by Claude Code | Safe to lose. Removed when the plugin is uninstalled. |
 
 ## Your local map
 
 Say **build my local map** after setup. In about 3 minutes it finds where your sweeps should look: employers in your field and area and the job site each one uses, state and field job boards, the places contract work is posted, and local groups and associations. Every entry is checked with a live call before it is kept. The result is `~/.config/workdecero/sources.yaml`, which you can edit. It is re-checked every few weeks.
+
+## The job sweep
+
+Say **run the job sweep**, about once a week. It re-checks which of your open postings are still live, reads the job lists of the employers in your local map, searches a little further inside a small budget, scores what it finds against your profile, and writes the results into your tracker with a digest note that puts deadlines first. In Lite mode it takes about 10 minutes.
+
+It never applies, messages, follows or saves anything, and it does not sign in anywhere. The part that reads web pages is never told your pay floor, your exclusions, your current employer or who you know. Those are applied on your computer after the reading is done.
 
 ## Your profile
 

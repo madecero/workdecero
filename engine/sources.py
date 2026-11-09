@@ -658,6 +658,12 @@ def learn_employer(source_map, name, posting_url, fetcher=None, today=None):
     ats = detect_ats(posting_url)
     if not name or not ats or not api_url(ats):
         return False
+    known = [entry for entry in source_map.get("jobs") or [] if entry.get("kind") == "employer"
+             and (merge.normalize_company(entry.get("name")) == merge.normalize_company(name)
+                  or (isinstance(entry.get("ats"), dict) and entry["ats"] == dict(
+                      (k, v) for k, v in ats.items() if v not in (None, "", False))))]
+    if known:
+        return False          # already in the map: nothing to learn, and no call to make
     result = add_entries(source_map, {"jobs": [{"name": name, "kind": "employer", "ats": ats,
                                                 "url": _board_url(ats, posting_url),
                                                 "notes": "Learned from a posting a sweep found"}]},
