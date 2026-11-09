@@ -566,6 +566,7 @@ class Write(SetupCase):
         self.assertIn('Next:   say "run the job sweep". The first one takes about 10 minutes in Lite mode.', out)
         self.assertIn("Open:   obsidian://open?path=", out)
         self.assertIn("Start%20here.md", out)
+        self.assertIn('Say "build my local map"', out)
         self.assertIn("Change anything later:   /workdecero:setup", out)
         self.assertIn(setup_tool.PRIVACY, out)
 

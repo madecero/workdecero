@@ -835,7 +835,9 @@ def write(draft, out=None):
     print("  Profile      %s   (your answers; %s)" % (_tilde(path), "saved" if changed else "unchanged"), file=out)
     print("  Tracker      %s / %s / Start here   (%s)" % (
         name, folder, "%d files added" % len(created) if created else "already in place, nothing overwritten"), file=out)
-    print("  Local map    not built yet. It will be offered after your first sweep.", file=out)
+    print("  Local map    not built yet. Say \"build my local map\" (about 3 minutes) to find job boards,", file=out)
+    print("               employers and groups for %s." % (profile.get("location", {}).get("home_base") or "your area"),
+          file=out)
     print("", file=out)
     print("Next:   say \"%s\". The first one takes about 10 minutes in %s mode." % (first, mode), file=out)
     if link:

@@ -177,7 +177,7 @@ Only after they say it looks good, run `TOOL write`. Show the "workdecero is set
 Then offer two things, one at a time:
 
 1. **Connections (optional).** "Want to add your LinkedIn connections, so sweeps can spot people you know at a company? In LinkedIn: Settings, Data privacy, Get a copy of your data, pick Connections. LinkedIn emails you a file called Connections.csv." If yes, get the path, then ask separately: **"Include the email addresses in that file? Most people say no."** (default no). Run `TOOL status` to open a run, write an answers file holding only `"_run"`, `"_connections_path"` and `"_include_emails"` (true only on a clear yes), run `TOOL import-connections`, and report the counts it prints in a sentence.
-2. **Local sources.** "Finding local job boards, employers and groups for your area is coming in a later version. It will be offered after your first sweep." Do not pretend to build it now.
+2. **Local map.** "Want me to find the job boards, employers and groups for your area now? It takes about 3 minutes, or you can do it later by saying build my local map." If yes, tell them to say **build my local map** as their next message (that starts the `sources` skill, which has its own tools). Do not research it yourself inside setup.
 
 End by repeating the one next step from the screen (for example: say "run the job sweep").
 

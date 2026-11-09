@@ -45,10 +45,15 @@ Nothing personal is stored in this repository or in the plugin folder.
 
 | What | Where | Notes |
 | --- | --- | --- |
-| Profile and local source map | `~/.config/workdecero/` | Location can be overridden. Untouched by updates and by uninstall. |
+| Profile (`profile.yaml`) and local map (`sources.yaml`) | `~/.config/workdecero/` | Location can be overridden. Untouched by updates and by uninstall. |
 | Trackers (postings, contracts, groups, events, people, companies) | Your Obsidian vault | Plain Markdown notes that you own. |
 | Setup draft | `~/.cache/workdecero/` (`setup-answers.json`, `setup-state.json`) | Temporary. Holds your answers only while setup is running, in a folder only you can open, and is deleted when setup is saved or cancelled. |
+| Source hand-off | `~/.cache/workdecero/sources-entries.json` | Temporary. Holds public names and links found while your local map is being built, and is deleted as soon as each batch is checked. |
 | Cache | The plugin data folder managed by Claude Code | Safe to lose. Removed when the plugin is uninstalled. |
+
+## Your local map
+
+Say **build my local map** after setup. In about 3 minutes it finds where your sweeps should look: employers in your field and area and the job site each one uses, state and field job boards, the places contract work is posted, and local groups and associations. Every entry is checked with a live call before it is kept. The result is `~/.config/workdecero/sources.yaml`, which you can edit. It is re-checked every few weeks.
 
 ## Your profile
 

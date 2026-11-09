@@ -1,0 +1,237 @@
+{
+  "note": "Invented content in the shape each source answers with. No real employer, board or group. No request headers, cookies or tokens are stored.",
+  "exchanges": [
+    {
+      "url": "https://examplehealth.wd5.myworkdayjobs.com/wday/cxs/examplehealth/Careers/jobs",
+      "status": 200,
+      "json": {
+        "total": 212,
+        "jobPostings": [
+          {
+            "title": "Nurse Manager",
+            "externalPath": "/job/Round-Rock-TX/Nurse-Manager_R-10231",
+            "locationsText": "Round Rock, TX",
+            "postedOn": "Posted 3 Days Ago"
+          }
+        ]
+      }
+    },
+    {
+      "url": "https://closedclinic.wd1.myworkdayjobs.com/wday/cxs/closedclinic/External/jobs",
+      "status": 404,
+      "json": {
+        "errorCode": "S21",
+        "httpStatus": 404
+      }
+    },
+    {
+      "url": "https://badsite.wd1.myworkdayjobs.com/wday/cxs/badsite/Nope/jobs",
+      "status": 422,
+      "json": {
+        "errorCode": "HTTP_422",
+        "httpStatus": 422
+      }
+    },
+    {
+      "url": "https://blockedco.wd3.myworkdayjobs.com/wday/cxs/blockedco/Jobs/jobs",
+      "status": 403,
+      "body": "Forbidden"
+    },
+    {
+      "url": "https://boards-api.greenhouse.io/v1/boards/frontrangerobotics/jobs",
+      "status": 200,
+      "json": {
+        "jobs": [
+          {
+            "id": 1,
+            "title": "VP of Product"
+          },
+          {
+            "id": 2,
+            "title": "Staff Engineer"
+          }
+        ],
+        "meta": {
+          "total": 2
+        }
+      }
+    },
+    {
+      "url": "https://boards-api.greenhouse.io/v1/boards/nosuchboard/jobs",
+      "status": 404,
+      "json": {
+        "status": 404,
+        "error": "Board not found"
+      }
+    },
+    {
+      "url": "https://api.lever.co/v0/postings/milehighanalytics?mode=json&limit=1",
+      "status": 200,
+      "json": [
+        {
+          "id": "11111111-1111-4111-8111-111111111111",
+          "text": "Head of Product"
+        }
+      ]
+    },
+    {
+      "url": "https://api.lever.co/v0/postings/emptyco?mode=json&limit=1",
+      "status": 200,
+      "json": []
+    },
+    {
+      "url": "https://api.lever.co/v0/postings/goneco?mode=json&limit=1",
+      "status": 404,
+      "json": {
+        "ok": false,
+        "error": "Document not found"
+      }
+    },
+    {
+      "url": "https://api.ashbyhq.com/posting-api/job-board/bluebirdhealth",
+      "status": 200,
+      "json": {
+        "jobs": [
+          {
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "title": "Senior Director of Product"
+          }
+        ]
+      }
+    },
+    {
+      "url": "https://api.smartrecruiters.com/v1/companies/TidewaterCoffee/postings?limit=1",
+      "status": 200,
+      "json": {
+        "offset": 0,
+        "limit": 1,
+        "totalFound": 7,
+        "content": [
+          {
+            "id": "1",
+            "name": "Brand Designer"
+          }
+        ]
+      }
+    },
+    {
+      "url": "https://apply.workable.com/api/v1/widget/accounts/okaforstudio",
+      "status": 200,
+      "json": {
+        "name": "Okafor Studio",
+        "jobs": [
+          {
+            "title": "Designer",
+            "shortcode": "ABC123"
+          }
+        ]
+      }
+    },
+    {
+      "url": "https://careers.lonestarregional.example.org/jobs",
+      "status": 200,
+      "body": "<html><body><h1>Careers at Lone Star Regional Health</h1></body></html>"
+    },
+    {
+      "url": "https://lonestarregional.icims.com/jobs/search",
+      "status": 200,
+      "body": "<html><body>Search jobs</body></html>"
+    },
+    {
+      "url": "https://jobs.statework.example.gov/",
+      "status": 200,
+      "body": "<html><body>State job board</body></html>"
+    },
+    {
+      "url": "https://nursingjobs.example.org/texas",
+      "status": 200,
+      "body": "<html><body>Nursing jobs</body></html>"
+    },
+    {
+      "url": "https://deadboard.example.com/jobs",
+      "status": 404,
+      "body": "Not found"
+    },
+    {
+      "url": "https://www.marketplace.example.com/design",
+      "status": 403,
+      "body": "Forbidden"
+    },
+    {
+      "url": "https://travelnurse.example.com/texas",
+      "status": 200,
+      "body": "<html>agency</html>"
+    },
+    {
+      "url": "https://bids.statework.example.gov/open",
+      "status": 200,
+      "body": "<html>bids</html>"
+    },
+    {
+      "url": "https://www.meetup.example.com/denver-product-leaders/",
+      "status": 200,
+      "body": "<html>group</html>"
+    },
+    {
+      "url": "https://www.meetup.example.com/sleepy-group/",
+      "status": 200,
+      "body": "<html>group</html>"
+    },
+    {
+      "url": "https://roundrockchamber.example.org/",
+      "status": 200,
+      "body": "<html>chamber</html>"
+    },
+    {
+      "url": "https://texasnurses.example.org/chapters/central",
+      "status": 200,
+      "body": "<html>association</html>"
+    },
+    {
+      "url": "https://vanished.example.org/",
+      "status": null,
+      "error": "URLError"
+    },
+    {
+      "url": "https://www.examplehealth.example.org/careers",
+      "status": 200,
+      "body": "<html><body><h1>Careers</h1><a href=\"https://examplehealth.wd5.myworkdayjobs.com/en-US/Careers\">Search jobs</a><script>var cfg={\"applyBase\":\"https:\\/\\/examplehealth.wd5.myworkdayjobs.com\\/Careers\"};</script><a href=\"https://www.linkedin.com/company/example\">LinkedIn</a></body></html>"
+    },
+    {
+      "url": "https://www.closedclinic.example.org/careers",
+      "status": 200,
+      "body": "<html><body><a href=\"https://closedclinic.wd1.myworkdayjobs.com/External\">Jobs</a></body></html>"
+    },
+    {
+      "url": "https://www.frontrangerobotics.example.com/",
+      "status": 200,
+      "body": "<html><body><nav><a href=\"/about\">About</a><a href=\"/company/careers\">Careers</a><a href=\"https://www.linkedin.com/company/x\">LinkedIn</a></nav></body></html>"
+    },
+    {
+      "url": "https://www.frontrangerobotics.example.com/company/careers",
+      "status": 200,
+      "body": "<html><body><h1>Work with us</h1><a class=\"btn\" href=\"https://job-boards.greenhouse.io/frontrangerobotics\">View open roles</a></body></html>"
+    },
+    {
+      "url": "https://www.milehighanalytics.example.com/",
+      "status": 200,
+      "body": "<html><body><a href=\"https://www.milehighanalytics.example.com/jobs\">Join our team</a></body></html>"
+    },
+    {
+      "url": "https://www.milehighanalytics.example.com/jobs",
+      "status": 200,
+      "final_url": "https://jobs.lever.co/milehighanalytics",
+      "body": "<html><body>Open roles</body></html>"
+    },
+    {
+      "url": "https://www.smallshop.example.com/",
+      "status": 200,
+      "body": "<html><body><a href=\"/contact\">Contact</a><a href=\"/careers\">Careers</a></body></html>"
+    },
+    {
+      "url": "https://www.smallshop.example.com/careers",
+      "status": 200,
+      "body": "<html><body>Email us your resume.</body></html>"
+    }
+  ]
+}

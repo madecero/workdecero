@@ -134,8 +134,23 @@ class HttpFetcher(object):
             self._sleep(min(retry_after if retry_after is not None else 5 * (2 ** attempt), 60))
         return response
 
-    def _once(self, url, accept):
-        request = urllib.request.Request(url, headers={"User-Agent": self.user_agent, "Accept": accept})
+    def post_json(self, url, payload):
+        """POST a small JSON body, for job-site systems whose public job list is a POST. Same manners as get."""
+        host = urllib.parse.urlsplit(url).netloc.lower()
+        response = None
+        for attempt in range(MAX_RETRIES + 1):
+            self._wait_for_host(host)
+            response, retry_after = self._once(url, "application/json", json.dumps(payload).encode("utf-8"))
+            if response.status not in (429, 503) or attempt == MAX_RETRIES:
+                break
+            self._sleep(min(retry_after if retry_after is not None else 5 * (2 ** attempt), 60))
+        return response
+
+    def _once(self, url, accept, body=None):
+        headers = {"User-Agent": self.user_agent, "Accept": accept}
+        if body is not None:
+            headers["Content-Type"] = "application/json"
+        request = urllib.request.Request(url, data=body, headers=headers)
         try:
             with self._open(request, timeout=self.timeout) as reply:
                 body = reply.read(MAX_BODY_BYTES).decode("utf-8", "replace")
