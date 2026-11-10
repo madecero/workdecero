@@ -348,7 +348,7 @@ class Intake(ContractCase):
 
     def test_unused_searches_get_one_nudge(self):
         _, report = self.intake([], searches=2)
-        self.assertIn("BEFORE YOU FINISH: 8 of 10 searches are unused and no gig was read.", report)
+        self.assertIn("BEFORE YOU FINISH: 8 of 10 searches are unused and nothing that fits has been found yet.", report)
         _, report = self.intake([], searches=2)
         self.assertNotIn("BEFORE YOU FINISH", report)
         self.assertIn("Run the finish command next.", report)
@@ -657,6 +657,30 @@ class Platforms(ContractCase):
         for text in (report, intake, done):
             for private in ("175", "under your floor", "does not take"):
                 self.assertNotIn(private, text)
+
+    def test_a_page_that_is_not_a_gig_never_reaches_the_tracker(self):
+        # From a live run: a network's pages for companies hiring were taken for gigs and written as near misses.
+        for title, url in (("Product Head of Product, Product Managers, Strategists 1,900+ available", PLATFORM + "/x"),
+                           ("Fractional CPO", PLATFORM + "/hire/fractional-cpo"),
+                           ("Interim CPO", PLATFORM + "/blog/what-an-interim-cpo-does"),
+                           ("CPO", PLATFORM + "/talent/cpo")):
+            self.assertFalse(contracts.looks_like_a_gig(title, url), title)
+        self.assertTrue(contracts.looks_like_a_gig("Fractional CPO", PLATFORM + "/gigs/fractional-cpo"))
+        _, report = self.start()
+        ids = [line.split(" | ")[0].strip() for line in report.splitlines() if re.match(r"^  c\d+ \| ", line)]
+        self.hand_off({"assessed": [{"id": ids[0], "not_a_gig": True, "fit_assessment": 0},
+                                    {"id": ids[1], "not_a_gig": True}, {"id": ids[2], "not_a_gig": True}],
+                       "searches": 3})
+        _, intake = self.run_step(contract_tool.intake, today=TODAY)
+        self.assertIn("New notes written: 0.", intake)
+        # Nothing that fits yet and most of the budget unused: told once to go and read what the searches found.
+        self.assertIn("BEFORE YOU FINISH: 7 of 10 searches are unused and nothing that fits has been found yet.", intake)
+        self.finish()
+        self.assertEqual(self.store().rows("contract"), [])
+        digest = [row for row in self.store().rows("digest")][0].section
+        self.assertIn("Matching gigs read from them: 0.", digest)
+        self.assertIn("turned out not to be gigs (a hiring form, a list of people, an article): 3.", digest)
+        self.assertNotIn("## Near misses", digest)
 
     def test_gigs_not_judged_get_one_reminder(self):
         self.start()
