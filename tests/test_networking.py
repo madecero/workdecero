@@ -353,6 +353,28 @@ class Events(NetCase):
         self.assertEqual(len(self.events()), 5)                       # all are in the tracker
 
 
+class CoHosted(NetCase):
+    def test_one_gathering_listed_by_two_groups_is_one_note_and_one_line(self):
+        self.sweep([group("a", "Portland Brand Meetup"), group("b", "Oregon Design Association")],
+                   [event("mixer-a", "Holiday mixer", "2026-12-02", group="Portland Brand Meetup"),
+                    event("mixer-b", "Joint holiday social", "2026-12-02", group="Oregon Design Association"),
+                    event("other", "Founders breakfast", "2026-12-02", time="8:00 AM", evening=False)])
+        events = self.events()
+        self.assertEqual(sorted(events), ["Founders breakfast", "Holiday mixer"])
+        self.assertIn("also listed as Joint holiday social (Oregon Design Association)", events["Holiday mixer"].section)
+        self.assertEqual(self.digest().section.count("Wed Dec 2, 6:00 PM"), 1)
+
+    def test_two_groups_whose_regular_meeting_is_the_same_gathering_show_once(self):
+        shared = {"next_meeting": "2026-11-18", "weekday": "Wednesday"}
+        meeting = {"special": "", "time": "6:00 PM", "where": "Example Hall, Portland"}
+        self.sweep([group("a", "Portland Brand Meetup", **shared), group("b", "Oregon Design Association", **shared)],
+                   [event("m-a", "November meetup", "2026-11-18", group="Portland Brand Meetup", **meeting),
+                    event("m-b", "November meetup", "2026-11-18", group="Oregon Design Association", **meeting)])
+        digest = self.digest().section.split("## Groups worth trying")[0]
+        self.assertEqual(digest.count("Wed Nov 18, 6:00 PM"), 1, digest)
+        self.assertRegex(digest, r"Wed Nov 18, 6:00 PM.*, with (Portland Brand Meetup|Oregon Design Association)")
+
+
 class Housekeeping(NetCase):
     def seed(self):
         store = self.store()
@@ -524,6 +546,21 @@ class Updates(NetCase):
         self.assertIn("NOT DONE  There is no group or event with the id C-1.", out)
         self.assertEqual(self.events()["Design Awards Gala"].values["status"], "New")
 
+    def test_the_going_box_and_the_status_always_agree(self):
+        gala = self.ids["Design Awards Gala"]
+        self.update({"id": gala, "status": "Want to go"})
+        row = self.events()["Design Awards Gala"]
+        self.assertEqual((row.values["status"], row.values["going"]), ("Want to go", True))
+        self.update({"id": gala, "going": False})                      # "actually I am not going"
+        row = self.events()["Design Awards Gala"]
+        self.assertEqual((row.values["status"], row.values["going"]), ("New", False))
+        self.update({"id": gala, "going": True})
+        row = self.events()["Design Awards Gala"]
+        self.assertEqual((row.values["status"], row.values["going"]), ("Want to go", True))
+        self.update({"id": gala, "status": "Did not go"})
+        row = self.events()["Design Awards Gala"]
+        self.assertEqual((row.values["status"], row.values["going"], row.values["attended"]), ("Did not go", False, False))
+
     def test_list_shows_ids_and_no_people(self):
         self.update({"id": self.ids["Northwest Food Brand Summit"], "status": "Went", "met": ["Jane Doe"]})
         code, out, _ = self.command("list")
@@ -557,7 +594,10 @@ class Prep(NetCase):
         self.assertIn("**From the group's public page:** Organiser: Sam Okoro.", prep)
         self.assertIn("**Opener 1:**", prep)
         self.assertIn("Listen for Founders of food and drink brands.", prep)                # their own words and casing
-        self.assertIn("**Opener 2:** Have one short story ready about Rebranding on a small budget", prep)
+        self.assertIn('**Opener 1:** "What brought you to Packaging that sells?"', prep)     # about this event
+        self.assertIn('**Opener 2:** "Is anyone here working on Rebranding on a small budget?" Have one short story '
+                      "ready about Rebranding on a small budget", prep)
+        self.assertNotIn("this quarter", prep)
         self.assertIn("**Bring:**", prep)
         self.assertIn("Nothing was registered or sent.", prep)
         self.assertLessEqual(len([line for line in prep.strip().splitlines() if line.strip()]), 10)
@@ -648,6 +688,20 @@ class WeekOne(NetCase):
         self.assertIn("THIS MONTH'S PICKS (3)", summary)
         self.assertNotIn("$", summary)                                # no costs or limits in the conversation
         self.assertLess(len(section.split()), 420)                    # a two-minute read
+
+    def test_a_gap_is_named_once_however_research_words_it(self):
+        self.start()
+        said = "No group or event found for: %s. Nearest is a statewide association." % FOUNDERS
+        self.hand_off({"groups": [group("freelance", "Freelance Designers Coffee", audience=[DESIGNERS])],
+                       "not_found": [said, "No group or event found for: %s." % DIRECTORS,
+                                     "The chamber calendar lists nothing before January.",
+                                     "The chamber calendar lists nothing before January."], "searches": 9})
+        self.run_step(networking_tool.intake, today=TODAY)
+        self.finish()
+        missing = self.digest().section.split("## Not found")[1].split("##")[0]
+        self.assertEqual(missing.count(FOUNDERS), 1)
+        self.assertEqual(missing.count(DIRECTORS), 1)
+        self.assertEqual(missing.count("The chamber calendar"), 1)
 
     def test_what_was_not_found_is_said_plainly(self):
         self.start()

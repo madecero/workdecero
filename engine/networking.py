@@ -671,6 +671,13 @@ def _same_group(row, item):
     return merge.same("group", merge.row_as_item("group", row), {"name": item.get("name"), "url": item.get("url")})
 
 
+def same_slot(first, second):
+    """Two listings for the same date, start time and place are one gathering, whoever lists it."""
+    def slot(entry):
+        return tuple(scoring._text(str(entry.get(key) or "")) for key in ("date", "time", "where"))
+    return all(slot(first)) and slot(first) == slot(second)
+
+
 def intake(state, handoff, profile, store, today=None):
     """Rank what research found, write the notes, and record what happened."""
     today = today or datetime.date.today()
@@ -769,7 +776,7 @@ def intake(state, handoff, profile, store, today=None):
             when = scoring._date(item.get("date"))
             if host and when is not None and when >= today and not model.GROUP.is_done(host[0].values.get("status")):
                 current = scoring._date(host[0].values.get("next_meeting"))
-                if current is None or current < today or when < current:
+                if current is None or current < today or when <= current:   # the same day fills in its details
                     values = {"next_meeting": when.isoformat(), "next_time": item.get("time"),
                               "next_where": item.get("where"), "evening": item.get("evening"),
                               "miles": item.get("distance_miles"), "next_cost": item.get("cost"),
@@ -786,6 +793,16 @@ def intake(state, handoff, profile, store, today=None):
         if any(merge.same("event", merge.row_as_item("event", row), find) for row in event_rows) or \
                 any(merge.same("event", find, {"title": other["title"], "date": other["date"], "url": other["url"]})
                     for other in state["new_events"]):
+            continue
+        slot = {"date": item.get("date"), "time": item.get("time"), "where": item.get("where")}
+        twin = [row for row in event_rows if same_slot(slot, row.values)]
+        twin_id = twin[0].id if twin else next((other["id"] for other in state["new_events"] if same_slot(slot, other)), None)
+        if twin_id:
+            # Co-hosted: two groups list one gathering. It stays one note, with the other listing named on it.
+            also = scoring.scrub_confidential("%s (%s)" % (item["title"], item.get("group") or item.get("url")), names)
+            store.apply([{"type": "event", "id": twin_id, "values": {}, "force": [],
+                          "append": "%s: also listed as %s." % (day, also)}])
+            state["folded"] += 1
             continue
         note_id = merge.next_id(model.EVENT, event_rows, taken)
         taken.append(note_id)
@@ -806,7 +823,8 @@ def intake(state, handoff, profile, store, today=None):
                           "part": (model.PART_SPEAKING, scoring.scrub_confidential(
                               angle.rstrip(".") + ".\n\nThis is a draft idea only. Nothing was proposed or sent.", names))}])
         state["new_events"].append({"id": note_id, "title": title, "fit": rank.total, "date": item.get("date"),
-                                    "url": item.get("url"), "speaking": bool(angle)})
+                                    "url": item.get("url"), "speaking": bool(angle),
+                                    "time": item.get("time"), "where": item.get("where")})
 
     state["new_groups"].sort(key=lambda entry: (-entry.get("who", 0), -entry["fit"]))
     state["new_events"].sort(key=lambda entry: (entry["date"] or "", -entry["fit"]))
@@ -892,7 +910,17 @@ def coming_up(store, today, profile=None):
             if not entry["outside"] and outside_times(profile, entry["date"], entry["time"], entry["evening"],
                                                       entry["virtual"]):
                 entry["outside"] = True
-    return found
+    # One gathering listed by two groups shows once: the better fit, with the other named beside it.
+    kept = []
+    for entry in sorted(found, key=lambda entry: (entry["kind"] != "event", -entry["fit"])):
+        twin = next((other for other in kept if same_slot(entry, other)), None)
+        if twin is not None:
+            if entry["host"] and scoring._text(entry["host"]) != scoring._text(twin["host"]):
+                twin.setdefault("with", []).append(entry["host"])
+            twin["going"] = twin["going"] or entry["going"]
+            continue
+        kept.append(entry)
+    return kept
 
 
 def choose(found, cap):
@@ -918,6 +946,8 @@ def _coming_line(entry, store, cap):
     what = "%s (its regular meeting)" % link if entry["kind"] == "group" else link
     if entry["kind"] == "event" and entry["host"]:
         what += ", run by %s" % entry["host"]
+    if entry.get("with"):
+        what += ", with %s" % " and ".join(entry["with"])
     cost = cost_text(entry["cost"], cap)
     line = "- **%s**: %s. %s. %s." % (when_text(entry["date"], entry["time"]), what, place, cost[:1].upper() + cost[1:])
     if entry["why"]:
@@ -957,8 +987,17 @@ def not_found_lines(state, profile, store):
     wanted = list(_net(profile).get("who_to_meet") or [])
     text = scoring._text(" ".join((row.section or "") for row in store.rows("group") + store.rows("event")
                                   if not model.BY_NAME[row.values.get("type") or "group"].is_done(row.values.get("status"))))
-    lines = ["No group or event found for: %s." % who for who in wanted if scoring._text(who) not in text]
-    return lines + list(state.get("not_found") or [])
+    missing = [who for who in wanted if scoring._text(who) not in text]
+    lines = ["No group or event found for: %s." % who for who in missing]
+    seen = set(scoring._text(line) for line in lines)
+    for line in state.get("not_found") or []:
+        said = scoring._text(line)
+        # Research often says the same thing in its own words. Each gap is named once.
+        if said in seen or any(scoring._text(who) in said for who in missing):
+            continue
+        seen.add(said)
+        lines.append(line)
+    return lines
 
 
 def write_digest(state, profile, store, today=None):
@@ -1208,6 +1247,18 @@ def apply_updates(updates, store, profile, today=None):
                     values["status"] = "Want to go"
                     force.append("status")
                 extra.append("Calendar is off, so add it to your calendar yourself")
+            if entry.get("going") is False and not status:
+                values["going"] = False
+                force.append("going")
+                if _event_status(row) == "Want to go":
+                    values["status"] = "New"
+                    force.append("status")
+            if status == "Want to go":
+                values["going"] = True                 # the box and the status always say the same thing
+                force.append("going")
+            if status == "New":
+                values["going"] = False
+                force.append("going")
             if status in ("Registered", "Speaking"):
                 values["going"] = True
                 force.append("going")
@@ -1216,8 +1267,8 @@ def apply_updates(updates, store, profile, today=None):
                 values.update({"going": True, "attended": True})
                 force += ["going", "attended"]
             if status in ("Did not go", "Passed"):
-                values["going"] = False
-                force.append("going")
+                values.update({"going": False, "attended": False})
+                force += ["going", "attended"]
             if met:
                 people = store.rows("person")
                 taken = []
@@ -1311,11 +1362,33 @@ def write_prep(note_id, store, profile, today=None, there=None):
         ", ".join(store.link("person", person.title) for person in known[:3]) if known else "no one yet"))
     if public:
         lines.append("**From the group's public page:** %s." % "; ".join(public))
-    lines.append("**Opener 1:** \"What are you working on this quarter?\" Listen for %s."
-                 % (who[0] if who else "people in your field"))
-    lines.append("**Opener 2:** %s" % ("Have one short story ready about %s: the problem, what you did, the result."
-                                      % topics[0].rstrip(".") if topics else
-                                      "\"Who else here should I meet?\""))
+    listen = who[0] if who else "people in your field"
+    about = scoring._text("%s %s" % (row.title, row.section or ""))
+    own = list(net.get("topics") or [])
+    fitting = [topic for topic in own if scoring._text(topic) and scoring._text(topic) in about]
+    ideas = own + list((net.get("speaking") or {}).get("talk_ideas") or [])
+    story = (" Have one short story ready about %s: the problem, what you did, the result." % ideas[0].rstrip(".")
+             if ideas else "")
+    subject = row.title if not host or "**Why it has its own note:**" in (row.section or "") else None
+    if subject:
+        lines.append("**Opener 1:** \"What brought you to %s?\" Then ask what they hope to take back to work. "
+                     "Listen for %s." % (subject, listen))
+    elif host:
+        lines.append("**Opener 1:** \"How long have you been coming to %s, and what keeps you coming back?\" "
+                     "Listen for %s." % (host, listen))
+    else:
+        lines.append("**Opener 1:** \"What are you working on this quarter?\" Listen for %s." % listen)
+    if fitting:
+        lines.append("**Opener 2:** \"What is your team doing about %s?\" It is in this event's description and it "
+                     "is one of your topics.%s" % (fitting[0].rstrip("."), story))
+    elif own:
+        lines.append("**Opener 2:** \"Is anyone here working on %s?\"%s" % (own[0].rstrip("."), story))
+    elif story:
+        lines.append("**Opener 2:**%s" % story)
+    else:
+        lines.append("**Opener 2:** \"Who else here should I meet?\"")
+    if public and (net.get("speaking") or {}).get("interested"):
+        lines.append("**If you meet an organiser:** ask what topics they are short of speakers on.")
     lines.append("**Bring:** one sentence on what you do, and a way to swap details.")
     lines.append("**After:** tell me who you met (\"I met ... at %s\"). Each gets a note and a follow-up date %d days "
                  "out." % (row.id, FOLLOW_UP_AFTER_EVENT_DAYS))
