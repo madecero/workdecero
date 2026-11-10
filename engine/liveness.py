@@ -31,6 +31,7 @@ Standard library only, Python 3.9+.
 """
 
 import datetime
+import html
 import json
 import re
 import sys
@@ -356,6 +357,67 @@ def check_generic(url, fetcher):
         return Result(UNKNOWN, "One weak sign it may be closed (%s). Not enough to close it: check by hand"
                       % weak[0], source, weak)
     return Result(LIVE, "Page is up with no sign of being closed", source)
+
+
+def _plain(markup, limit):
+    """Posting text as plain words: tags and entities removed, spaces collapsed, cut at a word."""
+    if not isinstance(markup, str):
+        return ""
+    text = html.unescape(markup)
+    text = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", text)
+    text = re.sub(r"(?i)<\s*(br|/p|/li|/h[1-6]|/div)\s*/?>", ". ", text)
+    text = html.unescape(re.sub(r"<[^>]+>", " ", text))
+    text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"(\s*\.){2,}", ".", text).replace(" .", ".").replace(":.", ":")
+    if len(text) > limit:
+        text = text[:limit].rsplit(" ", 1)[0] + " ..."
+    return text
+
+
+def posting_text(url, fetcher, limit=1800):
+    """The words of a posting, read from the job site's own public data. Empty when it cannot be read that way.
+
+    Many job sites build their pages in the browser, so loading the page as
+    text shows nothing. The same public data the liveness checks use carries
+    the description, so a sweep can judge a posting without a browser.
+    """
+    url = url or ""
+    try:
+        match = _WORKDAY_RE.match(url)
+        if match:
+            host, site, path = match.groups()
+            response = fetcher.get("https://%s/wday/cxs/%s/%s/job/%s" % (host, host.split(".")[0], site, path))
+            info = json.loads(response.body).get("jobPostingInfo") if response.status == 200 else None
+            return _plain((info or {}).get("jobDescription"), limit)
+        match = _GREENHOUSE_RE.search(url)
+        if match:
+            board, job_id = match.groups()
+            api = "boards-api.eu.greenhouse.io" if "eu.greenhouse" in url else "boards-api.greenhouse.io"
+            response = fetcher.get("https://%s/v1/boards/%s/jobs/%s" % (api, board, job_id))
+            return _plain(json.loads(response.body).get("content"), limit) if response.status == 200 else ""
+        match = _LEVER_RE.search(url)
+        if match:
+            eu, company, job_id = match.groups()
+            response = fetcher.get("https://api.%slever.co/v0/postings/%s/%s" % (eu or "", company, job_id))
+            if response.status != 200:
+                return ""
+            data = json.loads(response.body)
+            parts = [data.get("descriptionPlain") or ""]
+            for block in data.get("lists") or []:
+                if isinstance(block, dict):
+                    parts.append("%s: %s" % (block.get("text") or "", block.get("content") or ""))
+            return _plain(" ".join(part for part in parts if part), limit)
+        match = _ASHBY_RE.search(url)
+        if match:
+            organization, job_id = match.groups()
+            response = fetcher.get("https://api.ashbyhq.com/posting-api/job-board/%s" % organization)
+            jobs = json.loads(response.body).get("jobs") if response.status == 200 else None
+            for job in jobs or []:
+                if isinstance(job, dict) and job.get("id") == job_id:
+                    return _plain(job.get("descriptionPlain") or job.get("descriptionHtml"), limit)
+    except (ValueError, AttributeError, TypeError):
+        return ""
+    return ""
 
 
 def _parse_date(text):

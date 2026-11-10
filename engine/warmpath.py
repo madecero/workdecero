@@ -424,7 +424,7 @@ def build(job_row, research, people_rows, store, profile, taken_ids=()):
             % manager["name"].strip()
     else:
         title = (manager or {}).get("title") if isinstance(manager, dict) else None
-        first = "No one found yet. Apply directly" + ("; the hiring manager is likely %s" % title.strip() if title else "")
+        first = "No one found yet. Apply directly" + ("; the hiring manager is likely %s" % re.sub(r"(?i)[\s,]*\(?\b(likely|probably)\)?\s*$", "", title.strip()) if title else "")
     lines.insert(0, "- **Contact first:** %s." % first)
 
     result.text = scoring.scrub_confidential("\n".join(lines), names)
