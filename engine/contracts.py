@@ -663,9 +663,14 @@ def write_digest(state, profile, store, problems, today=None):
         lines += ["- " + problem for problem in problems]
     lines += ["", "Nothing was bid on, applied for, signed up for or sent."]
 
+    # A second sweep on the same day gets its own note. The first one is never overwritten.
     title = "%s Contract sweep" % today.isoformat()
-    existing = [row for row in store.rows("digest") if row.title == title]
-    note_id = existing[0].id if existing else merge.next_id(model.DIGEST, store.rows("digest"))
+    taken = [row.title for row in store.rows("digest")]
+    number = 2
+    while title in taken:
+        title = "%s Contract sweep %d" % (today.isoformat(), number)
+        number += 1
+    note_id = merge.next_id(model.DIGEST, store.rows("digest"))
     touched = [store.link("contract", entry["title"]) for entry in state["new"]]
     store.upsert("digest", note_id, title,
                  {"date": today.isoformat(), "track": "Contracts", "new": len(state["new"]),

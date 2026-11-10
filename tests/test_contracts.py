@@ -400,6 +400,18 @@ class Finish(ContractCase):
         self.assertNotIn("$", summary)                                # no rates in the conversation
         self.assertFalse(os.path.exists(self.cache))                  # nothing is left behind
 
+    def test_a_second_sweep_on_the_same_day_keeps_the_first_digest(self):
+        self.start()
+        self.intake([gig("a", "Brand identity for a cafe group", engagement="1099", rate_max=95)])
+        self.finish()
+        self.start()
+        self.intake([gig("b", "Label design for a brewery", engagement="1099", rate_max=85)])
+        self.finish()
+        digests = dict((row.title, row) for row in self.store().rows("digest"))
+        self.assertEqual(sorted(digests), ["2026-11-09 Contract sweep", "2026-11-09 Contract sweep 2"])
+        self.assertIn("Brand identity for a cafe group", digests["2026-11-09 Contract sweep"].section)
+        self.assertIn("Label design for a brewery", digests["2026-11-09 Contract sweep 2"].section)
+
     def test_a_gig_with_no_stated_terms_says_so_in_the_digest(self):
         self.start()
         self.intake([gig("d", "Website refresh for a bakery", rate_max=90)])
