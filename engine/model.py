@@ -36,8 +36,10 @@ SECTION_END = "<!-- workdecero:end -->"
 # Headed parts inside the workdecero block of a job or contract note, in the order they are kept.
 # Text before the first heading is the fit summary, refreshed by each sweep.
 PART_WARM_PATH = "Warm path"
+PART_SPEAKING = "Speaking angle"
+PART_PREP = "Prep"
 PART_LOG = "Log"
-PART_ORDER = [PART_WARM_PATH, PART_LOG]
+PART_ORDER = [PART_WARM_PATH, PART_SPEAKING, PART_PREP, PART_LOG]
 
 # Group label for a status nobody recognises (a typo made in a table cell). It sorts first, so it is seen.
 CHECK_STATUS_STAGE = "0 Check status"
@@ -235,6 +237,7 @@ CHANNEL = NoteType(
 EVENT = NoteType(
     "event", "Events", "E", "Event",
     [
+        Field("status", TEXT, "Status", SEED),
         Field("date", DATE, "Date"),
         Field("time", TEXT, "Time"),
         Field("evening", CHECKBOX, "Evening"),
@@ -250,6 +253,16 @@ EVENT = NoteType(
         Field("people_met", LINKS, "People met", USER),
         Field("follow_up_by", DATE, "Follow up by", USER),
         Field("prep", LINK, "Prep note", USER),
+    ],
+    [
+        Status("New", "1 New", "new"),
+        Status("Want to go", "2 Want to go", "active"),
+        # Once the person has registered or agreed to speak, a sweep never changes the status again.
+        Status("Registered", "3 Registered", "active", engaged=True),
+        Status("Speaking", "3 Registered", "active", engaged=True),
+        Status("Went", "4 Went", "done"),
+        Status("Did not go", "5 Did not go", "done"),
+        Status("Passed", "5 Did not go", "done"),
     ],
 )
 

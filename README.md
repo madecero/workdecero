@@ -49,7 +49,7 @@ Nothing personal is stored in this repository or in the plugin folder.
 | Trackers (postings, contracts, groups, events, people, companies) | Your Obsidian vault | Plain Markdown notes that you own. |
 | Setup draft | `~/.cache/workdecero/` (`setup-answers.json`, `setup-state.json`) | Temporary files in a private folder. They hold your answers only while setup is running, in a folder only you can open, and are deleted when setup is saved or cancelled. `setup-answers.json` is written by Claude Code a few lines at a time and is taken in and deleted at the next step. |
 | Source hand-off | `~/.cache/workdecero/` (`sources-entries.json`, `sources-run.json`) | Temporary. Holds public names and links found while your local map is being built. Each batch is deleted as soon as it is checked, and the folder goes when the run ends. |
-| Sweep hand-off and state | `~/.cache/workdecero/` (`sweep-handoff.json`, `sweep-state.json`, `contract-handoff.json`, `contract-state.json`) | Temporary. Hold public postings found during a sweep, and are deleted when the sweep finishes. |
+| Sweep hand-off and state | `~/.cache/workdecero/` (`sweep-handoff.json`, `sweep-state.json`, `contract-handoff.json`, `contract-state.json`, `networking-handoff.json`, `networking-state.json`) | Temporary. Hold public postings found during a sweep, and are deleted when the sweep finishes. |
 | Browser setting | `~/.config/workdecero/flags.json` | One line: whether you turned browser use on. Kept in step with your profile, so the hook never reads the profile itself. |
 | Conversation marks | `~/.cache/workdecero-sessions/` | One empty file per conversation that started a workdecero skill, named by its id, in a folder only you can open. Removed after a day. |
 | Cache | The plugin data folder managed by Claude Code | Safe to lose. Removed when the plugin is uninstalled. |
@@ -75,6 +75,21 @@ Run **`/workdecero:contract-sweep`** when you want freelance, contract, fraction
 * **Tell it what you did.** "I applied to C-12", "I won the cafe one", "my profile there is live". It works at any time.
 
 It never bids, applies, signs up or sends anything.
+
+## The networking sweep
+
+Run **`/workdecero:networking-sweep`** to find where to show up, or just say "run the networking sweep". It looks at the groups in your local map and searches for more, ranked by who you said you want to meet.
+
+* **Groups and events are kept apart.** A group that meets every month is one note with its next meeting. An event gets its own note only when it is special: a conference, a speaker squarely in your field, a call for speakers.
+* **Only live groups.** A group needs a meeting in the last six months or one on the calendar. One that has gone quiet is marked Inactive with the evidence, unless you have joined it, in which case you are told.
+* **Follow-ups first.** Every digest leads with the follow-ups you owe people, overdue ones first.
+* **Tidied by date.** An event you never planned to go to is marked Did not go once it has passed. One you registered for or were speaking at is never changed for you. The digest asks whether you went.
+* **Your spending limits stay private.** The assistant that reads the web is never told what you will pay. It records the price on the page, and the engine flags what is above your limit.
+* **Speaking angles.** For groups that take speakers, a draft talk idea from your topics goes in the note. A draft only.
+* **Tell it what you did.** "I joined the product meetup", "I registered for E-12", "I went to E-4 and met Jane and Raj". People you met get a note and a follow-up date.
+* **Prep.** "Prep me for E-4" writes a one-page brief into the event's note: who you know that may be there, three talking points, a follow-up plan.
+
+It never registers, RSVPs, joins, pays or sends anything. Calendar is off: you add events to your calendar yourself.
 
 ## Your profile
 
@@ -102,7 +117,8 @@ Claude Code normally asks before it runs a command or writes a file. Setup and t
 | Run the local map helper | `python3 "<plugin folder>/skills/sources/scripts/sources_tool.py"` followed by one of: `plan`, `plan-refresh`, `open`, `add`, `reverify`, `remove`, `finish`, `close`, `show`. Nothing may follow the subcommand |
 | Run the job sweep helper | `python3 "<plugin folder>/skills/job-sweep/scripts/sweep_tool.py"` followed by one of: `start`, `restart`, `intake`, `warm`, `finish`, `cancel`. Nothing may follow the subcommand |
 | Run the contract sweep helper | `python3 "<plugin folder>/skills/contract-sweep/scripts/contract_tool.py"` followed by one of: `start`, `restart`, `intake`, `finish`, `cancel`, `list`, `open`, `update`, `close`. Nothing may follow the subcommand |
-| Write one temporary file per helper | `~/.cache/workdecero/setup-answers.json`, `sources-entries.json`, `sweep-handoff.json` and `contract-handoff.json` in the same folder, and only while that folder is a real folder that you own and nobody else can open |
+| Run the networking sweep helper | `python3 "<plugin folder>/skills/networking-sweep/scripts/networking_tool.py"` followed by one of: `start`, `restart`, `intake`, `finish`, `cancel`, `list`, `open`, `update`, `prep`, `close`. Nothing may follow the subcommand |
+| Write one temporary file per helper | `~/.cache/workdecero/setup-answers.json`, `sources-entries.json`, `sweep-handoff.json`, `contract-handoff.json` and `networking-handoff.json` in the same folder, and only while that folder is a real folder that you own and nobody else can open |
 
 What that means in practice:
 

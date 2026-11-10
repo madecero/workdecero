@@ -62,6 +62,9 @@ HELPERS = {
     "contract-sweep": ("contract_tool.py",
                        ("start", "restart", "intake", "finish", "cancel", "list", "open", "update", "close"),
                        "contract-handoff.json"),
+    "networking-sweep": ("networking_tool.py",
+                         ("start", "restart", "intake", "finish", "cancel", "list", "open", "update", "prep", "close"),
+                         "networking-handoff.json"),
 }
 HANDOFF_DIR = os.path.join("~", ".cache", "workdecero")
 
