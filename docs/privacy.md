@@ -16,6 +16,8 @@
 | Your trackers | The `workdecero` folder in your Obsidian vault | Plain notes that you own: jobs, contracts, channels, groups, events, people, companies and digests. |
 | Spreadsheet snapshot, only if you turn it on | `workdecero snapshot.xlsx` in that same folder | A read-only picture of your trackers, rebuilt after every sweep. Anything typed into it is lost. Readable by you alone. |
 | Temporary working files | `~/.cache/workdecero/` | Exist only while setup or a sweep is running, in a folder only you can open, and are deleted when it ends. During setup they hold your answers. During a sweep they hold public postings. |
+| Whether browser use is on | `~/.config/workdecero/flags.json` | One line, yes or no, kept in step with your profile. |
+| Which conversations started a workdecero skill | `~/.cache/workdecero-sessions/` | One empty file per conversation, named by its id, in a folder only you can open. Removed after a day. Nothing about you or the conversation is in it. |
 | A small count of LinkedIn pages viewed, only if you turn that connection on | `~/.config/workdecero/usage.json` | Numbers per day for the last week. |
 
 `~` means your home folder. Folders whose names start with a dot are hidden by default in Finder.
@@ -26,4 +28,4 @@ Uninstalling the plugin leaves your data alone. To delete it, remove these yours
 
 * The folder `~/.config/workdecero` (your profile, your map and backups).
 * The `workdecero` folder inside your Obsidian vault (your trackers). Delete it in Obsidian or in Finder.
-* The folder `~/.cache/workdecero`, if it exists. It normally does not.
+* The folders `~/.cache/workdecero` and `~/.cache/workdecero-sessions`, if they exist.
