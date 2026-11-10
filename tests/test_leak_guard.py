@@ -193,6 +193,54 @@ class EndToEnd(unittest.TestCase):
         self.git("checkout", "-q", "-b", "feature-fine")
         self.assertEqual(self.guard("--branch").returncode, 0)
 
+    def commit(self, name, text, message):
+        self.write(name, text)
+        self.git("add", name)
+        self.git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "-m", message)
+        return subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.repo, check=True, stdout=subprocess.PIPE,
+                              universal_newlines=True).stdout.strip()
+
+    def push(self, lines, **env_overrides):
+        env = dict(os.environ)
+        env[leak_guard.DENYLIST_ENV] = self.denylist
+        env.update(env_overrides)
+        return subprocess.run([sys.executable, GUARD, "--push"], cwd=self.repo, env=env, input=lines,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+
+    def test_a_push_is_scanned_by_what_it_sends_not_by_what_is_checked_out(self):
+        zero = "0" * 40
+        clean = self.commit("a.md", "fine\n", "one")
+        self.git("checkout", "-q", "-b", "other")
+        dirty = self.commit("b.md", "a note about " + SECRET + "\n", "two")
+        # The work tree is on the branch with the private name. A push of the clean commit by its id passes,
+        # the first time and every time: there is no local branch name to look at, and none is needed.
+        by_id = "%s %s refs/heads/main %s\n" % (clean, clean, zero)
+        for _ in range(2):
+            result = self.push(by_id)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("leak guard: clean", result.stdout)
+        # Back on the clean branch, a push of the other commit is still caught.
+        self.git("checkout", "-q", "-")
+        result = self.push("refs/heads/other %s refs/heads/other %s\n" % (dirty, zero))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("b.md", result.stderr)
+        self.assertNotIn(SECRET.lower(), result.stderr.lower())
+        # The name the branch will have on the remote is scanned, whatever it is called here.
+        named = self.push("refs/heads/main %s refs/heads/feature-%s %s\n" % (clean, SECRET.lower(), zero))
+        self.assertEqual(named.returncode, 1)
+        self.assertIn("branch name", named.stderr)
+        # Deleting a branch, or pushing nothing, sends nothing to scan.
+        self.assertEqual(self.push("(delete) %s refs/heads/gone %s\n" % (zero, clean)).returncode, 0)
+        self.assertEqual(self.push("").returncode, 0)
+
+    def test_the_pre_push_hook_runs_the_push_scan(self):
+        with open(os.path.join(_paths.REPO_ROOT, "dev", "git-hooks", "pre-push"), encoding="utf-8") as handle:
+            hook = handle.read()
+        self.assertIn('leak_guard.py" --push', hook)
+        self.assertNotIn("--tree", hook)
+        self.assertNotIn("--branch", hook)
+        self.assertTrue(os.access(os.path.join(_paths.REPO_ROOT, "dev", "git-hooks", "pre-push"), os.X_OK))
+
     def test_binary_file_is_skipped_with_a_note(self):
         with open(os.path.join(self.repo, "blob.bin"), "wb") as handle:
             handle.write(b"\x00\x01" + SECRET.encode())

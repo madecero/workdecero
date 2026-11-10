@@ -1,5 +1,6 @@
 #!/bin/sh
-# Last check before anything leaves this machine: scan the branch name and the whole tree.
+# Last check before anything leaves this machine. Scans what the push actually sends: the name each
+# branch will have on the remote, and every file in each commit being pushed. Git gives the list on
+# standard input. A push by commit id works the same as a push of a branch.
 root=$(git rev-parse --show-toplevel) || exit 1
-python3 "$root/dev/leak_guard.py" --branch || exit 1
-exec python3 "$root/dev/leak_guard.py" --tree
+exec python3 "$root/dev/leak_guard.py" --push

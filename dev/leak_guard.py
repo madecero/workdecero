@@ -14,6 +14,7 @@ Modes:
     leak_guard.py --tree            scan every tracked file in the work tree
     leak_guard.py --message FILE    scan a commit message file
     leak_guard.py --branch          scan the current branch name
+    leak_guard.py --push            scan what a push sends (the pre-push hook: reads git's lines on standard input)
 
 Exit codes: 0 clean, 1 findings, 2 usage or configuration error.
 Runs on the Python standard library only (3.9+).
@@ -195,6 +196,47 @@ def scan_tree(rules, cwd=None):
     return findings, skipped
 
 
+def scan_commit(commit, rules, cwd=None):
+    """Scan every file as it is in one commit. This is what a push sends, whatever is checked out."""
+    findings, skipped = [], []
+    out = _git(["ls-tree", "-r", "-z", "--name-only", commit], cwd)
+    for path in [p for p in out.decode("utf-8").split("\x00") if p]:
+        findings.extend(scan_path_name(path, rules))
+        text = _decode(_git(["show", "%s:%s" % (commit, path)], cwd))
+        if text is None:
+            skipped.append(path)
+            continue
+        findings.extend(scan_text(path, text, rules))
+    return findings, skipped
+
+
+def scan_push(lines, rules, cwd=None):
+    """Scan what a push is about to send, from the lines git gives a pre-push hook.
+
+    Each line is "<local ref> <local commit> <remote ref> <remote commit>". The
+    name the branch will have on the remote is scanned, and the tree of the
+    commit being sent. A push by commit id has no local branch name, and the
+    working tree may be on another branch altogether, so neither is used.
+    """
+    findings, skipped, seen = [], [], set()
+    for line in lines:
+        parts = line.split()
+        if len(parts) < 4:
+            continue
+        commit, remote_ref = parts[1], parts[2]
+        if set(commit) == {"0"}:
+            continue                      # a branch being deleted sends nothing
+        name = remote_ref.split("/", 2)[2] if remote_ref.startswith("refs/") and remote_ref.count("/") >= 2 else remote_ref
+        findings.extend(scan_text("branch name", name, rules))
+        if commit in seen:
+            continue
+        seen.add(commit)
+        found, binary = scan_commit(commit, rules, cwd)
+        findings.extend(found)
+        skipped.extend(path for path in binary if path not in skipped)
+    return findings, skipped
+
+
 def scan_message(message_path, rules):
     with open(message_path, "r", encoding="utf-8", errors="replace") as handle:
         lines = [line for line in handle.read().splitlines() if not line.startswith("#")]
@@ -208,6 +250,8 @@ def main(argv=None):
     mode.add_argument("--tree", action="store_true", help="scan every tracked file")
     mode.add_argument("--message", metavar="FILE", help="scan a commit message file")
     mode.add_argument("--branch", action="store_true", help="scan the current branch name")
+    mode.add_argument("--push", action="store_true",
+                      help="scan what a push sends: reads git's pre-push lines from standard input")
     parser.add_argument("--no-denylist", action="store_true",
                         help="generic patterns only (CI has no private denylist)")
     parser.add_argument("--require-denylist", action="store_true",
@@ -236,6 +280,8 @@ def main(argv=None):
         findings, skipped = scan_staged(rules)
     elif args.tree:
         findings, skipped = scan_tree(rules)
+    elif args.push:
+        findings, skipped = scan_push(sys.stdin.read().splitlines(), rules)
     elif args.branch:
         # Branch names are public once pushed. Report by label only.
         name = _git(["rev-parse", "--abbrev-ref", "HEAD"]).decode("utf-8").strip()

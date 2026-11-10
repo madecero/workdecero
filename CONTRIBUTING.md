@@ -19,7 +19,7 @@ This repository must never contain a real person's name, a real employer or clie
 | --- | --- | --- |
 | `pre-commit` | every commit | the staged version of each staged file |
 | `commit-msg` | every commit | the commit message |
-| `pre-push` | every push | the branch name and every tracked file |
+| `pre-push` | every push | what the push sends: the name each branch will have on the remote, and every file in each commit being pushed. A push by commit id is scanned the same way |
 
 Run it by hand at any time with `make leak-check`.
 
