@@ -329,6 +329,11 @@ def _common_checks(item, owner, profile, today, result):
         # The reason must not repeat the name.
         result.dropped = "it is at an employer or client your profile keeps confidential"
         return
+    # A note about a posting that names a confidential employer in its title would have to carry the name.
+    if any(_contains_phrase(_text(item.get(key)), _text(name))
+           for name in confidential_names(profile) for key in ("title", "via") if item.get(key)):
+        result.dropped = "its title names an employer or client your profile keeps confidential"
+        return
     exclusion = match_exclusion(item, owner, active_exclusions(profile, today))
     if exclusion is not None:
         reason = exclusion.get("reason") or "listed in your exclusions"
@@ -427,7 +432,7 @@ def score_contract(item, profile, today=None):
     kinds = engagement_type(item)
     if kinds is None:
         result.parts["engagement"] = CONTRACT_WEIGHTS["engagement"] // 2
-        result.caveats.append("How the work is engaged is not stated")
+        result.caveats.append("How the work is engaged is not stated. Confirm the terms before you spend time on it")
     else:
         usable = [kind for kind in kinds if kind in accepted]
         if not usable:
@@ -446,8 +451,16 @@ def score_contract(item, profile, today=None):
         if fixed is not None and fixed_min and fixed < fixed_min:
             result.dropped = "the fixed price of %d is under your minimum of %d" % (fixed, fixed_min)
             return result
-        result.parts["rate"] = int(round(CONTRACT_WEIGHTS["rate"] * 0.4))
-        result.caveats.append("Rate not listed")
+        monthly, monthly_min = _number(item.get("retainer_monthly")), _number(contracts.get("retainer_monthly_min"))
+        if monthly is not None and monthly_min and monthly < monthly_min:
+            result.dropped = "the retainer of %d a month is under your minimum of %d" % (monthly, monthly_min)
+            return result
+        if fixed is not None or monthly is not None:
+            # A stated price that clears the person's minimum counts as a rate that clears the floor.
+            result.parts["rate"] = int(round(CONTRACT_WEIGHTS["rate"] * 2 / 3.0))
+        else:
+            result.parts["rate"] = int(round(CONTRACT_WEIGHTS["rate"] * 0.4))
+            result.caveats.append("Rate not listed")
     elif floor and top < floor:
         result.dropped = "the rate tops out at %s an hour, under your floor of %s" % (top, floor)
         return result

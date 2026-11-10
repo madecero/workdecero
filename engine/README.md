@@ -19,6 +19,7 @@ Shared logic for the sweeps. Standard library Python only (3.9 or newer), so it 
 | `sweep.py` | The job sweep: liveness, harvest, intake, warm paths, verification and the digest note. Keeps everything private out of the research conversation. |
 | `sources.py` | The local source map: checks each proposed source with a live call, removes duplicates, re-checks old entries, and keeps `sources.yaml`. |
 | `handoff.py` | The private temporary folder the helpers share with the assistant, and whether a skill has a run open. Commands that change saved data only work during a run. |
+| `contracts.py` | The contract sweep: places to look from the local map, engagement rules, agency copies folded into one gig, the Channels list, the digest, and status updates. |
 | `warmpath.py` | Writes the Warm path part of a job note, rates email confidence from published evidence, links People notes, and imports LinkedIn's connections export. |
 
 ## Liveness rules

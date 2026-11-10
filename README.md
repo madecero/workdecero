@@ -49,7 +49,7 @@ Nothing personal is stored in this repository or in the plugin folder.
 | Trackers (postings, contracts, groups, events, people, companies) | Your Obsidian vault | Plain Markdown notes that you own. |
 | Setup draft | `~/.cache/workdecero/` (`setup-answers.json`, `setup-state.json`) | Temporary files in a private folder. They hold your answers only while setup is running, in a folder only you can open, and are deleted when setup is saved or cancelled. `setup-answers.json` is written by Claude Code a few lines at a time and is taken in and deleted at the next step. |
 | Source hand-off | `~/.cache/workdecero/` (`sources-entries.json`, `sources-run.json`) | Temporary. Holds public names and links found while your local map is being built. Each batch is deleted as soon as it is checked, and the folder goes when the run ends. |
-| Sweep hand-off and state | `~/.cache/workdecero/sweep-handoff.json`, `sweep-state.json` | Temporary. Hold public postings found during a sweep, and are deleted when the sweep finishes. |
+| Sweep hand-off and state | `~/.cache/workdecero/` (`sweep-handoff.json`, `sweep-state.json`, `contract-handoff.json`, `contract-state.json`) | Temporary. Hold public postings found during a sweep, and are deleted when the sweep finishes. |
 | Cache | The plugin data folder managed by Claude Code | Safe to lose. Removed when the plugin is uninstalled. |
 
 ## Your local map
@@ -58,9 +58,21 @@ Run **`/workdecero:sources`** after setup, or just say "build my local map". In 
 
 ## The job sweep
 
-Run **`/workdecero:job-sweep`** about once a week, or just say "run the job sweep". In Lite mode it takes a few minutes. It re-checks which of your open postings are still live, reads the job lists of the employers in your local map, searches a little further inside a small budget, scores what it finds against your profile, and writes the results into your tracker with a digest note that puts deadlines first. In Lite mode it takes about 10 minutes.
+Run **`/workdecero:job-sweep`** about once a week, or just say "run the job sweep". In Lite mode it takes a few minutes. It re-checks which of your open postings are still live, reads the job lists of the employers in your local map, searches a little further inside a small budget, scores what it finds against your profile, and writes the results into your tracker with a digest note that puts deadlines first.
 
 It never applies, messages, follows or saves anything, and it does not sign in anywhere. The part that reads web pages is never told your pay floor, your exclusions, your current employer or who you know. Those are applied on your computer after the reading is done.
+
+## The contract sweep
+
+Run **`/workdecero:contract-sweep`** when you want freelance, contract, fractional or consulting work, or just say "run the contract sweep". It looks in the places your local map lists for your field (marketplaces, talent networks, agencies, expert networks, and public-bid portals if you turned bids on), keeps only the ways of working your profile takes, and writes what fits into your tracker with a digest note.
+
+* **Your rates stay private.** The assistant that reads the web is never told your hourly floor, your minimum project or retainer price, or the hours you want. It records what a posting says, and the engine decides what clears your terms.
+* **Deadlines first.** Proposal and bid deadlines in the next 7 days lead the digest.
+* **Channels.** Platforms where you need a live profile before work comes through are listed at the end of every digest until you mark each one Live or Skip.
+* **One gig, one note.** The same gig listed by several agencies becomes one note, with the others under "also listed by".
+* **Tell it what you did.** "I applied to C-12", "I won the cafe one", "my profile there is live". It works at any time.
+
+It never bids, applies, signs up or sends anything.
 
 ## Your profile
 
@@ -87,7 +99,8 @@ Claude Code normally asks before it runs a command or writes a file. Setup and t
 | Run the setup helper | `python3 "<plugin folder>/skills/setup/scripts/setup_tool.py"` followed by one of: `status`, `takeover`, `pick-up`, `fields`, `save`, `read-resume`, `check-vault`, `preview`, `preview-details`, `preview-file`, `write`, `cancel`, `import-connections`. Nothing may follow the subcommand |
 | Run the local map helper | `python3 "<plugin folder>/skills/sources/scripts/sources_tool.py"` followed by one of: `plan`, `plan-refresh`, `open`, `add`, `reverify`, `remove`, `finish`, `close`, `show`. Nothing may follow the subcommand |
 | Run the job sweep helper | `python3 "<plugin folder>/skills/job-sweep/scripts/sweep_tool.py"` followed by one of: `start`, `restart`, `intake`, `warm`, `finish`, `cancel`. Nothing may follow the subcommand |
-| Write one temporary file per helper | `~/.cache/workdecero/setup-answers.json`, `sources-entries.json` and `sweep-handoff.json` in the same folder, and only while that folder is a real folder that you own and nobody else can open |
+| Run the contract sweep helper | `python3 "<plugin folder>/skills/contract-sweep/scripts/contract_tool.py"` followed by one of: `start`, `restart`, `intake`, `finish`, `cancel`, `list`, `open`, `update`, `close`. Nothing may follow the subcommand |
+| Write one temporary file per helper | `~/.cache/workdecero/setup-answers.json`, `sources-entries.json`, `sweep-handoff.json` and `contract-handoff.json` in the same folder, and only while that folder is a real folder that you own and nobody else can open |
 
 What that means in practice:
 

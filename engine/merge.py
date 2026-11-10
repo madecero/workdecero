@@ -245,10 +245,20 @@ def _section(kind, item, result, names):
                      "digest's top list." % (reason[:1].upper() + reason[1:]))
     if item.get("why"):
         lines.append("**Why it fits:** %s" % item["why"].strip())
+    terms = []
+    if kind == CONTRACT:
+        if item.get("fixed_price"):
+            terms.append("fixed price $%s" % format(int(item["fixed_price"]), ","))
+        if item.get("retainer_monthly"):
+            terms.append("retainer $%s a month" % format(int(item["retainer_monthly"]), ","))
+        if item.get("location"):
+            terms.append(str(item["location"]).strip())
+    if terms:
+        lines.append("**Terms:** %s." % ", ".join(terms))
     if result.caveats:
         lines.append("**Caveats:** " + " ".join(caveat.rstrip(".") + "." for caveat in result.caveats))
     if item.get("also_listed"):
-        lines.append("**Also listed on:** " + ", ".join(
+        lines.append("**Also listed %s:** " % ("on" if kind == JOB else "by") + ", ".join(
             "[%s](%s)" % (entry.get("source") or "link", entry["url"]) for entry in item["also_listed"]))
     return scoring.scrub_confidential("\n\n".join(lines), names)
 
