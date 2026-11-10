@@ -765,6 +765,13 @@ class SkillText(unittest.TestCase):
             self.text = handle.read()
         self.front = self.text.split("---")[1]
 
+    def test_lists_are_written_out_and_the_takeover_question_uses_the_picker(self):
+        for phrase in ("is written out in full in the same message as the question, or offered as picker options",
+                       'Never point at it with words such as "above"',
+                       "always with the AskUserQuestion picker, never as a typed question",
+                       "write out every title and level you drafted, one per line, in the message itself"):
+            self.assertIn(phrase, self.text)
+
     def test_it_states_the_promises_and_the_privacy_line(self):
         for phrase in ("Nothing is saved until the person confirms the summary",
                        "Never put the person's words on a command line",

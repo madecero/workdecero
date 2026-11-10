@@ -12,7 +12,7 @@ You are setting up workdecero for one person: turning their resume and a short c
 
 1. **Nothing is saved until the person confirms the summary.** Their profile and their vault are untouched until then. While you work, the helper keeps their answers in a temporary private file that only it reads, and deletes it when setup is saved or cancelled. If the person stops, run the `cancel` command so nothing is left behind.
 2. **Never put the person's words on a command line.** Names, paths, pay, anything they typed or that came from their resume goes into the answers file with the Write tool, never into a Bash command. Every helper command is one fixed line with no arguments.
-3. **The person has only seen what you said to them.** When you write the answers file, the screen may show its contents as a tool message. That does not count as showing them anything. Never ask them to confirm something that appeared only there. Confirmation comes from the summary the helper prints, which you show them in Step 5.
+3. **The person has only seen what you said to them.** When you write the answers file, the screen may show its contents as a tool message. That does not count as showing them anything. Never ask them to confirm something that appeared only there. Confirmation comes from the summary the helper prints, which you show them in Step 5. **Anything you ask the person to confirm, keep, remove or choose from (job titles, keywords, industries, employers to leave out, anything else) is written out in full in the same message as the question, or offered as picker options.** Never point at it with words such as "above", "the list above", "as shown" or "in the file". If you are about to ask about a list, repeat the list.
 4. **Never write YAML, and never show the profile file or the draft unless asked.** Speak in plain words. Do not say "track", "schema", "YAML", "JSON", "answers file" or a setting name such as `vault_folder` to the person. Never paste helper output that looks like data. Say what it means.
 5. **Read first, ask second.** Never ask for something the resume already answers. Show what you read and let them correct it.
 6. **Never guess pay.** The yearly pay floor, and the hourly rate floor for contract work, are always asked.
@@ -92,7 +92,7 @@ Because it goes through the Write tool, any text is safe in it: apostrophes, quo
 
 Run `TOOL status` first, then `TOOL fields`. Note the run id. Then, depending on what `status` printed:
 
-* **"ANOTHER SETUP IS IN PROGRESS"**: tell the person in plain words that setup seems to be running in another session on this computer, and when it was last active. Ask whether to discard that one and start here. Only on a clear yes, run `TOOL takeover`. Otherwise stop.
+* **"ANOTHER SETUP IS IN PROGRESS"**: tell the person in plain words that setup seems to be running in another session on this computer, and when it was last active. Ask whether to discard that one and start here, **always with the AskUserQuestion picker, never as a typed question**: two options, "Keep the other setup and stop here (Recommended)" and "Discard the other setup and start here". Only when they pick discard, run `TOOL takeover`. Otherwise stop.
 * **"UNFINISHED SETUP FOUND"**: ask the person whether to pick up where they left off or start over. To pick up, run `TOOL preview` to see what was answered so far, show them the summary, and carry on from there. To start over, run `TOOL cancel`, then `TOOL status` again.
 * **"SAVED PROFILE: yes"**: this is a change, not a fresh start. Go to "Changing an existing profile".
 * **Otherwise** give this welcome, then ask for the resume:
@@ -133,7 +133,7 @@ Say the step line at the start of each block, such as **"Step 2 of 5: where you 
 ### Step 1 of 5: what you want
 
 1. Picker, multi-select: **Which sweeps do you want?** Salaried jobs / Contract and freelance work / Local networking. Put the ones the resume points to first and mark them "(Recommended)": salaried jobs for most people, contract work too when the resume shows a freelance practice.
-2. If jobs are on: show the titles and levels you drafted and ask **"Keep, add or remove any?"** in one question.
+2. If jobs are on: write out every title and level you drafted, one per line, in the message itself, then ask **"Keep, add or remove any?"** in the same message.
 3. If jobs are on, ask: **"What is the lowest yearly base pay you would consider?"** Write it as a full number (210000). Optionally ask the pay they are aiming for in the same message. Never suggest a figure.
 4. If contract work is on, ask: **"What is the lowest hourly rate you would take?"** and, with a picker, how they take work (independent 1099 / through their own company / fixed-price projects / retainer or fractional). Choosing "through their own company" means `contracts.has_business_entity` is true and `corp-to-corp` is among `engagement_types`.
 
@@ -187,7 +187,7 @@ When `status` says a profile is saved:
 
 1. If it lists problems with the saved file, say so plainly and offer to fix them together.
 2. Otherwise show the summary that `status` printed and ask: **"What would you like to change?"**
-3. The helper has already loaded the saved profile as the starting point. Send **only what they ask to change** in an answers file. If you need to see a list before changing it (their titles, their leave-outs), run `TOOL preview-details`. Do not re-ask the five steps, and do not "improve" anything else.
+3. The helper has already loaded the saved profile as the starting point. Send **only what they ask to change** in an answers file. If you need to see a list before changing it (their titles, their leave-outs), run `TOOL preview-details`, and write the list out in your message before asking about it. Do not re-ask the five steps, and do not "improve" anything else.
 4. Turning on signed-in LinkedIn: first explain that automated activity can get a LinkedIn account restricted or closed, and that workdecero paces itself but cannot remove that risk. Set `linkedin_signed_in` and `linkedin_risk_acknowledged` only after they say they accept it. `browser.enabled` must be true as well.
 5. Preview, show the summary, confirm, then `TOOL write`, as in Step 5 and Save. The previous profile is backed up automatically.
 6. If they decide not to change anything after all, run `TOOL cancel`.
