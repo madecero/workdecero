@@ -1,120 +1,203 @@
 # workdecero
 
-A Claude Code plugin that runs weekly job, contract and networking sweeps from your own profile and keeps the results in your Obsidian vault.
+workdecero is a Claude Code plugin that searches for jobs, contract work and local networking for you, from a profile you set up once, and keeps everything it finds as plain notes in your own Obsidian vault.
 
-**Under construction.** Setup, the local map and the job sweep work. The contract and networking sweeps are still being built.
+It is for one person looking for their next thing: a salaried job, freelance or fractional work, or the right rooms to be in. You do not need to be an engineer to use it. I built it for my own search and then made it work for anyone.
+
+It does research only. It never applies, messages, registers or signs up for anything.
+
+![The Start here note in Obsidian, with this week's new roles](docs/screenshots/start-here.png)
+
+After each sweep you get a short digest note. Here is a shortened example. The employers are invented:
+
+```
+## New this sweep
+- Director of Product Management, AI/ML, Blue Mesa Cloud. Fit 65. Pay not listed.
+  Contact first: Apply through the posting. No contact was looked up for this one.
+- Principal Product Manager, AI, Juniper Commerce. Fit 58. $190K to $235K.
+
+## Near misses
+- VP of Product, Lakeshore Fintech: the background fit is 14 of 40, under the 20 that counts as a fit.
+
+## Left out, and why
+- VP of Product, Payments, Old Posting Co: posted 69 days ago, older than the 21 days your profile allows.
+
+## Not covered
+- Browser Built Board (its listing page could not be read)
+
+Nothing was applied for, sent or posted.
+```
+
+## Contents
+
+1. [Before you start](#before-you-start)
+2. [Install](#install)
+3. [First run](#first-run)
+4. [Weekly use](#weekly-use)
+5. [What it will never do](#what-it-will-never-do)
+6. [Privacy and your data](#privacy-and-your-data)
+7. [What workdecero runs without asking](#what-workdecero-runs-without-asking)
+8. [Optional connections](#optional-connections)
+9. [Cost and limits](#cost-and-limits)
+10. [Update and uninstall](#update-and-uninstall)
+11. [Troubleshooting](#troubleshooting)
+
+## Before you start
+
+You need three things.
+
+| You need | Notes |
+| --- | --- |
+| **Claude Code on a paid plan** | Claude Code comes with the paid Claude plans (Pro and Max). workdecero has two modes to match. **Lite** keeps each sweep small enough for a Pro plan. **Full** searches wider and suits a Max plan. Setup asks which you want, and you can change it later. |
+| **Obsidian** | A free notes app, from obsidian.md. Your trackers live there as ordinary notes. If you have never used it: install it, open it once, and create a vault (a vault is just a folder). Setup will find it. |
+| **python3** | A small helper program that workdecero uses. On a Mac it is very likely already there. On a brand new Mac, the first time anything asks for it, macOS shows a window offering to install the "Command Line Developer Tools". Click **Install** and wait a few minutes. That is all. Nothing else needs installing. |
+
+**Which computers.** I built and tested this on macOS. It should work on Linux, which I have not tested. Windows is not supported yet.
 
 ## Install
 
-In Claude Code:
+A "marketplace" is just the place Claude Code downloads a plugin from. Here it is this GitHub repository. You add it once, then install the plugin from it.
+
+In Claude Code, type these two lines, one at a time:
 
 ```
 /plugin marketplace add madecero/workdecero
 /plugin install workdecero@workdecero
 ```
 
-Or from a terminal:
+Then start a new Claude Code session.
+
+If you prefer a terminal, these do the same thing:
 
 ```
 claude plugin marketplace add madecero/workdecero
 claude plugin install workdecero@workdecero
 ```
 
-Then start a new session and run `/workdecero:setup`.
+> **While this repository is private** (remove this note at public release): you need to have been given access to it, and your computer needs to be signed in to GitHub. The simplest way is to install the GitHub command line tool and run `gh auth login`. If the first command above fails with a message about access or a repository that cannot be found, this is why.
 
-## Setup
+## First run
 
-`/workdecero:setup` takes about 15 minutes. It reads your resume, asks a dozen or so short questions (what you want, where, what to leave out, how much to show you, which Obsidian vault), shows you a plain-language summary, and only then saves anything. Stop at any point before that and nothing has changed on your computer. Run it again later to change an answer.
+Do these three things once, in order. Each is a slash command you type in Claude Code.
 
-Your answers stay in a file on your computer. Sweeps search the public web. Nothing is ever applied for, sent or posted for you.
+### 1. Set up your profile: `/workdecero:setup`
 
-While this repository is private you need read access to it and working git credentials for GitHub (an SSH key, or `gh auth login` followed by `gh auth setup-git`).
+About 5 to 10 minutes. It reads your resume, then asks about a dozen short questions in five steps:
 
-## Update
+1. What you want: salaried jobs, contract work, local networking, your target titles and the lowest pay you would consider.
+2. Where: your home base, remote or in person, how far you will travel.
+3. Discretion: whether you are searching quietly while employed, and any employers or names to leave out.
+4. Time and tools: how much to show you each week, Lite or Full, and which Obsidian vault to use.
+5. A plain summary of everything, for you to check.
 
-```
-claude plugin marketplace update workdecero
-claude plugin update workdecero@workdecero
-```
+**Nothing is saved until you say the summary looks good.** Stop at any point before that and nothing on your computer has changed. Run `/workdecero:setup` again any time to change an answer.
 
-Restart Claude Code (or run `/reload-plugins`) to pick up the new version.
+Setup creates one folder called `workdecero` inside your vault. Nothing outside that folder is touched.
 
-## Where your data lives
+### 2. Build your local map: `/workdecero:sources`
 
-Nothing personal is stored in this repository or in the plugin folder.
+About 3 minutes. It finds where your sweeps should look, for your field and your area: employers and the job site each one uses, job boards, places that list contract work, and local groups. Every entry is checked with a live request before it is kept. If it cannot find something, it says so.
+
+You can say "show my sources", "remove NAME from my sources" or "add NAME to my sources" at any time.
+
+### 3. Run your first sweep
+
+| Command | Finds |
+| --- | --- |
+| `/workdecero:job-sweep` | Salaried jobs |
+| `/workdecero:contract-sweep` | Freelance, contract, fractional and consulting work |
+| `/workdecero:networking-sweep` | Groups worth trying and events worth going to |
+
+**Slash commands or plain words.** You can also just say "run the job sweep" or "build my local map". When you do, Claude Code asks once whether it may start that part of workdecero. Say yes. The slash commands ask nothing.
+
+## Weekly use
+
+Run the sweeps you care about about once a week. Each takes a few minutes in Lite mode.
+
+**What a sweep does.** It re-checks what is already in your tracker and closes what has gone. It reads the job lists of the employers in your map and the job boards in your map directly. It searches a little further on the web. It scores what it finds against your profile, leaves out what your profile rules out, and writes a note for each thing that fits. Then it writes a digest note and gives you a short summary.
+
+**What the digest shows.**
+
+* Deadlines first.
+* The new roles that fit, best first, each with a score, the pay if listed, and who to contact first.
+* Near misses: roles that look like a fit and are not, with the reason. For example one that requires a language you do not speak.
+* What closed since last time.
+* Everything that was left out, each with a plain reason, so you can see the tool's judgement and correct your profile if it is wrong.
+* What it could not cover.
+
+**Working in Obsidian.** Open the `Start here` note in the `workdecero` folder. It has table views for each tracker. Change a role's **Status** right in the table (New, Interested, Applied, Interviewing, and so on), add a next step and a date, or write your own notes in any note. Your own writing is never touched. A status you set is never changed back by a sweep.
+
+**Or just say it.** In Claude Code, at any time:
+
+* "I applied to C-12" or "I won the cafe one" (contract work)
+* "I joined the product meetup", "I'm going to the product meetup", "I met Priya at the product meetup" (networking)
+* "Prep me for E-4" writes a short brief into that event's note
+
+**Each sweep in one line.**
+
+* **Job sweep.** Roles from employer job lists and job boards, scored for fit, with a warm path for the best few: the likely hiring manager, the recruiter if named, and anyone you already know there.
+* **Contract sweep.** Gigs from the marketplaces, agencies and networks in your map. Your rates stay private: the part that reads the web is never told your floor. Proposal deadlines in the next 7 days come first. Platforms where you still need a live profile are listed until you mark each one Live or Skip.
+* **Networking sweep.** Answers one question: which one or two things are worth going to this month, and who do I owe a note? Follow-ups come first, then at most the number of events a month you asked for. A meeting at a time you said you cannot do is never picked.
+
+## What it will never do
+
+* Apply for a job or a gig.
+* Send a message, an email or a connection request.
+* Register, RSVP, join or pay for anything.
+* Post anything anywhere.
+* Sign up for an account or create a profile for you.
+* Sign in anywhere, unless you turn on a connection that does (see [Optional connections](#optional-connections)).
+
+It reads public pages and writes notes on your computer. Everything after that is yours to do.
+
+## Privacy and your data
+
+**What stays on your computer.** Your profile, your resume, your pay floor and rates, your current employer, the names you asked to keep confidential, your notes and your connections. None of it is stored in this repository or sent to me.
+
+**What goes to the web.** Search queries and page requests. A search may name your field and your area, for example "VP of Product Denver". It never contains your name, your current employer or a name you keep confidential. The part of workdecero that reads web pages is deliberately not told your pay floor, your rates, your exclusions or who you know. Filtering by those happens on your computer, after the reading is done.
+
+**What goes to Claude.** workdecero runs inside Claude Code, so your conversation with it, including your resume when you give it during setup, is handled by Claude under your own Claude account and its terms. workdecero adds no other service.
+
+### Where your data lives
 
 | What | Where | Notes |
 | --- | --- | --- |
-| Profile (`profile.yaml`), local map (`sources.yaml`) and backups | `~/.config/workdecero/` | Readable by you alone. Location can be overridden. Untouched by updates and by uninstall. |
-| Trackers (postings, contracts, groups, events, people, companies) | Your Obsidian vault | Plain Markdown notes that you own. |
-| Spreadsheet snapshot (only if you turn it on) | `workdecero snapshot.xlsx` in your tracker folder | Read-only picture of the trackers, rebuilt every sweep. Readable by you alone. |
-| Setup draft | `~/.cache/workdecero/` (`setup-answers.json`, `setup-state.json`) | Temporary files in a private folder. They hold your answers only while setup is running, in a folder only you can open, and are deleted when setup is saved or cancelled. `setup-answers.json` is written by Claude Code a few lines at a time and is taken in and deleted at the next step. |
-| Source hand-off | `~/.cache/workdecero/` (`sources-entries.json`, `sources-run.json`) | Temporary. Holds public names and links found while your local map is being built. Each batch is deleted as soon as it is checked, and the folder goes when the run ends. |
-| Sweep hand-off and state | `~/.cache/workdecero/` (`sweep-handoff.json`, `sweep-state.json`, `contract-handoff.json`, `contract-state.json`, `networking-handoff.json`, `networking-state.json`) | Temporary. Hold public postings found during a sweep, and are deleted when the sweep finishes. |
-| Browser setting | `~/.config/workdecero/flags.json` | One line: whether you turned browser use on. Kept in step with your profile, so the hook never reads the profile itself. |
-| Conversation marks | `~/.cache/workdecero-sessions/` | One empty file per conversation that started a workdecero skill, named by its id, in a folder only you can open. Removed after a day. |
-| Cache | The plugin data folder managed by Claude Code | Safe to lose. Removed when the plugin is uninstalled. |
+| Your profile, your local map and backups | `~/.config/workdecero/` | `profile.yaml`, `sources.yaml` and a `backups` folder. Readable by you alone. Updates and uninstalling do not touch them. |
+| Your trackers | The `workdecero` folder in your Obsidian vault | Plain notes that you own: jobs, contracts, channels, groups, events, people, companies and digests. |
+| Spreadsheet snapshot, only if you turn it on | `workdecero snapshot.xlsx` in that same folder | A read-only picture of your trackers, rebuilt after every sweep. Anything typed into it is lost. Readable by you alone. |
+| Temporary working files | `~/.cache/workdecero/` | Exist only while setup or a sweep is running, in a folder only you can open, and are deleted when it ends. During setup they hold your answers. During a sweep they hold public postings. |
+| A small count of LinkedIn pages viewed, only if you turn that connection on | `~/.config/workdecero/usage.json` | Numbers per day for the last week. |
 
-## Your local map
+`~` means your home folder. Folders whose names start with a dot are hidden by default in Finder.
 
-Run **`/workdecero:sources`** after setup, or just say "build my local map". In about 3 minutes it finds where your sweeps should look: employers in your field and area and the job site each one uses, state and field job boards, the places contract work is posted, and local groups and associations. Every entry is checked with a live call before it is kept. The result is `~/.config/workdecero/sources.yaml`, which you can edit. It is re-checked every few weeks.
+## What workdecero runs without asking
 
-## The job sweep
+Claude Code normally asks you before it runs a command or writes a file. Setup and the sweeps have many small steps, and being asked a dozen times would make them unusable. So while workdecero is enabled, it approves a short, fixed list of its own actions for you. Nothing else.
 
-Run **`/workdecero:job-sweep`** about once a week, or just say "run the job sweep". In Lite mode it takes a few minutes. It re-checks which of your open postings are still live, reads the job lists of the employers in your local map, searches a little further inside a small budget, scores what it finds against your profile, and writes the results into your tracker with a digest note that puts deadlines first.
+**Exactly what is approved:**
 
-It never applies, messages, follows or saves anything, and it does not sign in anywhere. The part that reads web pages is never told your pay floor, your exclusions, your current employer or who you know. Those are applied on your computer after the reading is done.
+| What | Exactly |
+| --- | --- |
+| Run the setup helper | `python3 "<plugin folder>/skills/setup/scripts/setup_tool.py"` followed by one of: `status`, `takeover`, `pick-up`, `fields`, `save`, `read-resume`, `check-vault`, `preview`, `preview-details`, `preview-file`, `write`, `cancel`, `import-connections`. Nothing may follow that word |
+| Run the local map helper | `python3 "<plugin folder>/skills/sources/scripts/sources_tool.py"` followed by one of: `plan`, `plan-refresh`, `open`, `add`, `reverify`, `remove`, `finish`, `close`, `show`. Nothing may follow that word |
+| Run the job sweep helper | `python3 "<plugin folder>/skills/job-sweep/scripts/sweep_tool.py"` followed by one of: `start`, `restart`, `intake`, `warm`, `finish`, `cancel`. Nothing may follow that word |
+| Run the contract sweep helper | `python3 "<plugin folder>/skills/contract-sweep/scripts/contract_tool.py"` followed by one of: `start`, `restart`, `intake`, `finish`, `cancel`, `list`, `open`, `update`, `close`. Nothing may follow that word |
+| Run the networking sweep helper | `python3 "<plugin folder>/skills/networking-sweep/scripts/networking_tool.py"` followed by one of: `start`, `restart`, `intake`, `finish`, `cancel`, `list`, `open`, `update`, `prep`, `close`. Nothing may follow that word |
+| Write one temporary file per helper | `setup-answers.json`, `sources-entries.json`, `sweep-handoff.json`, `contract-handoff.json` and `networking-handoff.json`, each in `~/.cache/workdecero/`, and only while that folder is a real folder that you own and nobody else can open |
 
-## The contract sweep
+**What that means.**
 
-Run **`/workdecero:contract-sweep`** when you want freelance, contract, fractional or consulting work, or just say "run the contract sweep". It looks in the places your local map lists for your field (marketplaces, talent networks, agencies, expert networks, and public-bid portals if you turned bids on), keeps only the ways of working your profile takes, and writes what fits into your tracker with a digest note.
+* The helpers take no extra words, so an approved command cannot be pointed at another file. They read and write your profile, your local map, the `workdecero` folder in your vault and the temporary folder. That is all they can reach.
+* A helper command that changes anything only works while its part of workdecero is in the middle of a run. A stray call in some other conversation changes nothing.
+* Any other command, any extra word on those lines, any other file: Claude Code asks you as usual. The approval never blocks anything and never approves anything it does not recognise in full.
+* The approval holds in any Claude Code conversation while the plugin is enabled. **To turn it off, disable the plugin:** `claude plugin disable workdecero@workdecero`. The code that does this is one short file, [`hooks/allow_helper.py`](hooks/allow_helper.py), if you want to read it.
 
-* **Your rates stay private.** The assistant that reads the web is never told your hourly floor, your minimum project or retainer price, or the hours you want. It records what a posting says, and the engine decides what clears your terms.
-* **Deadlines first.** Proposal and bid deadlines in the next 7 days lead the digest.
-* **Channels.** Platforms where you need a live profile before work comes through are listed at the end of every digest until you mark each one Live or Skip.
-* **One gig, one note.** The same gig listed by several agencies becomes one note, with the others under "also listed by".
-* **Tell it what you did.** "I applied to C-12", "I won the cafe one", "my profile there is live". It works at any time.
+**What still asks, on purpose:**
 
-It never bids, applies, signs up or sends anything.
-
-## The networking sweep
-
-Run **`/workdecero:networking-sweep`** to find where to show up, or just say "run the networking sweep". It looks at the groups in your local map and searches for more, ranked by who you said you want to meet.
-
-* **Groups and events are kept apart.** A group that meets every month is one note with its next meeting. An event gets its own note only when it is special: a conference, a speaker squarely in your field, a call for speakers.
-* **Only live groups.** A group needs a meeting in the last six months or one on the calendar. One that has gone quiet is marked Inactive with the evidence, unless you have joined it, in which case you are told.
-* **One question, a two-minute read.** Every digest leads with the follow-ups you owe people, then this month's picks: at most the number of events a month you asked for. A meeting at a time you said you cannot do is never a pick. It is listed under "Also coming up" so you can swap it in.
-* **Said plainly.** When no group exists for a kind of person you want to meet, the digest says so.
-* **Tidied by date.** An event you never planned to go to is marked Did not go once it has passed. One you registered for or were speaking at is never changed for you. The digest asks whether you went.
-* **Your spending limits stay private.** The assistant that reads the web is never told what you will pay. It records the price on the page, and the engine flags what is above your limit.
-* **Speaking angles.** For groups that take speakers, a draft talk idea from your topics goes in the note. A draft only.
-* **Tell it what you did.** "I'm going to the product meetup", "I registered for E-12", "I met Priya at the product meetup". People you met get a note and a follow-up date a week out.
-* **Prep.** "Prep me for E-4" writes a ten-line brief into the event's note: who you know that may be there, two openers, what to bring.
-* **Discreet.** Networking notes describe interests. They never say you are looking for work, and never name your employer.
-
-It never registers, RSVPs, joins, pays or sends anything. Calendar is off: you add events to your calendar yourself.
-
-## Your profile
-
-One file, `~/.config/workdecero/profile.yaml`, holds what you are looking for, where, what to leave out and where your trackers live. Setup will write it for you. Set `WORKDECERO_HOME` to keep it in another folder.
-
-See [examples/profiles](examples/profiles) for three complete examples, and [engine/profile.schema.json](engine/profile.schema.json) for every setting. To check a profile:
-
-```
-python3 engine/wdprofile.py validate path/to/profile.yaml
-```
-
-## Your tracker
-
-Trackers are plain notes in your Obsidian vault, with table views that update as you work. Everything stays in one folder, and your own writing in a note is never touched. See [trackers/README.md](trackers/README.md) for the layout, the promises the plugin keeps, and how to build a demo vault to look around.
-
-![The Start here note](docs/screenshots/start-here.png)
-
-## A spreadsheet to glance at (optional)
-
-Off by default. Turn it on with `/workdecero:setup` ("turn on the spreadsheet copy"). After each sweep, a file called `workdecero snapshot.xlsx` is rebuilt in your tracker folder: a Summary sheet with counts by status, then Jobs, Contracts, Channels, Groups, Events and People. Rows are in the same order as the main views and shaded by stage, and the first cell of each row opens its note in Obsidian.
-
-It is a picture of your notes, never a second copy to keep up. It is written fresh every sweep and never read back, so anything typed into it is lost. The first row of every sheet says so. Names you keep confidential do not appear in it, and only you can read the file.
+* **Reading a PDF resume** that sits outside the folder you started Claude Code in. It is your file, so you get to say yes.
+* **Starting by plain words.** "Run the job sweep" asks once. The slash command does not.
+* **Web search later in a conversation.** If you ask for a refresh or a second sweep later in the same conversation, Claude Code may ask once to allow web search. Say yes, or start it with the slash command.
+* **Every optional connection** below: your browser, your calendar, your task tracker.
 
 ## Optional connections
 
@@ -126,44 +209,92 @@ All off until you turn them on with `/workdecero:setup`. Each one is skipped cle
 | Signed-in LinkedIn | Finds who you already know at an employer, and the hiring team on a posting | Needs two switches: the connection, and your acknowledgement of the risk. **Automated activity can get a LinkedIn account restricted or closed.** workdecero paces itself and keeps to a small daily number of pages, and cannot remove that risk. Read only. In a quiet search it never opens a profile, because a profile view can be shown to its owner |
 | Calendar (Outlook or Google) | Adds a networking event when you say you are going | Checks for a clash first and tells you. One event, no attendees. The entry holds the link and why to go |
 | Task tracker (Linear) | Posts a short comment after each sweep on an issue you name | Counts only. Never a title, an employer or a name |
+| Spreadsheet snapshot | Rebuilds `workdecero snapshot.xlsx` in your tracker folder after each sweep, with one sheet per tracker | A picture to glance at, never a second copy to keep up. Anything typed into it is lost at the next sweep |
 
-**No standing permission for these.** The hook described below covers only workdecero's own helper commands. Browser, calendar and tracker tools are asked for by Claude Code each time, like any other tool. If you want fewer prompts, allow them yourself in your own Claude Code settings.
+**No standing permission for these.** The approval described above covers only workdecero's own helper commands. Browser, calendar and tracker tools are asked for by Claude Code each time, like any other tool. If you want fewer prompts, allow them yourself in your own Claude Code settings.
 
-## What workdecero is allowed to do without asking
+**About LinkedIn, plainly.** You do not need it. Without it, workdecero uses only what is public. If you export your connections from LinkedIn yourself (Settings, Data privacy, Get a copy of your data, Connections), setup can read that file so sweeps know who you know, with no signed-in browsing at all. That is the safe way, and it is the one I recommend.
 
-Claude Code normally asks before it runs a command or writes a file. Setup and the sweeps are conversations with many steps, and being asked a dozen times would make them unusable. So while this plugin is enabled, a small hook (`hooks/allow_helper.py`) approves exactly the following, and nothing else:
+## Cost and limits
 
-| What | Exactly |
-| --- | --- |
-| Run the setup helper | `python3 "<plugin folder>/skills/setup/scripts/setup_tool.py"` followed by one of: `status`, `takeover`, `pick-up`, `fields`, `save`, `read-resume`, `check-vault`, `preview`, `preview-details`, `preview-file`, `write`, `cancel`, `import-connections`. Nothing may follow the subcommand |
-| Run the local map helper | `python3 "<plugin folder>/skills/sources/scripts/sources_tool.py"` followed by one of: `plan`, `plan-refresh`, `open`, `add`, `reverify`, `remove`, `finish`, `close`, `show`. Nothing may follow the subcommand |
-| Run the job sweep helper | `python3 "<plugin folder>/skills/job-sweep/scripts/sweep_tool.py"` followed by one of: `start`, `restart`, `intake`, `warm`, `finish`, `cancel`. Nothing may follow the subcommand |
-| Run the contract sweep helper | `python3 "<plugin folder>/skills/contract-sweep/scripts/contract_tool.py"` followed by one of: `start`, `restart`, `intake`, `finish`, `cancel`, `list`, `open`, `update`, `close`. Nothing may follow the subcommand |
-| Run the networking sweep helper | `python3 "<plugin folder>/skills/networking-sweep/scripts/networking_tool.py"` followed by one of: `start`, `restart`, `intake`, `finish`, `cancel`, `list`, `open`, `update`, `prep`, `close`. Nothing may follow the subcommand |
-| Write one temporary file per helper | `~/.cache/workdecero/setup-answers.json`, `sources-entries.json`, `sweep-handoff.json`, `contract-handoff.json` and `networking-handoff.json` in the same folder, and only while that folder is a real folder that you own and nobody else can open |
+workdecero itself is free. What it uses is your Claude Code plan.
 
-What that means in practice:
+| | Lite | Full |
+| --- | --- | --- |
+| Meant for | A Pro plan | A Max plan |
+| Building your local map | Up to 12 web searches | Up to 40 |
+| Refreshing your local map | Up to 4 | Up to 12 |
+| A job sweep | Up to 10 web searches, up to 12 postings judged, contact research for the best 3 | Up to 30, 30 and 8 |
+| A contract or networking sweep | Up to 10 web searches | Up to 30 |
 
-* The helpers take no arguments, so an approved command cannot be aimed at another file. They read and write your profile, your local map, the workdecero folder in your vault, and the temporary folder above. A command that changes anything only works while its skill has a run open, so a stray call in another conversation changes nothing.
-* Any other command, any extra word on those command lines, any other file: Claude Code asks you as usual. The hook never approves anything it does not recognise in full.
-* One thing is refused outright. In a conversation where you have started a workdecero skill, while browser use is off in your profile (it is off unless you turn it on), any tool that drives a browser, such as Claude in Chrome, is refused with the reason "workdecero: browser use is off in your profile". Nothing else is ever refused, and your other conversations are never affected. To know which conversation is which, the hook keeps an empty file named by the conversation's id for a day.
-* Three things still ask on purpose:
-  * Reading your resume if it is a PDF outside the folder you started in. That is your file, so you get to say yes.
-  * Starting a skill by plain words. A slash command such as `/workdecero:job-sweep` asks nothing. If you say "run the job sweep" instead, Claude Code asks once to allow it, and you can allow it permanently from that prompt.
-  * Web search later in a conversation. A refresh or re-run asked for later in the same conversation may ask once to allow web search. Start it with the slash command or allow it permanently.
-* The approval applies in any conversation while the plugin is enabled, not only during setup. To turn it off, disable the plugin: `claude plugin disable workdecero@workdecero`.
+**Typical times in Lite**, from my own test runs: setup 5 to 10 minutes, the local map about 2 to 3 minutes, each sweep about 2 minutes. Full takes longer.
 
-## What it does not do
+Reading a page that is already known (an employer's job list, a board in your map) does not count as a search, so much of a sweep costs no searches at all.
 
-Research only. It never applies, messages, registers or creates accounts for you.
+**Plan limits.** Every Claude plan has usage limits, and a sweep counts against yours like any other work in Claude Code. If you hit a limit in the middle of a sweep, nothing is lost: notes already written stay, and you can run the sweep again later. If Lite sweeps strain your plan, run fewer of them or run them on different days.
 
-## Requirements
+## Update and uninstall
 
-Claude Code and `python3` 3.9 or newer (the version macOS ships). No other installs.
+**Update.** In Claude Code, type `/plugin`, open the **Marketplaces** tab, choose `workdecero`, and choose **Update marketplace**. That refreshes the marketplace and updates the plugin in one go.
 
-## Contributing
+From a terminal, the same thing is two commands:
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+```
+claude plugin marketplace update workdecero
+claude plugin update workdecero@workdecero
+```
+
+The new version is used from your next Claude Code session. Your profile, your map and your notes are not touched by an update.
+
+**Update by itself.** Auto-update is off by default for a marketplace like this one. To turn it on: `/plugin`, **Marketplaces** tab, choose `workdecero`, then **Enable auto-update**.
+
+**Turn it off for a while.**
+
+```
+claude plugin disable workdecero@workdecero
+```
+
+**Uninstall.**
+
+In Claude Code, `/plugin uninstall workdecero@workdecero` opens the plugin's page, where you choose Uninstall. Or from a terminal:
+
+```
+claude plugin uninstall workdecero@workdecero
+claude plugin marketplace remove workdecero
+```
+
+The first line removes the plugin. The second also forgets where it came from. Uninstalling leaves your profile, your local map and your Obsidian notes exactly where they are. Claude Code keeps a cached copy of the plugin's own files for about two weeks and then clears it by itself. That copy holds none of your data.
+
+**To delete your data as well**, remove these yourself:
+
+* The folder `~/.config/workdecero` (your profile, your map and backups).
+* The `workdecero` folder inside your Obsidian vault (your trackers). Delete it in Obsidian or in Finder.
+* The folder `~/.cache/workdecero`, if it exists. It normally does not.
+
+## Troubleshooting
+
+**"Unknown command" after installing.** Start a new Claude Code session. A plugin installed in the middle of a session is not loaded until the next one.
+
+**The install command fails with an access or "not found" message.** While the repository is private, your computer must be signed in to GitHub with an account that has been given access. See the note under [Install](#install).
+
+**A window about "Command Line Developer Tools" appears.** That is macOS offering to install python3. Click Install, wait for it to finish, and run the command again.
+
+**I said "run the job sweep" and Claude Code asked for permission.** That is expected when you start by plain words. Say yes, or use the slash command, which does not ask.
+
+**Setup says another setup is in progress.** A setup was left open in another window, or was cut off. You are offered three choices: leave it, pick it up here with every answer kept, or discard it. Nothing was saved by the unfinished one.
+
+**A sweep found little or nothing.** Three things to check. First, run `/workdecero:sources` and say "refresh my sources": it names any job board in your map that a sweep gets nothing from. Second, look at "Left out, and why" in the digest: if good roles are being left out, your profile is stricter than you meant, and `/workdecero:setup` changes it. Third, look at "Not covered": some sites can only be read with the browser connection turned on.
+
+**A second sweep in the same conversation asks to allow web search.** Expected. Allow it, or start the sweep with its slash command.
+
+**Something else.** Say "what went wrong?" in the same conversation and Claude will read the helper's message back in plain words. Your notes are never left half written: each note is written whole or not at all.
+
+## For the curious
+
+* [examples/profiles](examples/profiles) has three complete example profiles, and [engine/profile.schema.json](engine/profile.schema.json) lists every setting.
+* [trackers/README.md](trackers/README.md) describes the notes, the views and the promises the plugin keeps about your vault, and how to build a demo vault to look at.
+* [engine/README.md](engine/README.md) describes the scoring and the sweeps.
+* [CONTRIBUTING.md](CONTRIBUTING.md) is for anyone who wants to work on the code.
 
 ## License
 
