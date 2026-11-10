@@ -20,6 +20,7 @@ You are finding where one person should show up: the groups in their area that m
 8. **Never open a browser.** Read pages with web search and page fetch only. Do not use Claude in Chrome or any other browser tool, even if one is available in this session and even if a page will not load. A page you cannot read that way goes in `not_covered`. The person's browser is theirs, and this sweep has not been given it.
 8. Say a group is "worth trying". Never tell the person to join, register or sign up.
 9. Use plain hyphens and commas in everything you write, in notes and in what you say to the person. No long dashes.
+10. **Do not start subagents or background tasks.** Do every step in this conversation. The one exception: if this session has no page fetch tool of its own, the built-in page reader (the `web-fetch` agent) may be used to read a public page, in the foreground.
 
 ## The helper and the hand-off file
 
