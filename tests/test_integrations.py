@@ -325,8 +325,14 @@ class Words(unittest.TestCase):
 
     def test_no_skill_or_hook_gives_standing_permission_for_these_tools(self):
         hook = self.read("hooks", "allow_helper.py")
-        for word in ("mcp__", "chrome", "linear", "calendar", "WebSearch", "WebFetch"):
+        for word in ("linear", "calendar", "WebSearch", "WebFetch"):
             self.assertNotIn(word, hook.lower() if word.islower() else hook)
+        # The hook names browser tools for one purpose only: to refuse them. It never approves one.
+        sys.path.insert(0, os.path.join(_paths.REPO_ROOT, "hooks"))
+        import allow_helper
+        for tool in ("mcp__claude-in-chrome__navigate", "mcp__linear__save_comment", "mcp__ms365__create-calendar-event",
+                     "WebSearch", "WebFetch"):
+            self.assertFalse(allow_helper.decide({"tool_name": tool, "tool_input": {}}), tool)
         for skill in ("job-sweep", "contract-sweep", "networking-sweep"):
             text = self.read("skills", skill, "SKILL.md")
             front = text.split("---")[1]

@@ -17,7 +17,7 @@ You are finding contract work for one person: freelance projects, agency contrac
 5. **Never guess.** Do not invent a gig, a link, a client, a rate or a deadline. Leave out what the posting does not say. A client that is not named stays unnamed.
 6. **Stay inside the budget** the helper gives you. Reading a page you already have a link for is not a search.
 7. Use plain hyphens and commas in everything you write, in notes and in what you say to the person. No long dashes.
-8. **Never open a browser.** Read pages with web search and page fetch only. Do not use Claude in Chrome or any other browser tool, even if one is available in this session and even if a page will not load. A page you cannot read that way goes in `not_covered`. The person's browser is theirs, and this sweep has not been given it.
+8. **Never open a browser unless the start report says the browser pass is ON.** Without that line, read pages with web search and page fetch only. Do not use Claude in Chrome or any other browser tool, even if one is available in this session and even if a page will not load. A page you cannot read that way goes in `not_covered`. The person's browser is theirs. While the pass is off the plugin refuses browser tools outright, so trying one only wastes a step.
 9. **Do not start subagents or background tasks.** Do every step in this conversation. The one exception: if this session has no page fetch tool of its own, the built-in page reader (the `web-fetch` agent) may be used to read a public page, in the foreground.
 
 ## The helper and the hand-off file
