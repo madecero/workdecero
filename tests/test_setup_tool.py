@@ -256,10 +256,39 @@ class TwoSessions(SetupCase):
         code, out, _ = self.call("status")                             # session B starts
         self.assertEqual(code, 1)
         self.assertIn("ANOTHER SETUP IS IN PROGRESS (run %s, last activity 0 minutes ago)." % run_a, out)
-        self.assertIn("run the takeover command", out)
+        self.assertIn("pick it up here (the pick-up command keeps every answer so far), or discard it (the takeover command)", out)
         with open(setup_tool.draft_path()) as handle:
             self.assertEqual(handle.read(), before)                    # A's work is untouched
         self.assertEqual(setup_tool.current_run()["run"], run_a)
+
+    def test_a_cut_off_setup_can_be_picked_up_with_every_answer_kept(self):
+        self.put(self.example())                                       # A answered everything, then its window died
+        self.call("preview")
+        run_a = self.run_id
+        code, out, _ = self.call("status")                             # B, minutes later
+        self.assertEqual(code, 1)
+        self.assertIn("ANOTHER SETUP IS IN PROGRESS", out)
+        code, out, _ = self.call("pick-up")
+        self.assertEqual(code, 0)
+        self.assertIn("PICKED UP. Every answer given so far is kept.", out)
+        run_b = re.search(r"RUN ID: ([0-9a-f]+)", out).group(1)
+        self.assertNotEqual(run_a, run_b)
+        kept = self.state()
+        self.assertEqual(kept.pop("_run"), run_b)
+        self.assertEqual(kept, self.example())
+        self.run_id = run_b
+        code, out, _ = self.call("write")                              # B has not shown the summary yet
+        self.assertEqual(code, 1)
+        self.assertIn("Nothing was saved.", out)
+        self.assertEqual(self.call("preview")[0], 0)
+        self.assertEqual(self.call("write")[0], 0)
+        self.run_id = None
+
+    def test_pick_up_with_nothing_to_pick_up_starts_fresh(self):
+        code, out, _ = self.call("pick-up")
+        self.assertEqual(code, 0)
+        self.assertIn("There are no answers to pick up. Starting fresh.", out)
+        self.assertIn("RUN ID:", out)
 
     def test_after_a_takeover_the_first_session_cannot_save(self):
         self.put(self.example())                                       # A
@@ -415,6 +444,26 @@ class ReadOnlyCommands(SetupCase):
 
 
 class Preview(SetupCase):
+    def test_preview_names_resume_details_that_were_never_sent(self):
+        draft = self.example()
+        draft["person"] = dict(draft["person"])
+        name = draft["person"].pop("business_name")
+        draft["person"].pop("website", None)
+        code, out, _ = self.preview(draft)                              # no resume was read: nothing to look at again
+        self.assertNotIn("NOT SET, LOOK AT THE RESUME ONCE MORE", out)
+        self.send({"set": {"person.headline": draft["person"]["headline"]}, "from_resume": True})
+        code, out, _ = self.call("preview")
+        line = [text for text in out.splitlines() if text.startswith("NOT SET, LOOK AT THE RESUME ONCE MORE")]
+        self.assertEqual(len(line), 1)
+        self.assertIn("person.business_name", line[0])
+        self.assertIn("person.website", line[0])
+        self.assertIn("Do not ask the person about them.", out)
+        self.assertIn("READY TO SAVE", out)                             # a hint, never a block
+        self.send({"set": {"person.business_name": name}, "from_resume": True, "_dropped": ["person.website"]})
+        code, out, _ = self.call("preview")
+        self.assertNotIn("person.business_name", out.split("NOT SET")[-1] if "NOT SET" in out else "")
+        self.assertNotIn("person.website,", out.split("NOT SET")[-1] if "NOT SET" in out else "")
+
     def test_preview_shows_a_short_plain_summary_and_saves_nothing(self):
         before = self.disk()
         draft = self.example(_from_resume={"person.name": "Theo Lindqvist", "jobs.titles": ["VP of Product"],
@@ -564,10 +613,11 @@ class Write(SetupCase):
         self.assertTrue(os.path.isfile(os.path.join(self.vault, "workdecero", "Start here.md")))
         self.assertIn("workdecero is set up.", out)
         self.assertIn("  Tracker      Notes / workdecero / Start here   (8 files added)", out)
-        self.assertIn('Next:   say "run the job sweep". The first one takes a few minutes in Lite mode.', out)
+        self.assertIn("Next:   run /workdecero:job-sweep. The first one takes a few minutes in Lite mode.", out)
+        self.assertIn('Or just say "run the job sweep" or "build my local map". Claude Code asks once to allow it.', out)
+        self.assertIn("Run /workdecero:sources (about 3 minutes)", out)
         self.assertIn("Open:   obsidian://open?path=", out)
         self.assertIn("Start%20here.md", out)
-        self.assertIn('Say "build my local map"', out)
         self.assertIn("Change anything later:   /workdecero:setup", out)
         self.assertIn(setup_tool.PRIVACY, out)
 
@@ -814,7 +864,7 @@ class SkillText(unittest.TestCase):
                        "Nothing is ever applied for, sent or posted for you.",
                        "Never guess pay", "Always confirm the current employer explicitly",
                        "Step 1 of 5", "Step 5 of 5", "What would you like to change?",
-                       "The person has only seen what you said to them", "Saving your answers...",
+                       "The person has only seen what you said to them", "Noting that down...", 'Never say "saved" or "saving" before the final save',
                        "Never ask them to confirm something that appeared only there"):
             self.assertIn(phrase, self.text)
 

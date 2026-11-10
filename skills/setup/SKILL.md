@@ -1,7 +1,7 @@
 ---
 name: setup
 description: First-run setup and later changes for workdecero. Use when the user runs /workdecero:setup, asks to set up workdecero, or wants to change what the job, contract or networking sweeps look for (titles, pay floor, location, leave-outs, vault, digest size).
-allowed-tools: Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" status), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" takeover), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" fields), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" save), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" read-resume), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" check-vault), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" preview), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" preview-details), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" preview-file), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" write), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" cancel), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" import-connections), Write(~/.cache/workdecero/setup-answers.json), Read, AskUserQuestion
+allowed-tools: Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" status), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" takeover), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" pick-up), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" fields), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" save), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" read-resume), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" check-vault), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" preview), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" preview-details), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" preview-file), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" write), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" cancel), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" import-connections), Write(~/.cache/workdecero/setup-answers.json), Read, AskUserQuestion
 ---
 
 # workdecero setup
@@ -37,6 +37,7 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" preview-file
 python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" write
 python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" cancel
 python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" takeover
+python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" pick-up
 python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" import-connections
 ```
 
@@ -55,6 +56,7 @@ Below, `TOOL status` means the first line, `TOOL save` the third, and so on.
 | `TOOL write` | Saves the profile and adds the tracker folder to the vault. Refused unless the draft is exactly what the last preview showed |
 | `TOOL cancel` | Deletes the draft. Run it when the person stops |
 | `TOOL takeover` | Discards another session's unfinished setup. Only when the person says so |
+| `TOOL pick-up` | Carries on here with another session's unfinished setup, keeping every answer. For a session that crashed or was closed |
 | `TOOL import-connections` | Adds the LinkedIn connections file named in the draft to the People notes. Only after `write` |
 
 **How answers reach the helper.** The helper keeps the profile being built. You never read it or rewrite it. After each step you send only that step's answers, in one small file:
@@ -63,7 +65,7 @@ Below, `TOOL status` means the first line, `TOOL save` the third, and so on.
 ~/.cache/workdecero/setup-answers.json
 ```
 
-Write it with the **Write tool** (the helper prints its full path in `status`). Say "Saving your answers..." to the person before you do. Keep it to the few lines that step needs. The next helper command you run takes the file in and deletes it, so you always write a new file and never edit an old one. Every command takes in a waiting answers file first, so you can write the answers and go straight to `check-vault` or `preview`. Use `TOOL save` when a step has no other command to run.
+Write it with the **Write tool** (the helper prints its full path in `status`). Say "Noting that down..." to the person before you do. Never say "saved" or "saving" before the final save: nothing is saved until they confirm the summary, and the word would mislead them. Keep it to the few lines that step needs. The next helper command you run takes the file in and deletes it, so you always write a new file and never edit an old one. Every command takes in a waiting answers file first, so you can write the answers and go straight to `check-vault` or `preview`. Use `TOOL save` when a step has no other command to run.
 
 The answers file is one JSON object:
 
@@ -92,7 +94,7 @@ Because it goes through the Write tool, any text is safe in it: apostrophes, quo
 
 Run `TOOL status` first, then `TOOL fields`. Note the run id. Then, depending on what `status` printed:
 
-* **"ANOTHER SETUP IS IN PROGRESS"**: tell the person in plain words that setup seems to be running in another session on this computer, and when it was last active. Ask whether to discard that one and start here, **always with the AskUserQuestion picker, never as a typed question**: two options, "Keep the other setup and stop here (Recommended)" and "Discard the other setup and start here". Only when they pick discard, run `TOOL takeover`. Otherwise stop.
+* **"ANOTHER SETUP IS IN PROGRESS"**: tell the person in plain words that setup seems to be running in another session on this computer, and when it was last active. Ask whether to discard that one and start here, **always with the AskUserQuestion picker, never as a typed question**: three options: "Leave it and stop here (Recommended)", described as right when setup is open in another window; "Pick it up here", described as right when that session crashed or was closed, keeping every answer so far; and "Discard it and start fresh", described as throwing those answers away. On pick up, run `TOOL pick-up`, then `TOOL preview`, tell them in a line or two what is already answered, and carry on from the first unanswered step. On discard, run `TOOL takeover`. Otherwise stop.
 * **"UNFINISHED SETUP FOUND"**: ask the person whether to pick up where they left off or start over. To pick up, run `TOOL preview` to see what was answered so far, show them the summary, and carry on from there. To start over, run `TOOL cancel`, then `TOOL status` again.
 * **"SAVED PROFILE: yes"**: this is a change, not a fresh start. Go to "Changing an existing profile".
 * **Otherwise** give this welcome, then ask for the resume:
@@ -167,9 +169,10 @@ Say the step line at the start of each block, such as **"Step 2 of 5: where you 
 1. Run `TOOL preview` (after sending any answers still unsent). Show the person the summary it prints, as it is. It is about twenty lines. This summary, and nothing else, is what they are agreeing to.
 2. If it prints **QUESTIONS TO ASK BEFORE SAVING**, ask each one in plain words, for example **"You wrote 210 for your pay floor. Did you mean 210,000?"** If they correct it, send the corrected value. If they say the value is right as written, send that setting's name (the part before the message, such as `jobs.salary_floor`) in `"_confirmed"`. Never do that without asking.
 3. If it prints **READ FROM THE RESUME BUT NO LONGER IN THE DRAFT**, something read from the resume was removed. If the person asked for that, send its name in `"_dropped"`. If not, send it again.
-4. If it prints **TO FIX** or **VAULT PROBLEM**, fix what you can from what you know, ask about the rest. Say the problem plainly. Do not show raw error text.
-5. After any change, run `TOOL preview` again and show the new summary. **The person must see the summary of exactly what will be saved.** The helper enforces this: `write` is refused if anything changed since the last preview.
-6. Ask: **"Anything to change? Say it in your own words, or say looks good."** Send free-text corrections as answers, preview again, and show the summary again. Offer more detail once, in passing: `TOOL preview-details` shows every setting, and `TOOL preview-file` shows the file itself. Use them only if asked.
+4. If it prints **NOT SET, LOOK AT THE RESUME ONCE MORE**, check whether the resume shows any of the settings it names (a business name, a website, a LinkedIn address, certifications). Send the ones it does show with `"from_resume": true` and preview again. Do not ask the person about them.
+5. If it prints **TO FIX** or **VAULT PROBLEM**, fix what you can from what you know, ask about the rest. Say the problem plainly. Do not show raw error text.
+6. After any change, run `TOOL preview` again and show the new summary. **The person must see the summary of exactly what will be saved.** The helper enforces this: `write` is refused if anything changed since the last preview.
+7. Ask: **"Anything to change? Say it in your own words, or say looks good."** Send free-text corrections as answers, preview again, and show the summary again. Offer more detail once, in passing: `TOOL preview-details` shows every setting, and `TOOL preview-file` shows the file itself. Use them only if asked.
 
 ## Save
 
@@ -178,9 +181,9 @@ Only after they say it looks good, run `TOOL write`. Show the "workdecero is set
 Then offer two things, one at a time:
 
 1. **Connections (optional).** "Want to add your LinkedIn connections, so sweeps can spot people you know at a company? In LinkedIn: Settings, Data privacy, Get a copy of your data, pick Connections. LinkedIn emails you a file called Connections.csv." If yes, get the path, then ask separately: **"Include the email addresses in that file? Most people say no."** (default no). Run `TOOL status` to open a run, write an answers file holding only `"_run"`, `"_connections_path"` and `"_include_emails"` (true only on a clear yes), run `TOOL import-connections`, and report the counts it prints in a sentence.
-2. **Local map.** "Want me to find the job boards, employers and groups for your area now? It takes about 3 minutes, or you can do it later by saying build my local map." If yes, tell them to say **build my local map** as their next message (that starts the `sources` skill, which has its own tools). Do not research it yourself inside setup.
+2. **Local map.** "Want me to find the job boards, employers and groups for your area now? It takes about 3 minutes, or you can do it later with /workdecero:sources." If yes, tell them to run **/workdecero:sources** as their next message (that starts the `sources` skill, which has its own tools). They can also just say "build my local map", and Claude Code then asks once to allow it. Do not research it yourself inside setup.
 
-End by repeating the one next step from the screen (for example: say "run the job sweep").
+End by repeating the one next step from the screen, slash command first (for example: run /workdecero:job-sweep, or just say "run the job sweep").
 
 ## Changing an existing profile
 

@@ -47,6 +47,7 @@ Commands (none takes an argument). Each one first absorbs a waiting answers file
                          is exactly what the last preview showed
     cancel               deletes the draft
     takeover             discards another session's unfinished setup
+    pick-up              carries on here with another session's unfinished setup, keeping its answers
     import-connections   adds the LinkedIn file named in "_connections_path" to the People notes
 
 Exit codes: 0 fine, 1 the draft has problems to fix first, 2 the command could not run.
@@ -197,6 +198,12 @@ def draft_state():
 
 
 LIST_HELPERS = ("_dropped", "_confirmed")
+# Settings a resume often shows that are easy to pass over. Preview names the empty ones once more.
+RESUME_EXTRAS = ("person.business_name", "person.website", "person.linkedin_url", "skills.certifications")
+
+
+def draft_has_resume(result):
+    return bool(result.get("resume_read"))
 PLAIN_HELPERS = ("_new_vault", "_resume_path", "_connections_path", "_include_emails")
 
 
@@ -710,7 +717,8 @@ def review(draft):
         if node in (None, "", [], {}) and value not in (None, "", [], {}) and dotted not in dropped_ok:
             missing.append((str(dotted), value))
     return {"profile": profile, "inferred": inferred, "new_vault": new_vault, "problems": problems,
-            "questions": questions, "vault_ok": vault_ok, "vault_message": vault_message, "missing": missing}
+            "questions": questions, "vault_ok": vault_ok, "vault_message": vault_message, "missing": missing,
+            "dropped": dropped_ok, "resume_read": bool(from_resume)}
 
 
 def _blocked(result):
@@ -743,6 +751,12 @@ def _print_review(result, show_file=False, out=None, details=False):
             print("  %s: %s" % (dotted, shown if len(shown) <= 90 else shown[:87] + "..."), file=out)
         print("  Put each one back in the draft, or ask the person whether to leave it out and then list its "
               "name under \"_dropped\".", file=out)
+    unset = [dotted for dotted in RESUME_EXTRAS
+             if draft_has_resume(result) and dotted not in result.get("dropped", ()) and not _get_path(result["profile"], dotted)]
+    if unset:
+        print("NOT SET, LOOK AT THE RESUME ONCE MORE: %s" % ", ".join(unset), file=out)
+        print("  If the resume shows one of these, send it now with \"from_resume\": true. If it does not, carry on. "
+              "Do not ask the person about them.", file=out)
     if _blocked(result):
         pass
     else:
@@ -827,17 +841,20 @@ def write(draft, out=None):
     on = [key for key in wdprofile.TRACKS if profile.get("tracks", {}).get(key)]
     first = {"jobs": "run the job sweep", "contracts": "run the contract sweep",
              "networking": "run the networking sweep"}[on[0]]
+    command = {"jobs": "/workdecero:job-sweep", "contracts": "/workdecero:contract-sweep",
+               "networking": "/workdecero:networking-sweep"}[on[0]]
     mode = "Lite" if (profile.get("mode") or "lite") == "lite" else "Full"
     print("workdecero is set up.", file=out)
     print("", file=out)
     print("  Profile      %s   (your answers; %s)" % (_tilde(path), "saved" if changed else "unchanged"), file=out)
     print("  Tracker      %s / %s / Start here   (%s)" % (
         name, folder, "%d files added" % len(created) if created else "already in place, nothing overwritten"), file=out)
-    print("  Local map    not built yet. Say \"build my local map\" (about 3 minutes) to find job boards,", file=out)
+    print("  Local map    not built yet. Run /workdecero:sources (about 3 minutes) to find job boards,", file=out)
     print("               employers and groups for %s." % (profile.get("location", {}).get("home_base") or "your area"),
           file=out)
     print("", file=out)
-    print("Next:   say \"%s\". The first one takes a few minutes in %s mode." % (first, mode), file=out)
+    print("Next:   run %s. The first one takes a few minutes in %s mode." % (command, mode), file=out)
+    print("        Or just say \"%s\" or \"build my local map\". Claude Code asks once to allow it." % first, file=out)
     if link:
         print("Open:   %s   (opens Start here in Obsidian)" % link, file=out)
     else:
@@ -949,8 +966,9 @@ def status(out=None):
             owner["run"], int(idle), "" if int(idle) == 1 else "s"), file=out)
         print("  If %s is the run id you were given earlier in this same conversation, carry on with it." % owner["run"],
               file=out)
-        print("  Otherwise tell the person that setup is already running in another session on this computer. "
-              "Only if they want to discard that one, run the takeover command.", file=out)
+        print("  Otherwise tell the person that setup is already running in another session on this computer, "
+              "or was cut off there. They choose: leave it alone, pick it up here (the pick-up command keeps "
+              "every answer so far), or discard it (the takeover command).", file=out)
         return 1
     note = None
     if state == "resumable":
@@ -985,6 +1003,42 @@ def status(out=None):
     elif state == "empty" or owner is not None:
         delete_draft()
     _open_run(out)
+    return 0
+
+
+def pick_up(out=None):
+    """Carry on here with a setup that another session left behind, keeping its answers.
+
+    For a session that crashed or was closed. If that session is in fact still
+    running, its next answers file is refused, exactly as after a takeover.
+    """
+    out = out or sys.stdout
+    state, _, old = draft_state()
+    if state != "resumable" or not isinstance(old, dict):
+        print("There are no answers to pick up. Starting fresh.", file=out)
+        print("", file=out)
+        delete_draft()
+        _open_run(out)
+        return 0
+    run = start_run()
+    kept = dict(old)
+    kept["_run"] = run
+    prepare_draft(json.dumps(kept, indent=1, ensure_ascii=False) + "\n")
+    if os.path.isfile(_shown_path()):
+        os.remove(_shown_path())          # the person must see the summary again before anything is saved
+    _lock_down()
+    print("PICKED UP. Every answer given so far is kept.", file=out)
+    print("RUN ID: %s" % run, file=out)
+    print("  Put \"_run\": \"%s\" in every answers file you write. One without it is refused." % run, file=out)
+    print("ANSWERS FILE: %s" % answers_path(), file=out)
+    print("", file=out)
+    print("Run the preview command to see what was answered, tell the person where they left off, and carry on "
+          "from the first step that is not answered.", file=out)
+    print("", file=out)
+    vaults = known_vaults()
+    print("OBSIDIAN VAULTS ON THIS COMPUTER: %s" % (
+        "; ".join("%s (%s)" % (item["name"], item["shown"]) for item in vaults) or "none found"), file=out)
+    print("TODAY: %s" % datetime.date.today().isoformat(), file=out)
     return 0
 
 
@@ -1056,7 +1110,7 @@ def preview(out=None, details=False, show_file=False):
     return 0
 
 
-COMMANDS = ("status", "takeover", "fields", "save", "read-resume", "check-vault", "preview", "preview-details",
+COMMANDS = ("status", "takeover", "pick-up", "fields", "save", "read-resume", "check-vault", "preview", "preview-details",
             "preview-file", "write", "cancel", "import-connections")
 
 
@@ -1071,6 +1125,8 @@ def main(argv=None):
     try:
         if command == "status":
             return status()
+        if command == "pick-up":
+            return pick_up()
         if command == "takeover":
             return takeover()
         if command == "fields":

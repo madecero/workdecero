@@ -113,8 +113,8 @@ def start(out=None, fetcher=None, today=None, force=False):
     sweep.save_state(work_dir(), state)
     print(sweep.start_report(state, profile), file=out)
     if not any(source_map.get(track) for track in sources.TRACKS):
-        print("\nNOTE: there is no local map yet, so only web searches were available. Tell the person they can say "
-              "\"build my local map\" to make later sweeps much more thorough.", file=out)
+        print("\nNOTE: there is no local map yet, so only web searches were available. Tell the person they can run "
+              "/workdecero:sources (or say \"build my local map\") to make later sweeps much more thorough.", file=out)
     return 0
 
 

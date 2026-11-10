@@ -514,7 +514,7 @@ def show(out=None):
     source_map = sources.load()
     total = sum(len(source_map.get(track) or []) for track in sources.TRACKS)
     if not total:
-        print("Your local map is empty. Say \"build my local map\" to create it.", file=out)
+        print("Your local map is empty. Run /workdecero:sources to create it, or just say \"build my local map\".", file=out)
         return 0
     print("Your local map: %d places to look%s." % (
         total, " around %s" % source_map["area"] if source_map.get("area") else ""), file=out)

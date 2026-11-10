@@ -54,11 +54,11 @@ Nothing personal is stored in this repository or in the plugin folder.
 
 ## Your local map
 
-Say **build my local map** after setup. In about 3 minutes it finds where your sweeps should look: employers in your field and area and the job site each one uses, state and field job boards, the places contract work is posted, and local groups and associations. Every entry is checked with a live call before it is kept. The result is `~/.config/workdecero/sources.yaml`, which you can edit. It is re-checked every few weeks.
+Run **`/workdecero:sources`** after setup, or just say "build my local map". In about 3 minutes it finds where your sweeps should look: employers in your field and area and the job site each one uses, state and field job boards, the places contract work is posted, and local groups and associations. Every entry is checked with a live call before it is kept. The result is `~/.config/workdecero/sources.yaml`, which you can edit. It is re-checked every few weeks.
 
 ## The job sweep
 
-Say **run the job sweep**, about once a week. In Lite mode it takes a few minutes. It re-checks which of your open postings are still live, reads the job lists of the employers in your local map, searches a little further inside a small budget, scores what it finds against your profile, and writes the results into your tracker with a digest note that puts deadlines first. In Lite mode it takes about 10 minutes.
+Run **`/workdecero:job-sweep`** about once a week, or just say "run the job sweep". In Lite mode it takes a few minutes. It re-checks which of your open postings are still live, reads the job lists of the employers in your local map, searches a little further inside a small budget, scores what it finds against your profile, and writes the results into your tracker with a digest note that puts deadlines first. In Lite mode it takes about 10 minutes.
 
 It never applies, messages, follows or saves anything, and it does not sign in anywhere. The part that reads web pages is never told your pay floor, your exclusions, your current employer or who you know. Those are applied on your computer after the reading is done.
 
@@ -84,7 +84,7 @@ Claude Code normally asks before it runs a command or writes a file. Setup and t
 
 | What | Exactly |
 | --- | --- |
-| Run the setup helper | `python3 "<plugin folder>/skills/setup/scripts/setup_tool.py"` followed by one of: `status`, `takeover`, `fields`, `save`, `read-resume`, `check-vault`, `preview`, `preview-details`, `preview-file`, `write`, `cancel`, `import-connections`. Nothing may follow the subcommand |
+| Run the setup helper | `python3 "<plugin folder>/skills/setup/scripts/setup_tool.py"` followed by one of: `status`, `takeover`, `pick-up`, `fields`, `save`, `read-resume`, `check-vault`, `preview`, `preview-details`, `preview-file`, `write`, `cancel`, `import-connections`. Nothing may follow the subcommand |
 | Run the local map helper | `python3 "<plugin folder>/skills/sources/scripts/sources_tool.py"` followed by one of: `plan`, `plan-refresh`, `open`, `add`, `reverify`, `remove`, `finish`, `close`, `show`. Nothing may follow the subcommand |
 | Run the job sweep helper | `python3 "<plugin folder>/skills/job-sweep/scripts/sweep_tool.py"` followed by one of: `start`, `restart`, `intake`, `warm`, `finish`, `cancel`. Nothing may follow the subcommand |
 | Write one temporary file per helper | `~/.cache/workdecero/setup-answers.json`, `sources-entries.json` and `sweep-handoff.json` in the same folder, and only while that folder is a real folder that you own and nobody else can open |
@@ -93,7 +93,10 @@ What that means in practice:
 
 * The helpers take no arguments, so an approved command cannot be aimed at another file. They read and write your profile, your local map, the workdecero folder in your vault, and the temporary folder above. A command that changes anything only works while its skill has a run open, so a stray call in another conversation changes nothing.
 * Any other command, any extra word on those command lines, any other file: Claude Code asks you as usual. The hook never blocks anything and never approves anything it does not recognise in full.
-* One thing still asks on purpose: reading your resume if it is a PDF outside the folder you started in. That is your file, so you get to say yes.
+* Three things still ask on purpose:
+  * Reading your resume if it is a PDF outside the folder you started in. That is your file, so you get to say yes.
+  * Starting a skill by plain words. A slash command such as `/workdecero:job-sweep` asks nothing. If you say "run the job sweep" instead, Claude Code asks once to allow it, and you can allow it permanently from that prompt.
+  * Web search later in a conversation. A refresh or re-run asked for later in the same conversation may ask once to allow web search. Start it with the slash command or allow it permanently.
 * The approval applies in any conversation while the plugin is enabled, not only during setup. To turn it off, disable the plugin: `claude plugin disable workdecero@workdecero`.
 
 ## What it does not do

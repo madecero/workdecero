@@ -38,7 +38,7 @@ import sys
 # skill folder -> (helper script, subcommands allowed, hand-off file the assistant may write)
 HELPERS = {
     "setup": ("setup_tool.py",
-              ("status", "takeover", "fields", "save", "read-resume", "check-vault", "preview", "preview-details",
+              ("status", "takeover", "pick-up", "fields", "save", "read-resume", "check-vault", "preview", "preview-details",
                "preview-file", "write", "cancel", "import-connections"),
               "setup-answers.json"),
     "sources": ("sources_tool.py",
