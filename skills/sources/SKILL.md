@@ -84,11 +84,12 @@ The sweeps work best when the map knows the system that runs an employer's job s
 
 1. For each employer, pass its **careers page** if you saw one, otherwise its **homepage**. You do not need a search per employer: one good list of the area's largest employers gives you the names, and for well-known employers you may supply the homepage yourself (see rule 1). That is how a map reaches 12 or 30 employers inside the budget.
 2. The helper loads that page, follows the careers and jobs links on it, finds the job site behind them, and checks it with a live call. Its answer says "Job site found from the employer's own pages" when that worked.
-3. If you can already see a link to the job site itself, pass that. These are the forms the helper checks directly: `NAME.wdN.myworkdayjobs.com/SITE`, `job-boards.greenhouse.io/NAME`, `jobs.lever.co/NAME`, `jobs.ashbyhq.com/NAME`, `jobs.smartrecruiters.com/NAME`, `apply.workable.com/NAME`.
-4. If the helper finds no job site, it still keeps the employer with the page you gave. That is fine. **Never leave a large employer out** because its job site could not be identified.
-5. When searches are left over, use them on the largest employers still without a checked job list: search the employer's name with "careers" and a system name such as "Workday", and pass any link to the employer's job site that you see.
+3. If the employer's own pages show no job site, the helper also looks for the employer's board at the public addresses these systems use, starting from the employer's web domain. So give the employer's **real homepage or careers page**, not a news article or a directory page about it: the domain is what the helper works from.
+4. If you can already see a link to the job site itself, pass that. A link to one posting is fine: the helper stores the whole board, never a single posting. These are the forms the helper checks directly: `NAME.wdN.myworkdayjobs.com/SITE`, `job-boards.greenhouse.io/NAME`, `jobs.lever.co/NAME`, `jobs.ashbyhq.com/NAME`, `jobs.smartrecruiters.com/NAME`, `apply.workable.com/NAME`.
+5. If the helper finds no job site, it still keeps the employer with the page you gave. That is fine. **Never leave a large employer out** because its job site could not be identified.
+6. When searches are left over, use them on the largest employers still without a checked job list: search the employer's name with "careers" and a system name such as "Workday", and pass any link to the employer's job site that you see.
 
-Do not pass a third-party board's copy of an employer's postings as the employer. And do not pass a single posting or a filtered search: pass the employer's site.
+Do not pass a third-party board's copy of an employer's postings as the employer, and do not pass a filtered search.
 
 ## Building the map
 
@@ -101,9 +102,11 @@ Do not pass a third-party board's copy of an employer's postings as the employer
    * A designer gets agencies and studios, and marketplaces such as design and freelance platforms.
    * A product or technology leader gets software employers, fractional and executive boards, and expert networks.
    Use the profile, not these examples, to decide.
-6. **Use the budget.** If searches are left and a section is thin (fewer employers than the plan asks for, or a sweep with only two or three sources), keep going. Stopping early with half the budget unused shortchanges the person.
-7. When the checklist is done or the budget is used, write the true number of searches and a short list of what you did not get to into the hand-off file (an empty list if nothing was skipped), and run `TOOL finish`. Show the person the summary it prints, as it is.
-8. Add one line of your own: anything notable you could not verify, and that they can say "show my sources" or "remove NAME from my sources" at any time.
+6. **Three things every map has**, whatever the field: the state's public workforce job board; the largest active meetup groups for the field, found with one Meetup topic search and ranked by members and next event; and for contract platforms the freelancer's side of the site, never the "hire talent" side (the helper refuses those).
+7. **A refresh adds an employer only when it has an open role for this person.** Size alone is not a reason. The helper checks, and leaves out a new employer with nothing that matches.
+8. **Use the budget.** If searches are left and a section is thin (fewer employers than the plan asks for, or a sweep with only two or three sources), keep going. Stopping early with half the budget unused shortchanges the person.
+9. When the checklist is done or the budget is used, write the true number of searches and a short list of what you did not get to into the hand-off file (an empty list if nothing was skipped), and run `TOOL finish`. Show the person the summary it prints, as it is.
+10. Add one line of your own: anything notable you could not verify, and that they can say "show my sources" or "remove NAME from my sources" at any time.
 
 ## Refreshing the map
 

@@ -44,11 +44,21 @@
         "jobs": [
           {
             "id": 1,
-            "title": "VP of Product"
+            "title": "VP of Product",
+            "absolute_url": "https://job-boards.greenhouse.io/frontrangerobotics/jobs/1",
+            "location": {
+              "name": "Remote"
+            },
+            "updated_at": "2026-11-05T10:00:00-05:00"
           },
           {
             "id": 2,
-            "title": "Staff Engineer"
+            "title": "Staff Engineer",
+            "absolute_url": "https://job-boards.greenhouse.io/frontrangerobotics/jobs/2",
+            "location": {
+              "name": "Remote"
+            },
+            "updated_at": "2026-11-05T10:00:00-05:00"
           }
         ],
         "meta": {
@@ -232,6 +242,63 @@
       "url": "https://www.smallshop.example.com/careers",
       "status": 200,
       "body": "<html><body>Email us your resume.</body></html>"
+    },
+    {
+      "url": "https://www.bluebirdhealth.example/",
+      "status": 200,
+      "body": "<html><body><h1>Bluebird Health</h1><div id=\"app\"></div></body></html>"
+    },
+    {
+      "url": "https://www.frr-holdings.example/",
+      "status": 200,
+      "body": "<html><body><h1>Front Range Robotics</h1></body></html>"
+    },
+    {
+      "url": "https://boards-api.greenhouse.io/v1/boards/frontrangerobotics",
+      "status": 200,
+      "json": {
+        "name": "Front Range Robotics"
+      }
+    },
+    {
+      "url": "https://www.mha-group.example/",
+      "status": 200,
+      "body": "<html><body><h1>Mile High Analytics</h1></body></html>"
+    },
+    {
+      "url": "https://www.emptyco.example/",
+      "status": 200,
+      "body": "<html><body><h1>Empty Co</h1></body></html>"
+    },
+    {
+      "url": "https://boards-api.greenhouse.io/v1/boards/otherco",
+      "status": 200,
+      "json": {
+        "name": "Some Other Company"
+      }
+    },
+    {
+      "url": "https://boards-api.greenhouse.io/v1/boards/otherco/jobs",
+      "status": 200,
+      "json": {
+        "jobs": [
+          {
+            "id": 1,
+            "title": "Engineer",
+            "absolute_url": "https://job-boards.greenhouse.io/otherco/jobs/1"
+          }
+        ]
+      }
+    },
+    {
+      "url": "https://www.other-co-parent.example/",
+      "status": 200,
+      "body": "<html><body><h1>Other Co</h1></body></html>"
+    },
+    {
+      "url": "https://www.marketplace.example.com/hire/designers",
+      "status": 200,
+      "body": "<html><body>Hire a designer</body></html>"
     }
   ]
 }

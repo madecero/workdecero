@@ -21,6 +21,11 @@ EXAMPLES = os.path.join(_paths.REPO_ROOT, "examples", "profiles")
 TODAY = datetime.date(2026, 11, 9)
 
 
+# Addresses the helper may guess when it looks for an employer's public job board.
+PROBE_HOSTS = ("https://boards-api.greenhouse.io/", "https://api.lever.co/", "https://api.ashbyhq.com/",
+               "https://api.smartrecruiters.com/", "https://apply.workable.com/api/")
+
+
 class FixtureFetcher(object):
     """Answers from the fixture file only, so the tests never reach the network."""
 
@@ -32,6 +37,8 @@ class FixtureFetcher(object):
 
     def _answer(self, url):
         self.requested.append(url)
+        if url not in self.answers and url.startswith(PROBE_HOSTS):
+            return liveness.Response(404, "Not found", url, None)       # no board at a guessed address
         if url not in self.answers:
             raise AssertionError("request not covered by a fixture: %s" % url)
         item = self.answers[url]
@@ -134,7 +141,7 @@ class CheckingEntries(unittest.TestCase):
     def test_the_job_site_is_read_off_the_careers_page(self):
         entry = self.check("jobs", employer("Example Health", "https://www.examplehealth.example.org/careers"))
         self.assertEqual(entry["how"], "api")
-        self.assertEqual(entry["url"], "https://examplehealth.wd5.myworkdayjobs.com/en-US/Careers")
+        self.assertEqual(entry["url"], "https://examplehealth.wd5.myworkdayjobs.com/Careers")
         self.assertEqual(entry["careers_page"], "https://www.examplehealth.example.org/careers")
         self.assertEqual(entry["ats"]["site"], "Careers")
         self.assertIn("Job site found from the employer's own pages. Workday job list answered with 212 open "
@@ -153,7 +160,56 @@ class CheckingEntries(unittest.TestCase):
     def test_an_employer_with_no_job_site_is_kept_with_its_page(self):
         entry = self.check("jobs", employer("Small Shop", "https://www.smallshop.example.com/"))
         self.assertEqual((entry["how"], entry["url"]), ("page", "https://www.smallshop.example.com/"))
-        self.assertLessEqual(len(self.fetcher.requested), sources.MAX_PAGES_PER_EMPLOYER)
+        pages = [url for url in self.fetcher.requested if not url.startswith(PROBE_HOSTS)]
+        self.assertLessEqual(len(pages), sources.MAX_PAGES_PER_EMPLOYER)
+        guesses = [url for url in self.fetcher.requested if url.startswith(PROBE_HOSTS)]
+        self.assertLessEqual(len(guesses), sources.MAX_PROBE_SLUGS * len(sources.PROBE_SYSTEMS))
+
+    def test_a_board_is_found_at_its_public_address_from_the_employers_domain(self):
+        # The careers page is built in the browser and shows no link, but the board sits at a known address.
+        entry = self.check("jobs", employer("Bluebird Health", "https://www.bluebirdhealth.example/"))
+        self.assertEqual((entry["how"], entry["ats"]), ("api", {"system": "ashby", "board": "bluebirdhealth"}))
+        self.assertEqual(entry["url"], "https://jobs.ashbyhq.com/bluebirdhealth")
+        self.assertEqual(entry["careers_page"], "https://www.bluebirdhealth.example/")
+        self.assertIn("Job board found at its public address", entry["notes"])
+
+    def test_a_guess_from_the_name_alone_needs_the_board_to_say_whose_it_is(self):
+        # The domain says nothing, but the board at the name's address names the same employer.
+        entry = self.check("jobs", employer("Front Range Robotics", "https://www.frr-holdings.example/"))
+        self.assertEqual(entry["url"], "https://job-boards.greenhouse.io/frontrangerobotics")
+        # A board that exists at the guessed name but belongs to someone else is not taken.
+        other = self.check("jobs", employer("Other Co", "https://www.other-co-parent.example/"))
+        self.assertEqual((other["how"], other["url"]), ("page", "https://www.other-co-parent.example/"))
+        # Lever boards do not say whose they are, so a name-only guess there is not taken either.
+        lever = self.check("jobs", employer("Mile High Analytics", "https://www.mha-group.example/"))
+        self.assertEqual(lever["how"], "page")
+        # A board with nothing open proves nothing.
+        empty = self.check("jobs", employer("Empty Co", "https://www.emptyco.example/"))
+        self.assertEqual(empty["how"], "page")
+
+    def test_board_slugs_come_from_the_domain_then_the_name(self):
+        self.assertEqual(sources.board_slugs("Ping Pong Software, Inc.", "https://www.pingpong.example/careers"),
+                         [("pingpong", "domain"), ("pingpongsoftware", "name"), ("ping-pong-software", "name")])
+        self.assertEqual(sources.board_slugs("Acme", "https://jobs.lever.co/acme"), [("acme", "name")])
+        self.assertEqual(sources.board_slugs("Shop", "https://www.shop.co.uk/"), [("shop", "domain")])
+
+    def test_one_posting_is_stored_as_the_whole_board(self):
+        entry = self.check("jobs", employer("Front Range Robotics",
+                                            "https://job-boards.greenhouse.io/frontrangerobotics/jobs/1"))
+        self.assertEqual(entry["url"], "https://job-boards.greenhouse.io/frontrangerobotics")
+        workday = self.check("jobs", employer(
+            "Example Health", "https://examplehealth.wd5.myworkdayjobs.com/en-US/Careers/job/Round-Rock/Nurse_R-1"))
+        self.assertEqual(workday["url"], "https://examplehealth.wd5.myworkdayjobs.com/Careers")
+
+    def test_the_hiring_side_of_a_platform_is_refused(self):
+        reason = self.dropped("contracts", {"name": "Design marketplace", "kind": "marketplace",
+                                            "url": "https://www.marketplace.example.com/hire/designers"})
+        self.assertIn("the side for clients who want to hire", reason)
+        self.assertEqual(self.fetcher.requested, [])                    # refused before any request
+        for path in ("/hire-talent", "/for-companies/", "/clients", "/enterprise/teams", "/post-a-job"):
+            self.assertTrue(sources._HIRING_SIDE.search(path), path)
+        for path in ("/freelancers", "/jobs/design", "/talent/apply", "/", "/hired-stories"):
+            self.assertFalse(sources._HIRING_SIDE.search(path), path)
 
     def test_careers_links_are_picked_out_of_a_page(self):
         html = ('<a href="/about">About</a><a href="/careers">Careers</a><a href="https://x.example.com/blog">Blog</a>'
@@ -279,6 +335,10 @@ class Merging(MapCase):
                          [("Closed Clinic", "Workday has no job list at that address (HTTP 404)"),
                           ("Sleepy", "no activity since 2026-01-01")])
         self.assertEqual(len(source_map["jobs"]), 2)
+
+    def test_the_map_is_readable_by_its_owner_only(self):
+        saved = sources.save({"jobs": [], "contracts": [], "networking": []})
+        self.assertEqual(os.stat(saved).st_mode & 0o777, 0o600)
 
     def test_saved_file_round_trips_and_explains_itself(self):
         source_map = sources.empty_map()
@@ -509,6 +569,37 @@ class Tool(MapCase):
         self.assertIn("Your local map is refreshed", again)
         self.assertIn("Searches used: 2 of 4.", again)
         self.assertEqual(sources.load()["built_on"], "2026-11-09")
+
+    def test_a_refresh_adds_an_employer_only_when_it_has_a_role_for_this_person(self):
+        self.use_profile("product-leader-denver")
+        robotics = employer("Front Range Robotics", "https://job-boards.greenhouse.io/frontrangerobotics")
+        other = employer("Other Co", "https://job-boards.greenhouse.io/otherco")          # only an engineer role open
+        page_only = employer("Small Shop", "https://www.smallshop.example.com/")
+        # First build: employers go in on the strength of the list research found.
+        code, first = self.run_tool(sources_tool.add, {"jobs": [other]}, fetcher=self.fetcher, today=TODAY)
+        self.assertIn("Added (1): Other Co", first)
+        saved = sources.load()
+        saved["jobs"] = []
+        saved["built_on"] = "2026-10-01"
+        sources.save(saved)
+        # Refresh: size alone is not a reason.
+        code, out = self.run_tool(sources_tool.add, {"jobs": [robotics, other, page_only,
+                                                              dict(page_only, name="Small Shop Two", added_by="user",
+                                                                   url="https://www.smallshop.example.com/careers")]},
+                                  fetcher=self.fetcher, today=TODAY)
+        self.assertIn("Front Range Robotics", out.split("Dropped")[0])
+        self.assertIn("Other Co: it has no open role that matches your titles right now", out)
+        self.assertIn("Small Shop: its job list could not be read, so no matching open role could be confirmed", out)
+        names = [entry["name"] for entry in sources.load()["jobs"]]
+        self.assertEqual(sorted(names), ["Front Range Robotics", "Small Shop Two"])     # the person's own add is kept
+
+    def test_the_plan_names_the_three_things_every_map_has(self):
+        self.use_profile("product-leader-denver")
+        _, plan = self.run_tool(sources_tool.plan, today=TODAY)
+        self.assertIn("The state's public workforce job board, the one its labor department runs.", plan)
+        self.assertIn("Start with ONE search of Meetup for the field's topic in the area", plan)
+        self.assertIn("the largest active groups must not be missed", plan)
+        self.assertIn("never the page a client uses to hire", plan)
 
     def test_show_remove_and_refresh_plan(self):
         self.use_profile("freelance-designer-portland")

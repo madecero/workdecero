@@ -48,6 +48,8 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.
 sys.path.insert(0, os.path.join(_ROOT, "engine"))
 
 import handoff  # noqa: E402
+import harvest  # noqa: E402
+import liveness  # noqa: E402
 import merge  # noqa: E402
 import scoring  # noqa: E402
 import sources  # noqa: E402
@@ -192,14 +194,16 @@ def plan(refresh=False, out=None, today=None):
             "which finds and checks the job site behind it. Spend leftover searches on the biggest employers "
             "whose job site was not found: search the employer name with the word careers and a system name "
             "such as Workday." % (max(2, share), 12 if mode == "lite" else 30),
-            "The state job board and any city or regional job board (1 search).",
+            "The state's public workforce job board, the one its labor department runs. Every state has one. "
+            "It goes in every map (1 search). Then any city or regional job board.",
             "Job boards and association career centers for this field (1 to %d searches)." % max(1, share),
         ):
             step += 1
             print("  %d. JOBS: %s" % (step, text), file=out)
     if "contracts" in tracks:
         for text in (
-            "Marketplaces and talent networks that carry this kind of work (1 to %d searches)." % max(1, share),
+            "Marketplaces and talent networks that carry this kind of work (1 to %d searches). For each one, pass "
+            "the page a freelancer uses to find work or to join, never the page a client uses to hire." % max(1, share),
             "Staffing or placement agencies for this field in the area, and expert networks if they sell advice "
             "(1 to %d searches)." % max(1, share),
         ):
@@ -210,8 +214,11 @@ def plan(refresh=False, out=None, today=None):
             print("  %d. CONTRACT WORK: the state and local public-bid portals (1 search)." % step, file=out)
     if "networking" in tracks:
         for text in (
-            "Meetups and user groups for this field in the area, each with the date of its most recent event "
-            "(about %d searches). Skip any with nothing in the last six months." % max(2, share),
+            "Meetups and user groups for this field in the area (about %d searches). Start with ONE search of "
+            "Meetup for the field's topic in the area, and take the groups with the most members that have an "
+            "event coming up: the largest active groups must not be missed. Put the member count in notes. Each "
+            "group needs the date of its most recent event. Skip any with nothing in the last six months."
+            % max(2, share),
             "Professional associations and their local chapters, and the local chamber (1 to %d searches)." % max(1, share),
         ):
             step += 1
@@ -232,6 +239,18 @@ def _print_result(result, out):
             print("  %s: %s" % (name, reason), file=out)
     if not (result.added or result.updated or result.dropped):
         print("Nothing to do.", file=out)
+
+
+def has_matching_role(entry, profile, fetcher, today):
+    """None when a new employer has an open role that matches the person's titles, else why it is left out."""
+    if entry.get("how") != "api" or not isinstance(entry.get("ats"), dict):
+        return "its job list could not be read, so no matching open role could be confirmed. Add it by name if you want it"
+    found = harvest.harvest({"jobs": [entry]}, profile, fetcher, today)
+    if found.finds:
+        return None
+    if found.failed:
+        return "its job list did not answer, so no matching open role could be confirmed"
+    return "it has no open role that matches your titles right now"
 
 
 def add(text, out=None, fetcher=None, today=None):
@@ -258,7 +277,12 @@ def add(text, out=None, fetcher=None, today=None):
                 kept.append(entry)
         proposals[track] = kept
     source_map = sources.load()
-    result = sources.add_entries(source_map, proposals, fetcher=fetcher, today=today)
+    keep = None
+    if source_map.get("built_on"):
+        # A refresh. The map grows only by employers that have something for this person right now.
+        def keep(entry):
+            return has_matching_role(entry, profile, fetcher or liveness.HttpFetcher(), today)
+    result = sources.add_entries(source_map, proposals, fetcher=fetcher, today=today, keep_new_employer=keep)
     if result.added or result.updated:
         sources.save(source_map)
     _print_result(result, out)

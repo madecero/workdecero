@@ -116,10 +116,12 @@ def save(source_map, file_path=None):
               "# or list a name under removed and it is never added back.\n\n")
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     temp = file_path + ".tmp"
-    with open(temp, "w", encoding="utf-8") as handle:
-        handle.write(header + miniyaml.dumps(ordered))
-        handle.flush()
-        os.fsync(handle.fileno())
+    handle = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)     # the map is the person's own
+    with os.fdopen(handle, "w", encoding="utf-8") as out:
+        out.write(header + miniyaml.dumps(ordered))
+        out.flush()
+        os.fsync(out.fileno())
+    os.chmod(temp, 0o600)
     os.replace(temp, file_path)
     return file_path
 
@@ -177,6 +179,26 @@ def api_url(ats):
         return "https://api.smartrecruiters.com/v1/companies/%s/postings?limit=1" % board
     if system == "workable":
         return "https://apply.workable.com/api/v1/widget/accounts/%s" % board
+    return None
+
+
+def board_url(ats):
+    """The address of an employer's whole job board, for a person to open. Never a single posting."""
+    system, board = ats.get("system"), ats.get("board")
+    if system == "workday" and ats.get("host") and ats.get("site"):
+        return "https://%s/%s" % (ats["host"], ats["site"])
+    if not board:
+        return None
+    if system == "greenhouse":
+        return "https://job-boards.%sgreenhouse.io/%s" % ("eu." if ats.get("eu") else "", board)
+    if system == "lever":
+        return "https://jobs.%slever.co/%s" % ("eu." if ats.get("eu") else "", board)
+    if system == "ashby":
+        return "https://jobs.ashbyhq.com/%s" % urllib.parse.quote(board)
+    if system == "smartrecruiters":
+        return "https://jobs.smartrecruiters.com/%s" % board
+    if system == "workable":
+        return "https://apply.workable.com/%s" % board
     return None
 
 
@@ -302,6 +324,68 @@ def discover_job_site(url, html, fetcher, final_url=None):
     return None
 
 
+# Systems whose boards have a guessable public address, in the order they are tried.
+PROBE_SYSTEMS = ("greenhouse", "lever", "ashby", "smartrecruiters", "workable")
+MAX_PROBE_SLUGS = 3
+
+
+def board_slugs(name, url):
+    """Short names an employer's job board is likely to use: its web domain, then its name.
+
+    Returns [(slug, how sure)], where "domain" means the slug is the employer's
+    own web domain and "name" means it was built from the name alone.
+    """
+    slugs = []
+    host = urllib.parse.urlsplit(url or "").netloc.lower().split(":")[0]
+    labels = [part for part in host.split(".") if part]
+    if len(labels) >= 2 and not detect_ats(url):
+        label = labels[-3] if len(labels) >= 3 and labels[-2] in ("co", "com", "org", "net") and len(labels[-1]) == 2 \
+            else labels[-2]
+        if re.match(r"^[a-z0-9-]{2,40}$", label) and label not in ("www", "careers", "jobs"):
+            slugs.append((label, "domain"))
+    words = merge.normalize_company(name).split()
+    for candidate in ("".join(words), "-".join(words)):
+        if len(candidate) >= 4 and candidate not in [slug for slug, _ in slugs]:
+            slugs.append((candidate, "name"))
+    return slugs[:MAX_PROBE_SLUGS]
+
+
+def _positive(note):
+    """True when a job list answered with at least one open posting."""
+    match = re.search(r"answered with (?:at least )?(\d+) open posting", note or "")
+    return bool(match) and int(match.group(1)) > 0
+
+
+def probe_boards(name, url, fetcher):
+    """Look for the employer's public job board at the addresses these systems use.
+
+    Many employers' careers pages are built in the browser and show no link
+    to a script. Their board still sits at a predictable public address. A
+    guess is kept only when the board answers with open postings, and when
+    either the slug is the employer's own web domain or the board itself
+    gives a name that matches. Returns (link, ats, note) or None.
+    """
+    wanted = merge.normalize_company(name)
+    for slug, sure in board_slugs(name, url):
+        for system in PROBE_SYSTEMS:
+            ats = {"system": system, "board": slug}
+            state, note = verify_ats(ats, fetcher)
+            if state != "ok" or not _positive(note):
+                continue
+            if sure != "domain":
+                if system != "greenhouse":
+                    continue                    # a name-only guess needs the board to say whose it is
+                response = fetcher.get("https://boards-api.greenhouse.io/v1/boards/%s" % slug)
+                try:
+                    shown = json.loads(response.body).get("name") if response.status == 200 else None
+                except (ValueError, AttributeError):
+                    shown = None
+                if merge.normalize_company(shown) != wanted:
+                    continue
+            return board_url(ats), ats, note
+    return None
+
+
 def verify_page(url, fetcher, want_body=False):
     """Check that a page is there. Returns (state, note): 'ok', 'gone' or 'blocked'.
 
@@ -340,6 +424,12 @@ def _date(value):
         return None
 
 
+# Paths that lead a client to hire, not a freelancer to find work.
+_HIRING_SIDE = re.compile(r"(?:^|/)(?:hire|hiring|hire-[a-z-]+|clients?|for-clients|employers?|for-employers|"
+                          r"for-companies|companies|enterprise|post-a-job|post-job|find-talent|find-experts)(?:/|$)",
+                          re.IGNORECASE)
+
+
 def same_entry(a, b):
     if a.get("kind") == "employer" and b.get("kind") == "employer":
         if merge.normalize_company(a.get("name")) == merge.normalize_company(b.get("name")):
@@ -371,6 +461,10 @@ def check_entry(track, entry, fetcher, today, require_activity=True):
     if kind not in KINDS[track]:
         raise SourceError("kind must be one of %s for %s" % (", ".join(KINDS[track]), track))
 
+    if track == "contracts" and kind in ("marketplace", "talent-network", "expert-network") and _HIRING_SIDE.search(
+            urllib.parse.urlsplit(url).path):
+        raise SourceError("that link is the side for clients who want to hire. Pass the page a freelancer or "
+                          "expert uses to find work or to join")
     clean = {"name": name, "url": url, "kind": kind}
     notes = [(entry.get("notes") or "").strip()] if (entry.get("notes") or "").strip() else []
 
@@ -392,6 +486,8 @@ def check_entry(track, entry, fetcher, today, require_activity=True):
         if state == "gone":
             raise SourceError(note)
         clean["ats"] = dict((key, value) for key, value in ats.items() if value not in (None, "", False))
+        if board_url(ats):
+            clean["url"] = board_url(ats)        # the whole board, also when research passed one posting
         if state == "ok":
             clean["how"] = "api"
             notes.append(note)
@@ -402,17 +498,22 @@ def check_entry(track, entry, fetcher, today, require_activity=True):
         state, note, html, landed = verify_page(url, fetcher, want_body=True)
         if state == "gone":
             raise SourceError(note)
-        if kind == "employer" and state == "ok":
+        if kind == "employer" and state in ("ok", "blocked"):
             # An employer's own pages usually lead to the system that holds its postings. If one does,
-            # and that system's job list answers, the sweeps can read the whole list directly.
-            discovered = discover_job_site(url, html, fetcher, landed)
+            # and that system's job list answers, the sweeps can read the whole list directly. Failing
+            # that, the board is looked for at the public addresses those systems use.
+            discovered = discover_job_site(url, html, fetcher, landed) if state == "ok" else None
+            how_found = "Job site found from the employer's own pages"
+            if not discovered:
+                discovered = probe_boards(name, url, fetcher)
+                how_found = "Job board found at its public address"
             if discovered:
                 link, found, found_note = discovered
                 clean["careers_page"] = url
-                clean["url"] = link
+                clean["url"] = board_url(found) or link
                 clean["ats"] = dict((k, v) for k, v in found.items() if v not in (None, "", False))
                 clean["how"] = "api"
-                notes.append("Job site found from the employer's own pages. %s" % found_note)
+                notes.append("%s. %s" % (how_found, found_note))
                 clean["verified_on"] = today.isoformat()
                 if entry.get("added_by") == "user":
                     clean["added_by"] = "user"
@@ -441,8 +542,14 @@ class AddResult(object):
         self.dropped = []    # (track, name, reason)
 
 
-def add_entries(source_map, proposals, fetcher=None, today=None):
-    """Check proposed entries and merge the good ones into the map. `proposals` is {track: [entries]}."""
+def add_entries(source_map, proposals, fetcher=None, today=None, keep_new_employer=None):
+    """Check proposed entries and merge the good ones into the map. `proposals` is {track: [entries]}.
+
+    `keep_new_employer` is an optional test for an employer that is not in the
+    map yet: it is given the checked entry and returns None to keep it, or the
+    reason to leave it out. A refresh uses it so that the map only grows by
+    employers that have something for this person.
+    """
     fetcher = fetcher or liveness.HttpFetcher()
     today = today or datetime.date.today()
     result = AddResult()
@@ -467,6 +574,11 @@ def add_entries(source_map, proposals, fetcher=None, today=None):
                 source_map[track][index] = clean
                 result.updated.append((track, clean["name"]))
             else:
+                if keep_new_employer and clean.get("kind") == "employer" and clean.get("added_by") != "user":
+                    reason = keep_new_employer(clean)
+                    if reason:
+                        result.dropped.append((track, label, reason))
+                        continue
                 source_map[track].append(clean)
                 result.added.append((track, clean["name"]))
     return result
