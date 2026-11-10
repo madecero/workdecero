@@ -621,6 +621,18 @@ class Write(SetupCase):
         self.assertIn("Change anything later:   /workdecero:setup", out)
         self.assertIn(setup_tool.PRIVACY, out)
 
+    def test_the_done_screen_names_only_sweeps_this_version_has(self):
+        draft = self.example()
+        draft["tracks"] = {"jobs": False, "contracts": False, "networking": True}
+        code, out, _ = self.save(draft)
+        self.assertEqual(code, 0, out)
+        have = os.path.isfile(os.path.join(_paths.REPO_ROOT, "skills", "networking-sweep", "SKILL.md"))
+        if have:
+            self.assertIn("Next:   run /workdecero:networking-sweep.", out)
+        else:
+            self.assertNotIn("/workdecero:networking-sweep", out)
+            self.assertIn("Next:   the sweeps you turned on are not in this version of workdecero yet.", out)
+
     def test_settings_files_are_readable_by_their_owner_only(self):
         home = wdprofile.config_home()
         shutil.rmtree(home, ignore_errors=True)                         # setup creates the folder itself
@@ -740,7 +752,11 @@ class Write(SetupCase):
 
     def test_first_sweep_named_on_the_done_screen_follows_what_is_on(self):
         _, out, _ = self.save(self.example("freelance-designer-portland"))
-        self.assertIn('say "run the contract sweep"', out)
+        if os.path.isfile(os.path.join(_paths.REPO_ROOT, "skills", "contract-sweep", "SKILL.md")):
+            self.assertIn("Next:   run /workdecero:contract-sweep.", out)
+            self.assertIn('Or just say "run the contract sweep"', out)
+        else:
+            self.assertNotIn("contract-sweep", out)
 
 
 class RunAgain(SetupCase):

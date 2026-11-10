@@ -839,22 +839,32 @@ def write(draft, out=None):
     link = obsidian_link(target, folder)
     name = os.path.basename(os.path.realpath(target))
     on = [key for key in wdprofile.TRACKS if profile.get("tracks", {}).get(key)]
-    first = {"jobs": "run the job sweep", "contracts": "run the contract sweep",
-             "networking": "run the networking sweep"}[on[0]]
-    command = {"jobs": "/workdecero:job-sweep", "contracts": "/workdecero:contract-sweep",
-               "networking": "/workdecero:networking-sweep"}[on[0]]
+    # Name a sweep's command only if this version of the plugin has that skill, so the screen is never wrong.
+    skills = os.path.join(_ROOT, "skills")
+    sweeps = [("jobs", "job-sweep", "run the job sweep"), ("contracts", "contract-sweep", "run the contract sweep"),
+              ("networking", "networking-sweep", "run the networking sweep")]
+    ready = [(skill, words) for key, skill, words in sweeps
+             if key in on and os.path.isfile(os.path.join(skills, skill, "SKILL.md"))]
+    has_sources = os.path.isfile(os.path.join(skills, "sources", "SKILL.md"))
     mode = "Lite" if (profile.get("mode") or "lite") == "lite" else "Full"
     print("workdecero is set up.", file=out)
     print("", file=out)
     print("  Profile      %s   (your answers; %s)" % (_tilde(path), "saved" if changed else "unchanged"), file=out)
     print("  Tracker      %s / %s / Start here   (%s)" % (
         name, folder, "%d files added" % len(created) if created else "already in place, nothing overwritten"), file=out)
-    print("  Local map    not built yet. Run /workdecero:sources (about 3 minutes) to find job boards,", file=out)
-    print("               employers and groups for %s." % (profile.get("location", {}).get("home_base") or "your area"),
-          file=out)
+    if has_sources:
+        print("  Local map    not built yet. Run /workdecero:sources (about 3 minutes) to find job boards,", file=out)
+        print("               employers and groups for %s." % (profile.get("location", {}).get("home_base") or "your area"),
+              file=out)
     print("", file=out)
-    print("Next:   run %s. The first one takes a few minutes in %s mode." % (command, mode), file=out)
-    print("        Or just say \"%s\" or \"build my local map\". Claude Code asks once to allow it." % first, file=out)
+    if ready:
+        skill, words = ready[0]
+        print("Next:   run /workdecero:%s. The first one takes a few minutes in %s mode." % (skill, mode), file=out)
+        print("        Or just say \"%s\"%s. Claude Code asks once to allow it." % (
+            words, " or \"build my local map\"" if has_sources else ""), file=out)
+    else:
+        print("Next:   the sweeps you turned on are not in this version of workdecero yet. They arrive with an "
+              "update, and your profile is ready for them.", file=out)
     if link:
         print("Open:   %s   (opens Start here in Obsidian)" % link, file=out)
     else:

@@ -47,7 +47,7 @@ Nothing personal is stored in this repository or in the plugin folder.
 | --- | --- | --- |
 | Profile (`profile.yaml`), local map (`sources.yaml`) and backups | `~/.config/workdecero/` | Readable by you alone. Location can be overridden. Untouched by updates and by uninstall. |
 | Trackers (postings, contracts, groups, events, people, companies) | Your Obsidian vault | Plain Markdown notes that you own. |
-| Setup draft | `~/.cache/workdecero/` (`setup-answers.json`, `setup-state.json`) | Temporary. Holds your answers only while setup is running, in a folder only you can open, and is deleted when setup is saved or cancelled. |
+| Setup draft | `~/.cache/workdecero/` (`setup-answers.json`, `setup-state.json`) | Temporary files in a private folder. They hold your answers only while setup is running, in a folder only you can open, and are deleted when setup is saved or cancelled. `setup-answers.json` is written by Claude Code a few lines at a time and is taken in and deleted at the next step. |
 | Source hand-off | `~/.cache/workdecero/` (`sources-entries.json`, `sources-run.json`) | Temporary. Holds public names and links found while your local map is being built. Each batch is deleted as soon as it is checked, and the folder goes when the run ends. |
 | Sweep hand-off and state | `~/.cache/workdecero/sweep-handoff.json`, `sweep-state.json` | Temporary. Hold public postings found during a sweep, and are deleted when the sweep finishes. |
 | Cache | The plugin data folder managed by Claude Code | Safe to lose. Removed when the plugin is uninstalled. |
