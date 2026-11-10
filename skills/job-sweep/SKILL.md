@@ -1,7 +1,7 @@
 ---
 name: job-sweep
-description: Run the workdecero job sweep, the weekly search for salaried jobs that fit the person's profile. Use when the user says "run the job sweep", "check for new jobs", "weekly job scan", "update my job tracker", or asks what is new in their job search.
-allowed-tools: Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" start), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" restart), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" intake), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" warm), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" finish), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" cancel), Write(~/.cache/workdecero/sweep-handoff.json), WebSearch, WebFetch
+description: Run the workdecero job sweep, the weekly search for salaried jobs that fit the person's profile. Use when the user says "run the job sweep", "check for new jobs", "weekly job scan", "update my job tracker", or asks what is new in their job search. Also use when they say what they did about a role: "I applied to the analytics job", "I applied to J-12", "pass on the Example Co role", "I have an interview at Example Co", "they rejected me".
+allowed-tools: Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" start), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" restart), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" intake), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" warm), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" finish), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" cancel), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" list), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" open), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" update), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" close), Write(~/.cache/workdecero/sweep-handoff.json), WebSearch, WebFetch
 ---
 
 # workdecero job sweep
@@ -31,11 +31,15 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" intake
 python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" warm
 python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" finish
 python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" cancel
+python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" list
+python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" open
+python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" update
+python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" close
 ```
 
 Below, `TOOL start` means the first line, and so on.
 
-What you found goes into this one file, written whole with the **Write tool** before `TOOL intake` and before `TOOL warm`:
+What you found goes into this one file, written whole with the **Write tool** before `TOOL intake`, before `TOOL warm` and before `TOOL update`:
 
 ```
 ~/.cache/workdecero/sweep-handoff.json
@@ -157,6 +161,25 @@ Run `TOOL finish`. It checks the tracker, writes the digest note, and prints a s
 * that the full digest, with deadlines first, is in the Digests folder of their tracker.
 
 Do not add pay figures, reasons something was left out, or names of people. Those are in the notes, where they belong.
+
+## Recording what the person did
+
+This works at any time, with or without a sweep. It is the thing a person says most: "I applied to the analytics job", "I applied to J-12 yesterday", "pass on the Example Co one", "I have an interview there on Friday", "they turned me down".
+
+1. Run `TOOL list` to see open roles with their ids and the statuses allowed. If the person gave an id, you may skip this.
+2. Match what they said to one role. **If it could be more than one, ask with a picker that lists the candidates by title and employer. Never pick for them.** If nothing matches, say so and show the list.
+3. Run `TOOL open`.
+4. Write the hand-off file:
+
+```
+{"updates": [{"id": "J-12", "status": "Applied", "note": "Applied through the company site", "next_step": "Follow up with the recruiter", "next_step_date": "2026-11-16"}]}
+```
+
+`status` must be one of the statuses `list` printed. "I applied" is `Applied`: the engine sets the applied date to today, or send `"applied_on": "2026-11-08"` if they named another day. `note`, `next_step`, `next_step_date` and `reason` are optional, and only what the person said.
+
+5. Run `TOOL update`, then `TOOL close`. Tell the person what was recorded, in a line. Once a role is Applied, its closing date stops showing under deadlines.
+
+During a sweep you may skip `TOOL open` and `TOOL close`. Never edit a note yourself, and never tell the person to set a status by hand: this is how it is recorded.
 
 ## Integrations
 

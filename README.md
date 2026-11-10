@@ -84,7 +84,7 @@ Run the sweeps you care about about once a week. Each takes a few minutes in Lit
 
 **Or just say it,** at any time:
 
-* "I applied to C-12" or "I won the cafe branding gig"
+* "I applied to the analytics job", "I applied to C-12" or "I won the cafe branding gig"
 * "I'm going to the product meetup" or "I met Priya at the product meetup"
 * "Prep me for E-4", which writes a short brief into that event's note
 

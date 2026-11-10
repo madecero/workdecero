@@ -20,6 +20,10 @@ Commands (none takes an argument):
     warm      write warm paths from the research in the hand-off file
     finish    verify, write the digest note, and print the summary for the person
     cancel    stop the sweep. Notes already written stay
+    list      open roles with their ids and statuses (reads only)
+    open      start a change the person asked for outside a sweep
+    update    record the status changes in the hand-off file ({"updates": [{"id": "J-12", "status": "Applied"}]})
+    close     end what `open` started
 
 `start` (or `restart`) opens a sweep. `intake`, `warm` and `finish` only work
 while one is open and has been active in the last six hours.
@@ -49,7 +53,8 @@ import wdprofile  # noqa: E402
 
 DRAFT_DIR_ENV = handoff.DRAFT_DIR_ENV        # for tests: where the hand-off and state files live
 HANDOFF_NAME = "sweep-handoff.json"
-COMMANDS = ("start", "restart", "intake", "warm", "finish", "cancel")
+COMMANDS = ("start", "restart", "intake", "warm", "finish", "cancel", "list", "open", "update", "close")
+RUN = "job"
 ACTIVE_MINUTES = 30
 STALE_HOURS = 6                              # a sweep with no activity for this long has ended
 
@@ -203,6 +208,55 @@ def cancel(out=None):
     return 0
 
 
+def _sweep_open():
+    """True when a sweep is open and recent."""
+    path = sweep.state_path(work_dir())
+    return sweep.load_state(work_dir()) is not None and (time.time() - os.path.getmtime(path)) / 3600.0 <= STALE_HOURS
+
+
+def listing(out=None):
+    out = out or sys.stdout
+    profile, store = _context()
+    print(sweep.listing(store, profile), file=out)
+    return 0
+
+
+def open_change(out=None):
+    out = out or sys.stdout
+    _context()
+    handoff.open_run(RUN)
+    print("Ready. Write the hand-off file, run `update`, then run `close`.", file=out)
+    return 0
+
+
+def update(out=None, today=None):
+    out = out or sys.stdout
+    if not _sweep_open():
+        handoff.require_run(RUN, "open")
+    profile, store = _context()
+    data = read_handoff()
+    done, problems = sweep.apply_updates(data.get("updates"), store, profile, today)
+    for line in done:
+        print("DONE  " + line, file=out)
+    for line in problems:
+        print("NOT DONE  " + line, file=out)
+    if not done and not problems:
+        print('Nothing to do. Write {"updates": [{"id": "J-12", "status": "Applied"}]} to the hand-off file.', file=out)
+    return 0 if done and not problems else 1
+
+
+def close_change(out=None):
+    out = out or sys.stdout
+    handoff.close_run(RUN)
+    if sweep.load_state(work_dir()) is None:
+        if os.path.isfile(handoff_path()):
+            os.remove(handoff_path())
+        if os.path.isdir(work_dir()) and not os.path.islink(work_dir()) and not os.listdir(work_dir()):
+            os.rmdir(work_dir())
+    print("Closed.", file=out)
+    return 0
+
+
 def _dispatch(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     command = argv[0] if argv else ""
@@ -224,13 +278,21 @@ def _dispatch(argv=None):
             return finish()
         if command == "cancel":
             return cancel()
+        if command == "list":
+            return listing()
+        if command == "open":
+            return open_change()
+        if command == "update":
+            return update()
+        if command == "close":
+            return close_change()
     except (ValueError, sources.SourceError) as exc:
         print(str(exc), file=sys.stderr)
         return 2
     return 2
 
 
-ENDS = ("finish", "cancel")        # after one of these succeeds, nothing more is written
+ENDS = ("finish", "cancel", "close")        # after one of these succeeds, nothing more is written
 
 
 def main(argv=None):

@@ -578,7 +578,9 @@ def _deadlines(store, today):
             continue
         link = store.link("job", row.title)
         closes = scoring._date(row.values.get("closes"))
-        if closes and 0 <= (closes - today).days <= DEADLINE_DAYS:
+        # A closing date is a deadline to apply by. Once they have applied, it is no longer one.
+        applied = model.JOB.is_engaged(row.values.get("status"))
+        if closes and 0 <= (closes - today).days <= DEADLINE_DAYS and not applied:
             due.append((closes, "%s closes %s." % (link, closes.isoformat())))
         step = scoring._date(row.values.get("next_step_date"))
         if step and (step - today).days <= NEXT_STEP_DAYS:
@@ -734,3 +736,77 @@ def finish_report(state, profile, store, title, featured, more, problems):
     lines += ["", "The full digest is the note \"%s\" in the Digests folder of the tracker, with deadlines first." % title,
               "Nothing was applied for, sent or posted."]
     return _safe("\n".join(lines), profile)
+
+
+# --------------------------------------------------------------------------
+# Updates the person asks for, at any time
+# --------------------------------------------------------------------------
+
+def listing(store, profile):
+    """Open roles by id, so a request such as "I applied to the analytics one" can be matched."""
+    lines = ["OPEN ROLES"]
+    rows = [row for row in store.rows("job") if not model.JOB.is_done(row.values.get("status"))]
+    for row in sorted(rows, key=lambda r: (int(r.id.split("-")[-1]) if r.id.split("-")[-1].isdigit() else 0)):
+        lines.append("  %s | %s | %s" % (row.id, row.title, row.values.get("status") or "no status"))
+    if not rows:
+        lines.append("  none")
+    lines.append("STATUSES: %s" % ", ".join(model.JOB.status_names()))
+    return _safe("\n".join(lines), profile)
+
+
+def _with_dash(note_id, prefix):
+    """J12 and J012 mean J-12."""
+    rest = note_id[len(prefix):].lstrip("-") if note_id.startswith(prefix) else note_id
+    return "%s-%d" % (prefix, int(rest)) if rest.isdigit() else note_id
+
+
+def apply_updates(updates, store, profile, today=None):
+    """Record what the person did about a role. Returns (lines describing what was done, problems)."""
+    today = today or datetime.date.today()
+    day = today.isoformat()
+    names = scoring.confidential_names(profile)
+    done, problems = [], []
+    for entry in updates if isinstance(updates, list) else []:
+        if not isinstance(entry, dict):
+            continue
+        note_id = str(entry.get("id") or "").strip().upper()
+        row = store.get("job", note_id) or store.get("job", _with_dash(note_id, model.JOB.id_prefix))
+        if row is None:
+            problems.append("There is no role with the id %s. Run the list command to see the ids." % (entry.get("id") or "(none)"))
+            continue
+        values, force = {}, []
+        if entry.get("status") is not None:
+            status = model.JOB.canonical_status(str(entry["status"]))
+            if status is None:
+                problems.append("%s is not a status for %s. Use one of: %s." % (
+                    entry["status"], row.title, ", ".join(model.JOB.status_names())))
+                continue
+            values["status"] = status
+            force.append("status")
+            if status == "Applied":
+                applied = scoring._date(entry.get("applied_on")) or (None if row.values.get("applied_on") else today)
+                if applied is not None:
+                    values["applied_on"] = applied.isoformat()
+                    force.append("applied_on")
+        for key in ("next_step", "next_step_date", "reason"):
+            if entry.get(key):
+                values[key] = scoring.scrub_confidential(str(entry[key]), names)
+                force.append(key)
+        if not force:
+            problems.append("Nothing to change was given for %s." % row.title)
+            continue
+        values["last_touch"] = day
+        force.append("last_touch")
+        values["updated"] = day
+        what = "status set to %s" % values["status"] if "status" in values else "updated"
+        note = scoring.scrub_confidential(str(entry.get("note") or "").strip(), names)
+        store.apply([{"type": "job", "id": row.id, "values": values, "force": force,
+                      "append": "%s: %s%s" % (day, what, ". " + note.rstrip(".") + "." if note else ".")}])
+        extra = ""
+        if values.get("status") == "Applied":
+            extra = " Applied on %s. Its closing date no longer shows under deadlines." % values.get(
+                "applied_on", row.values.get("applied_on") or day)
+        done.append("%s (%s): %s.%s" % (row.title, row.id, "now %s" % values["status"] if "status" in values else "updated",
+                                      extra))
+    return done, problems
+

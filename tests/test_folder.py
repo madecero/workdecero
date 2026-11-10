@@ -23,7 +23,7 @@ import allow_helper  # noqa: E402
 FIRST = {
     "setup": ("status", "fields"),
     "sources": ("plan", "plan-refresh", "open", "show"),
-    "job-sweep": ("start", "restart"),
+    "job-sweep": ("start", "restart", "list", "open"),
     "contract-sweep": ("start", "restart", "list", "open"),
     "networking-sweep": ("start", "restart", "list", "open"),
     "import": ("fields", "check"),

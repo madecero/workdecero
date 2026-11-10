@@ -57,7 +57,7 @@ HELPERS = {
                 ("plan", "plan-refresh", "open", "add", "reverify", "remove", "finish", "close", "show"),
                 "sources-entries.json"),
     "job-sweep": ("sweep_tool.py",
-                  ("start", "restart", "intake", "warm", "finish", "cancel"),
+                  ("start", "restart", "intake", "warm", "finish", "cancel", "list", "open", "update", "close"),
                   "sweep-handoff.json"),
     "contract-sweep": ("contract_tool.py",
                        ("start", "restart", "intake", "finish", "cancel", "list", "open", "update", "close"),

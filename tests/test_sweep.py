@@ -929,6 +929,102 @@ class FullRun(SweepCase):
         self.assertIn("switched off", err.getvalue())
 
 
+class Updates(SweepCase):
+    """From the final run: "I applied to the Legion agentic AI role today" could not be recorded, because the job
+    sweep had no update step. It is what a job seeker says most."""
+
+    def setUp(self):
+        super(Updates, self).setUp()
+        self.store.upsert("job", "J-1", "Principal Product Manager, Agentic AI, Example Robotics",
+                          {"role": "Principal Product Manager, Agentic AI", "closes": "2026-11-11", "fit": 80})
+        self.store.upsert("job", "J-2", "VP of Product, Example Analytics", {"role": "VP of Product", "closes": "2026-11-12"})
+        self.store.upsert("job", "J-3", "Head of Product, Sample Health", {"role": "Head of Product"})
+        self.store.upsert("job", "J-3", "Head of Product, Sample Health", {"status": "Closed"}, force=["status"])
+
+    def command(self, name):
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            code = sweep_tool.main([name])
+        return code, out.getvalue(), err.getvalue()
+
+    def update(self, *updates, today=TODAY):
+        self.assertEqual(self.command("open")[0], 0)
+        self.hand_off({"updates": list(updates)})
+        result = self.run_step(sweep_tool.update, today=today)
+        self.command("close")
+        return result
+
+    def test_list_shows_open_roles_with_ids_and_nothing_private(self):
+        code, out, _ = self.command("list")
+        self.assertEqual(code, 0)
+        self.assertIn("  J-1 | Principal Product Manager, Agentic AI, Example Robotics | New", out)
+        self.assertIn("  J-2 | VP of Product, Example Analytics | New", out)
+        self.assertNotIn("Sample Health", out)                         # a closed role is not offered
+        self.assertIn("STATUSES: New, Interested, Applied, Interviewing, Offer, Passed, Rejected, Closed", out)
+        self.assertNotIn("$", out)
+
+    def test_i_applied_sets_the_status_the_date_and_a_log_line(self):
+        code, out = self.update({"id": "J-1", "status": "applied", "note": "Applied through the company site"})
+        self.assertEqual(code, 0, out)
+        self.assertIn("DONE  Principal Product Manager, Agentic AI, Example Robotics (J-1): now Applied. Applied on "
+                      "2026-11-09. Its closing date no longer shows under deadlines.", out)
+        row = self.jobs()["Principal Product Manager, Agentic AI, Example Robotics"]
+        self.assertEqual((row.values["status"], row.values["applied_on"], row.values["last_touch"]),
+                         ("Applied", "2026-11-09", "2026-11-09"))
+        self.assertIn("2026-11-09: status set to Applied. Applied through the company site.", row.section)
+        self.assertEqual(self.jobs()["VP of Product, Example Analytics"].values["status"], "New")   # only that one note
+        self.assertFalse(os.path.exists(self.cache))                   # the change is closed and nothing is left
+
+    def test_the_day_they_named_is_kept_and_j12_means_j_12(self):
+        code, out = self.update({"id": "j2", "status": "Applied", "applied_on": "2026-11-06",
+                                 "next_step": "Follow up with the recruiter", "next_step_date": "2026-11-16"})
+        row = self.jobs()["VP of Product, Example Analytics"]
+        self.assertEqual((row.values["applied_on"], row.values["next_step"], row.values["next_step_date"]),
+                         ("2026-11-06", "Follow up with the recruiter", "2026-11-16"))
+        code, out = self.update({"id": "J-2", "status": "Interviewing"})
+        self.assertEqual(self.jobs()["VP of Product, Example Analytics"].values["applied_on"], "2026-11-06")
+
+    def test_an_applied_role_leaves_the_deadlines_and_an_open_one_stays(self):
+        before = "\n".join(sweep._deadlines(self.store, TODAY))
+        self.assertIn("Example Robotics", before)
+        self.update({"id": "J-1", "status": "Applied"})
+        after = "\n".join(sweep._deadlines(vault.VaultStore(self.vault_dir), TODAY))
+        self.assertNotIn("Example Robotics", after)                    # applied: its closing date is no deadline now
+        self.assertIn("Example Analytics", after)
+        self.update({"id": "J-2", "status": "Applied", "next_step": "Send references", "next_step_date": "2026-11-10"})
+        after = "\n".join(sweep._deadlines(vault.VaultStore(self.vault_dir), TODAY))
+        self.assertNotIn("closes", after)
+        self.assertIn("Send references, due 2026-11-10", after)        # their own next step still shows
+
+    def test_nothing_changes_without_an_open_run_and_bad_input_is_said_plainly(self):
+        self.hand_off({"updates": [{"id": "J-1", "status": "Applied"}]})
+        code, _, err = self.command("update")
+        self.assertEqual(code, 2)
+        self.assertIn("Nothing is in progress, so nothing was changed.", err)
+        self.assertEqual(self.jobs()["Principal Product Manager, Agentic AI, Example Robotics"].values["status"], "New")
+        code, out = self.update({"id": "J-99", "status": "Applied"}, {"id": "J-1", "status": "Maybe"}, {"id": "J-2"})
+        self.assertEqual(code, 1)
+        self.assertIn("NOT DONE  There is no role with the id J-99.", out)
+        self.assertIn("NOT DONE  Maybe is not a status for Principal Product Manager, Agentic AI, Example Robotics. "
+                      "Use one of: New, Interested, Applied", out)
+        self.assertIn("NOT DONE  Nothing to change was given for VP of Product, Example Analytics.", out)
+
+    def test_during_a_sweep_no_open_is_needed(self):
+        self.start()
+        self.hand_off({"updates": [{"id": "J-2", "status": "Passed", "reason": "Too far"}]})
+        code, out = self.run_step(sweep_tool.update, today=TODAY)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.jobs()["VP of Product, Example Analytics"].values["status"], "Passed")
+
+    def test_the_skill_says_how_and_never_to_edit_a_note_by_hand(self):
+        with open(os.path.join(_paths.REPO_ROOT, "skills", "job-sweep", "SKILL.md"), encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("## Recording what the person did", text)
+        self.assertIn("ask with a picker that lists the candidates by title and employer. Never pick for them.", text)
+        self.assertIn("never tell the person to set a status by hand", text)
+        self.assertIn('"I applied to the analytics job"', text.split("---")[1])     # it starts the skill
+
+
 class SkillText(unittest.TestCase):
     def setUp(self):
         with open(os.path.join(_paths.REPO_ROOT, "skills", "job-sweep", "SKILL.md"), encoding="utf-8") as handle:
