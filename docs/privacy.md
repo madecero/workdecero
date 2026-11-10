@@ -18,6 +18,7 @@
 | Temporary working files | `~/.cache/workdecero/` | Exist only while setup or a sweep is running, in a folder only you can open, and are deleted when it ends. During setup they hold your answers. During a sweep they hold public postings. |
 | Whether browser use is on | `~/.config/workdecero/flags.json` | One line, yes or no, kept in step with your profile. |
 | Which conversations started a workdecero skill | `~/.cache/workdecero-sessions/` | One empty file per conversation, named by its id, in a folder only you can open. Removed after a day. Nothing about you or the conversation is in it. |
+| The row-by-row report of an import, only if you run one | `~/.config/workdecero/import-report.txt` | Which rows of your spreadsheet were not imported and why. Readable by you alone. It is never shown in the conversation. Delete it when you have read it. |
 | A small count of LinkedIn pages viewed, only if you turn that connection on | `~/.config/workdecero/usage.json` | Numbers per day for the last week. |
 
 `~` means your home folder. Folders whose names start with a dot are hidden by default in Finder.

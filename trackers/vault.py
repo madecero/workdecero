@@ -9,7 +9,9 @@ Promises it keeps:
     It never writes to .obsidian or anywhere else.
   * A note's body belongs to the user. So do any properties the user added.
     A write changes only the wd_ properties a sweep owns and the one block
-    between the workdecero markers.
+    between the workdecero markers. The one addition to a body is the
+    person's own text from a tracker they asked to import, added once under
+    a heading and never rewritten.
   * A property marked SEED or USER in the model is written when the note is
     created and then left alone, so a status changed in Obsidian stays changed.
   * Every write is atomic (write a temp file, then rename), and the previous
@@ -390,6 +392,30 @@ class VaultStore(object):
             raise KeyError("no %s note with id %s" % (type_name, note_id))
         text = (row.section + "\n" if row.section else "") + line
         return self.upsert(type_name, note_id, row.title, {}, section=text)
+
+    def add_own_text(self, type_name, note_id, heading, text):
+        """Put the person's own text into a note's body, under a heading, outside the workdecero block.
+
+        This is for text that is theirs and that they asked to bring in (an
+        import from their old tracker). It is added once: if the note already
+        has that heading, nothing is written, so text they have since edited
+        is never replaced. Returns True when it was added.
+        """
+        note_type = model.BY_NAME[type_name]
+        found = self._find(note_type, note_id)
+        if found is None:
+            raise KeyError("no %s note with id %s" % (type_name, note_id))
+        path, properties, body = found
+        heading = " ".join(str(heading).replace("#", " ").split())
+        if not heading or not str(text).strip():
+            return False
+        if re.search(r"(?m)^##\s+%s\s*$" % re.escape(heading), body):
+            return False
+        if self.scrub:
+            text = scrub_dashes(text)
+        body = body.rstrip("\n") + "\n\n## %s\n\n%s\n" % (heading, str(text).strip("\n"))
+        self._write_text(path, miniyaml.join_front_matter(properties, body))
+        return True
 
     def apply(self, operations):
         """Carry out operations planned by the engine (see liveness.plan_update). Returns the rows written."""
