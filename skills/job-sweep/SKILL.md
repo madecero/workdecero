@@ -66,7 +66,8 @@ Judge each candidate against the description of the person and record:
 | `distance_miles` | Your estimate of the distance from where they live, for hybrid and onsite roles |
 | `level` | One of `entry`, `mid`, `senior`, `lead`, `manager`, `director`, `vp`, `executive` |
 | `industry` | The employer's industry in a few words |
-| `deal_breaker` | Only if the posting clearly hits one of their deal breakers or requires a credential they do not hold. Say which, in a few words |
+| `deal_breaker` | Only if the posting clearly hits one of the deal breakers the helper listed in their words. Say which, in a few words |
+| `missing_credential` | Only if the posting **requires** a credential on the list of ones they do not hold. Name the credential. The role is kept, marked down, and the note says which credential it asks for |
 | `closes` | The application deadline as YEAR-MONTH-DAY, only if stated |
 | `link_verified` | Only for postings you found yourself: `false` if the page would not load or showed a different job. Candidates from the helper are already verified |
 

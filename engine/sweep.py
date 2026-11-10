@@ -148,11 +148,12 @@ def start(profile, store, source_map, fetcher, today=None):
     # 2. What the employers in the map have open that matches.
     harvested = harvest.harvest(source_map, profile, fetcher, today)
     rows = store.rows("job")
-    candidates, seen_again, reposted, left_out = [], [], [], 0
+    candidates, seen_again, reposted, left_out, why = [], [], [], 0, []
     for find in merge.dedupe("job", harvested.finds):
         result = _provisional(find, profile, today)
         if result.dropped:
             left_out += 1
+            why.append(["%s, %s" % (find.get("title"), find.get("company")), result.dropped])
             continue
         existing = merge.find_existing("job", find, rows)
         if existing is not None:
@@ -186,6 +187,8 @@ def start(profile, store, source_map, fetcher, today=None):
         "employers_as_pages": harvested.unreadable,
         "candidates": chosen, "not_read": max(0, len(candidates) - len(chosen)),
         "seen_again": seen_again, "reposted": reposted, "left_out": left_out,
+        # Why each one was left out. For the person's digest only: never printed to the conversation.
+        "left_out_why": why,
         "boards": [{"name": entry["name"], "url": entry["url"]} for entry in boards],
         "not_covered": browser_only,
         "new": [], "searches": 0, "warm_done": [],
@@ -240,7 +243,9 @@ def start_report(state, profile):
 # --------------------------------------------------------------------------
 
 ASSESSMENT_KEYS = ("fit_assessment", "why", "pay_min", "pay_max", "work_mode", "distance_miles", "level",
-                   "industry", "deal_breaker", "closes", "posted", "link_verified", "location")
+                   "industry", "deal_breaker", "missing_credential", "closes", "posted", "link_verified", "location")
+LEFT_OUT_SHOWN = 25
+NO_CONTACT_YET = "Apply through the posting. No contact was looked up for this one."
 FIND_KEYS = ("title", "company", "url", "req_id", "source") + ASSESSMENT_KEYS
 
 
@@ -282,6 +287,9 @@ def intake(state, handoff, profile, store, source_map, fetcher=None, today=None)
                                                           fetcher=fetcher, today=today):
             learned += 1
 
+    # Every new note says who to contact first. The warm-path step replaces this for the best few.
+    store.apply([{"op": "update", "type": "job", "id": operation["id"], "values": {"contact_first": NO_CONTACT_YET}, "force": []}
+                 for operation, _ in result.new])
     rows = dict((row.id, row) for row in store.rows("job"))
     for operation, score in result.new:
         row = rows.get(operation["id"])
@@ -298,6 +306,7 @@ def intake(state, handoff, profile, store, source_map, fetcher=None, today=None)
             state["reposted"].append({"id": "", "title": label, "url": ""})
         else:
             state["left_out"] += 1
+            state.setdefault("left_out_why", []).append([label, reason])
     state["unjudged"] = unjudged
     state["learned"] = state.get("learned", 0) + learned
     if isinstance(handoff.get("searches"), int) and not isinstance(handoff.get("searches"), bool):
@@ -477,13 +486,21 @@ def write_digest(state, profile, store, problems, today=None):
     lines.append("- Web searches used: %d of %d (%s mode)." % (state["searches"], budget(profile)["searches"],
                                                               "Lite" if state["mode"] == "lite" else "Full"))
     if state["left_out"]:
-        lines.append("- Left out by your profile (exclusions, pay floor, title words, age): %d." % state["left_out"])
+        lines.append("- Left out by your profile: %d. Each one is listed below with the reason." % state["left_out"])
     if state["not_read"] or state.get("unjudged"):
         lines.append("- Matches not read this run, kept for the next one: %d." % (state["not_read"] + state.get("unjudged", 0)))
     if state.get("learned"):
         lines.append("- Employers added to your local map from postings found: %d." % state["learned"])
     if state["employers_failed"]:
         lines.append("- Job lists that did not answer: %s." % ", ".join(state["employers_failed"]))
+    reasons = state.get("left_out_why") or []
+    if reasons:
+        lines += ["", "## Left out, and why"]
+        for label, reason in reasons[:LEFT_OUT_SHOWN]:
+            reason = str(reason).strip()
+            lines.append("- %s: %s." % (label, reason[:1].lower() + reason[1:].rstrip(".")))
+        if len(reasons) > LEFT_OUT_SHOWN:
+            lines.append("- And %d more." % (len(reasons) - LEFT_OUT_SHOWN))
     lines += ["", "## Not covered"]
     lines += ["- %s" % name for name in state["not_covered"]] or ["Every source in your local map was covered."]
     lines.append("")

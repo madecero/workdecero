@@ -251,6 +251,122 @@
           }
         ]
       }
+    },
+    {
+      "url": "https://boards-api.greenhouse.io/v1/boards/cedarridgepayroll/jobs",
+      "status": 200,
+      "json": {
+        "jobs": [
+          {
+            "id": 8001,
+            "title": "Principal Product Manager, Payroll Platform",
+            "absolute_url": "https://job-boards.greenhouse.io/cedarridgepayroll/jobs/8001",
+            "location": {
+              "name": "Denver, CO - Hybrid; New York, NY - Hybrid"
+            },
+            "updated_at": "2026-11-05T10:00:00-05:00"
+          },
+          {
+            "id": 8002,
+            "title": "Sr Principal Product Manager, Messaging",
+            "absolute_url": "https://job-boards.greenhouse.io/cedarridgepayroll/jobs/8002",
+            "location": {
+              "name": "Remote - US"
+            },
+            "updated_at": "2026-11-05T10:00:00-05:00"
+          },
+          {
+            "id": 8003,
+            "title": "Group Product Manager, Benefits",
+            "absolute_url": "https://job-boards.greenhouse.io/cedarridgepayroll/jobs/8003",
+            "location": {
+              "name": "Boston, MA - Onsite"
+            },
+            "updated_at": "2026-11-05T10:00:00-05:00"
+          },
+          {
+            "id": 8004,
+            "title": "Senior Product Manager, Tax",
+            "absolute_url": "https://job-boards.greenhouse.io/cedarridgepayroll/jobs/8004",
+            "location": {
+              "name": "Denver, CO - Hybrid"
+            },
+            "updated_at": "2026-11-05T10:00:00-05:00"
+          },
+          {
+            "id": 8005,
+            "title": "Principal Product Designer",
+            "absolute_url": "https://job-boards.greenhouse.io/cedarridgepayroll/jobs/8005",
+            "location": {
+              "name": "Denver, CO - Hybrid"
+            },
+            "updated_at": "2026-11-05T10:00:00-05:00"
+          },
+          {
+            "id": 8006,
+            "title": "Director of Product Management, Compliance",
+            "absolute_url": "https://job-boards.greenhouse.io/cedarridgepayroll/jobs/8006",
+            "location": {
+              "name": "Denver, CO - Hybrid"
+            },
+            "updated_at": "2026-11-05T10:00:00-05:00"
+          }
+        ]
+      }
+    },
+    {
+      "url": "https://boards-api.greenhouse.io/v1/boards/cedarridgepayroll/jobs/8001",
+      "status": 200,
+      "json": {
+        "id": 8001,
+        "title": "Principal Product Manager, Payroll Platform",
+        "content": "&lt;p&gt;Own the payroll platform roadmap. Base pay $179,000 to $220,000.&lt;/p&gt;"
+      }
+    },
+    {
+      "url": "https://boards-api.greenhouse.io/v1/boards/cedarridgepayroll/jobs/8002",
+      "status": 200,
+      "json": {
+        "id": 8002,
+        "title": "Sr Principal Product Manager, Messaging",
+        "content": "&lt;p&gt;Lead product for messaging. Base pay $233,000 to $259,000.&lt;/p&gt;"
+      }
+    },
+    {
+      "url": "https://boards-api.greenhouse.io/v1/boards/cedarridgepayroll/jobs/8003",
+      "status": 200,
+      "json": {
+        "id": 8003,
+        "title": "Group Product Manager, Benefits",
+        "content": "&lt;p&gt;Onsite five days a week in Boston.&lt;/p&gt;"
+      }
+    },
+    {
+      "url": "https://boards-api.greenhouse.io/v1/boards/cedarridgepayroll/jobs/8004",
+      "status": 200,
+      "json": {
+        "id": 8004,
+        "title": "Senior Product Manager, Tax",
+        "content": "&lt;p&gt;Tax product.&lt;/p&gt;"
+      }
+    },
+    {
+      "url": "https://boards-api.greenhouse.io/v1/boards/cedarridgepayroll/jobs/8005",
+      "status": 200,
+      "json": {
+        "id": 8005,
+        "title": "Principal Product Designer",
+        "content": "&lt;p&gt;Design.&lt;/p&gt;"
+      }
+    },
+    {
+      "url": "https://boards-api.greenhouse.io/v1/boards/cedarridgepayroll/jobs/8006",
+      "status": 200,
+      "json": {
+        "id": 8006,
+        "title": "Director of Product Management, Compliance",
+        "content": "&lt;p&gt;Requires an active CPA licence.&lt;/p&gt;"
+      }
     }
   ]
 }

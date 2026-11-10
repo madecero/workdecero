@@ -80,10 +80,8 @@ class ThreeProfiles(unittest.TestCase):
         self.assertEqual((leader.parts["location"], leader.parts["level"], leader.parts["industry"]), (14, 15, 5))
         self.assertEqual(leader.total, 74)
         nurse = self.job("vp_product_denver", self.nurse)
-        self.assertEqual(nurse.parts["location"], 0)
-        self.assertEqual(nurse.parts["level"], 8)        # vp is one step above director
-        self.assertIn((scoring.PENALTY_ONSITE_OUTSIDE_AREA, "hybrid outside your area"), nurse.penalties)
-        self.assertLess(nurse.total, leader.total - 20)
+        # A job that needs them in a place they cannot reach is never listed as a fit.
+        self.assertEqual(nurse.dropped, "it is hybrid work in a place outside your area")
 
     def test_remote_role_is_full_marks_for_one_and_a_caveat_for_the_other(self):
         leader = self.job("head_of_product_remote", self.leader)

@@ -51,7 +51,8 @@ PART_LABELS = {"fit": "background", "level": "level", "industry": "industry", "l
 PENALTY_PAY_START_BELOW_FLOOR = 6
 PENALTY_UNVERIFIED_LINK = 3
 PENALTY_FLAGGED = 10
-PENALTY_ONSITE_OUTSIDE_AREA = 4
+PENALTY_ONSITE_OUTSIDE_AREA = 4      # kept for older notes: such a role is now left out
+PENALTY_MISSING_CREDENTIAL = 10
 PENALTY_HOURS_OUTSIDE_RANGE = 4
 
 LEVELS = ["entry", "mid", "senior", "lead", "manager", "director", "vp", "executive"]
@@ -262,7 +263,8 @@ def _location_points(item, profile, full, result):
                                                       for name in targets):
             result.caveats.append("Would mean relocating")
             return int(round(full / 2.0))
-        result.penalties.append((PENALTY_ONSITE_OUTSIDE_AREA, "%s outside your area" % mode))
+        # A job that needs them in a place they cannot reach is not a fit, whatever else it offers.
+        result.dropped = "it is %s work in a place outside your area" % mode
         return 0
     result.caveats.append("Work mode not stated")
     return int(round(full / 3.0)) if in_area is not False else 0
@@ -315,6 +317,10 @@ def _common_checks(item, owner, profile, today, result):
     if item.get("deal_breaker"):
         result.dropped = "hits a deal breaker in your profile (%s)" % item["deal_breaker"]
         return
+    if item.get("missing_credential"):
+        needed = str(item["missing_credential"]).strip().rstrip(".")
+        result.penalties.append((PENALTY_MISSING_CREDENTIAL, "asks for a credential you do not hold"))
+        result.caveats.append("Asks for %s, which your profile says you do not hold" % needed)
     if item.get("link_verified") is False:
         result.penalties.append((PENALTY_UNVERIFIED_LINK, "link not verified"))
         result.caveats.append("The link could not be verified. Confirm the posting is real before applying")

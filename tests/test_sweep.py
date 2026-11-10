@@ -219,6 +219,83 @@ class SweepCase(unittest.TestCase):
         return rows[0]
 
 
+class TesterFindings(SweepCase):
+    """Shapes from the first live fit check: real fits on a board the sweep read that never surfaced."""
+
+    def setUp(self):
+        super(TesterFindings, self).setUp()
+        data = sources.empty_map()
+        data["jobs"] = [employer("Cedar Ridge Payroll", "greenhouse", board="cedarridgepayroll")]
+        sources.save(data)
+
+    def test_principal_and_group_titles_in_their_field_are_candidates(self):
+        matches = harvest.title_matches
+        for title in ("Principal Product Manager, Payroll Platform", "Sr Principal Product Manager, Messaging",
+                      "Group Product Manager, Benefits", "Director of Product Management, Compliance",
+                      "Senior Director, Product Manager"):
+            self.assertTrue(matches(title, self.profile), title)
+        for title in ("Senior Product Manager, Tax", "Product Manager", "Principal Product Designer",
+                      "Principal Software Engineer", "Product Marketing Lead", "Staff Product Designer"):
+            self.assertFalse(matches(title, self.profile), title)
+        _, report = self.start()
+        labels = sorted(self.candidates(report))
+        self.assertEqual(labels, ["Director of Product Management, Compliance | Cedar Ridge Payroll",
+                                  "Principal Product Manager, Payroll Platform | Cedar Ridge Payroll",
+                                  "Sr Principal Product Manager, Messaging | Cedar Ridge Payroll"])
+        self.assertIn("Base pay $179,000 to $220,000.", report)
+
+    def test_a_range_that_reaches_the_floor_is_kept_and_everything_left_out_is_listed_with_its_reason(self):
+        _, report = self.start()
+        ids = self.candidates(report)
+        judged = [
+            {"id": ids["Principal Product Manager, Payroll Platform | Cedar Ridge Payroll"], "fit_assessment": 30,
+             "why": "Owns a platform roadmap.", "work_mode": "hybrid", "distance_miles": 4, "pay_min": 179000,
+             "pay_max": 220000, "level": "lead"},                                   # the range reaches the floor
+            {"id": ids["Sr Principal Product Manager, Messaging | Cedar Ridge Payroll"], "fit_assessment": 31,
+             "why": "Leads messaging product.", "work_mode": "remote", "pay_min": 233000, "pay_max": 259000},
+            {"id": ids["Director of Product Management, Compliance | Cedar Ridge Payroll"], "fit_assessment": 26,
+             "why": "Compliance product.", "work_mode": "hybrid", "distance_miles": 4,
+             "missing_credential": "an active CPA licence"},
+        ]
+        finds = [
+            {"title": "VP of Product", "company": "Low Pay Labs", "url": "https://jobs.example.com/lowpay/1",
+             "fit_assessment": 30, "work_mode": "remote", "pay_min": 150000, "pay_max": 190000},
+            {"title": "Head of Product", "company": "Harbor Freight Tech", "url": "https://jobs.example.com/harbor/2",
+             "fit_assessment": 33, "work_mode": "onsite", "location": "Boston, MA", "distance_miles": 1770},
+            {"title": "VP of Product", "company": "Onsite Nearby Co", "url": "https://jobs.example.com/near/3",
+             "fit_assessment": 28, "work_mode": "onsite", "location": "Denver, CO", "distance_miles": 6},
+        ]
+        self.hand_off({"assessed": judged, "finds": finds, "searches": 9})
+        _, intake = self.run_step(sweep_tool.intake, fetcher=self.fetcher, today=TODAY)
+        _, done = self.run_step(sweep_tool.finish, today=TODAY)
+        jobs = self.jobs()
+        self.assertEqual(sorted(jobs), [
+            "Director of Product Management, Compliance, Cedar Ridge Payroll",
+            "Principal Product Manager, Payroll Platform, Cedar Ridge Payroll",
+            "Sr Principal Product Manager, Messaging, Cedar Ridge Payroll",
+            "VP of Product, Onsite Nearby Co"])
+        # A required credential they do not hold marks the role down, and the note says which.
+        cpa = jobs["Director of Product Management, Compliance, Cedar Ridge Payroll"].section
+        self.assertIn("minus 10 (asks for a credential you do not hold)", cpa)
+        self.assertIn("Asks for an active CPA licence, which your profile says you do not hold.", cpa)
+        # Every new note says who to contact first, also the ones no contact was looked up for.
+        for row in jobs.values():
+            self.assertEqual(row.values["contact_first"], sweep.NO_CONTACT_YET)
+        # The person's digest lists each left-out role with a plain reason.
+        section = self.digest().section
+        why = section.split("## Left out, and why")[1].split("##")[0]
+        self.assertIn("- VP of Product, Low Pay Labs: pay tops out at 190000, under your floor of 210000.", why)
+        self.assertIn("- Head of Product, Harbor Freight Tech: it is onsite work in a place outside your area.", why)
+        self.assertIn("- Group Product Manager, Benefits, Cedar Ridge Payroll: it is onsite work in a place outside "
+                      "your area.", why)
+        self.assertIn("- Left out by your profile: 3. Each one is listed below with the reason.", section)
+        # The conversation gets counts only: no reasons, no floor.
+        for text in (report, intake, done):
+            for private in ("210000", "210,000", "under your floor", "outside your area", "Low Pay Labs"):
+                self.assertNotIn(private, text)
+        self.assertIn("Left out by the profile: 3.", intake)
+
+
 class Start(SweepCase):
     def test_start_report_gives_candidates_and_a_brief_without_anything_private(self):
         code, report = self.start()

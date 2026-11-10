@@ -29,8 +29,17 @@ _STOP_WORDS = ("of", "the", "and", "for", "in", "at", "to", "a", "an", "or", "wi
 WORKDAY_PAGE = 20
 
 
+# Words that mean the same thing in a title: a "Product Manager" does product management.
+_SAME_WORD = {"manager": "management", "managers": "management", "managing": "management",
+              "designer": "design", "engineer": "engineering", "engineers": "engineering", "nursing": "nurse",
+              "analyst": "analytics", "analysis": "analytics", "marketer": "marketing"}
+# Senior specialist titles. They are often paid like the level above, so a person who asked for director
+# and up still wants to see one in their own field. The pay floor and the fit judgement sort them out.
+_SENIOR_SPECIALIST = ("principal", "distinguished", "group")
+
+
 def _tokens(text):
-    return [word for word in merge.normalize_title(text).split() if word not in _STOP_WORDS]
+    return [_SAME_WORD.get(word, word) for word in merge.normalize_title(text).split() if word not in _STOP_WORDS]
 
 
 def title_matches(title, profile):
@@ -39,6 +48,9 @@ def title_matches(title, profile):
     A title matches when it contains every significant word of one of the
     person's target titles ("VP of Product" matches "VP of Product, Platform"),
     or when it is at one of their levels and names one of their functions.
+    A principal or group title in one of their functions also matches when
+    they asked for manager level or above: "Principal Product Manager" for
+    someone who wants product management at director level.
     Titles with a word the profile leaves out never match.
     """
     jobs = profile.get("jobs") or {}
@@ -52,12 +64,14 @@ def title_matches(title, profile):
         if need and need <= have:
             return True
     levels = jobs.get("levels") or []
-    if levels and scoring.level_of({"title": title}) in levels:
-        for function in jobs.get("functions") or []:
-            need = set(_tokens(function))
-            if need and need <= have:
-                return True
-    return False
+    in_field = any(set(_tokens(function)) and set(_tokens(function)) <= have for function in jobs.get("functions") or [])
+    if not levels or not in_field:
+        return False
+    if scoring.level_of({"title": title}) in levels:
+        return True
+    # A principal or group title in their own field, when they asked for senior levels.
+    senior = [level for level in levels if level in ("manager", "director", "vp", "executive")]
+    return bool(senior) and any(" %s " % word in plain for word in _SENIOR_SPECIALIST)
 
 
 def search_terms(profile, limit):
@@ -104,6 +118,8 @@ def _mode(location_text):
         return "remote"
     if "hybrid" in low:
         return "hybrid"
+    if re.search(r"\b(on-?site|on site|in-?office|in office)\b", low):
+        return "onsite"
     return None
 
 
