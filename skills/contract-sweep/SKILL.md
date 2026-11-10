@@ -82,6 +82,7 @@ For each real gig, record:
 | `closes` | The proposal or bid deadline, as YEAR-MONTH-DAY, if stated. Always record this for an RFP |
 | `fit_assessment` | 0 to 40, how well the work matches what they sell and have done. See the scale |
 | `why` | One sentence the person will read: why this fits, or the main gap. Facts from the posting, no flattery |
+| `poster` | The person the listing itself names as the poster, recruiter or contact: `{"name": "...", "title": "..."}`. Add `"inferred": true` if the listing shows the name but not in that role, and the note will say "likely". Never search for one, and never guess a name or an email address |
 | `industry` | The client's industry in a few words, when the posting shows it |
 | `deal_breaker` | Only if the posting requires a credential they do not hold. Say which |
 | `link_verified` | `false` only if the page would not load or showed a different gig |
@@ -120,7 +121,7 @@ If its answer has a section **BEFORE YOU FINISH**, do what it says: search and r
 
 ### Step 3: finish
 
-Run `TOOL finish`. It checks the tracker, writes the digest note and prints a summary. Show the person that summary as it is, then add at most three lines of your own: anything you could not read, and anything they should look at first.
+Run `TOOL finish`. It checks the tracker, writes the digest note and prints a summary. Show the person that summary as it is. The notes for the best few gigs also say who to contact first, worked out from the listing and from people already in their tracker. Then add at most three lines of your own: anything you could not read, and anything they should look at first.
 
 The digest note leads with deadlines in the next 7 days and ends with **Channels to set up**: platforms where a profile has to be live before work comes through them. Mention the channels in one line. Never offer to create a profile for them.
 

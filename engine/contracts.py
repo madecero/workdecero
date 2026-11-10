@@ -9,7 +9,9 @@ list.
     start    re-check open gigs, bring the Channels list up to date, and tell
              research where to look and what kinds of engagement to keep
     intake   take what research found, drop what the profile rules out, merge
-             the same gig listed by several agencies, and write the notes
+             the same gig listed by several agencies, write the notes, and for
+             the best few say who to contact first (from the listing and the
+             person's own People notes, with no further searching)
     finish   verify, write the digest note (deadlines first, channels to set
              up last) and report
     update   record what the person did: "I applied to C-12", "Upwork is live"
@@ -34,10 +36,11 @@ import merge
 import model
 import scoring
 import sources
+import warmpath
 
 BUDGET = {
-    "lite": {"searches": 10, "read": 12},
-    "full": {"searches": 30, "read": 30},
+    "lite": {"searches": 10, "read": 12, "contact": 3},
+    "full": {"searches": 30, "read": 30, "contact": 8},
 }
 STATE_NAME = "contract-state.json"
 DEADLINE_DAYS = 7              # proposal and bid deadlines this close lead the digest
@@ -67,7 +70,7 @@ CHANNEL_DONE = ("Live", "Skip")
 FIND_KEYS = ("title", "client", "via", "url", "source", "job_id", "engagement", "rate_min", "rate_max",
              "fixed_price", "retainer_monthly", "hours_per_week", "length_weeks", "remote", "work_mode",
              "location", "distance_miles", "posted", "closes", "fit_assessment", "why", "deal_breaker",
-             "link_verified", "industry")
+             "link_verified", "industry", "poster")
 
 
 def budget(profile):
@@ -366,9 +369,85 @@ def merge_agency_copies(items):
     return kept, folded
 
 
+# --------------------------------------------------------------------------
+# Who to contact, from what is already known. No web searches are spent on this.
+# --------------------------------------------------------------------------
+
+def known_people(item, people_rows, profile):
+    """People notes at the client or the agency: [(row, "1st" or "2nd", "the client" or the agency name)]."""
+    employer = (profile.get("person") or {}).get("current_employer")
+    quiet = warmpath._is_quiet(profile)
+    found = []
+    for where, label in ((item.get("client"), "the client"), (item.get("via"), item.get("via"))):
+        if not where or merge.normalize_company(where) in merge._UNDISCLOSED:
+            continue
+        for row in people_rows:
+            company = merge.link_label(row.values.get("company"))
+            if not warmpath._same_company(company, where):
+                continue
+            if quiet and warmpath._same_company(company, employer):
+                continue                         # never route a quiet search through a coworker
+            degree = (row.values.get("relationship") or "").strip().lower()
+            if degree in ("1st", "2nd") and not any(row is entry[0] for entry in found):
+                found.append((row, degree, label))
+    return sorted(found, key=lambda entry: (entry[1] != "1st", entry[2] != "the client", entry[0].title.lower()))
+
+
+def contact_part(item, known, platforms, flagged, store, names):
+    """The contact lines for one gig. Returns (text for the note, the "contact first" sentence)."""
+    via = (item.get("via") or "").strip()
+    on_platform = bool(via) and merge.normalize_company(via) in platforms
+    poster = item.get("poster") if isinstance(item.get("poster"), dict) else {}
+    poster_name = (poster.get("name") or "").strip()
+    likely = poster.get("inferred") is True
+    role = (poster.get("title") or "").strip()
+
+    if flagged:
+        first = "No one for now. See the caution above"
+    elif known:
+        row, degree, where = known[0]
+        at = "the client" if where == "the client" else where
+        if degree == "1st":
+            first = "%s (1st), who works at %s, for a warm introduction" % (row.title, at)
+        else:
+            first = "%s (2nd), through a shared connection. Works at %s" % (row.title, at)
+    elif on_platform:
+        # The platform is the channel. No address is guessed for someone who posts there.
+        first = "Reply on %s" % via
+    elif poster_name:
+        what = "likely the contact for this gig (not named as such on the listing)" if likely else \
+            "named on the listing%s" % (" as %s" % role if role else "")
+        first = "%s, %s%s" % (poster_name, what, ", at %s" % via if via else "")
+    elif via:
+        first = "Apply through %s" % via
+    else:
+        first = "Apply through the listing"
+
+    lines = ["- **Contact first:** %s." % first]
+    if poster_name:
+        shown = "%s%s" % ("Likely " if likely else "", poster_name)
+        lines.append("- **Named on the listing:** %s%s.%s" % (
+            shown, ", %s" % role if role else "",
+            " Not named in that role on the listing." if likely else ""))
+    else:
+        lines.append("- **Named on the listing:** no one.")
+    if known and not flagged:
+        lines.append("- **People you know there:** " + "; ".join(
+            "%s (%s, %s%s)" % (store.link("person", row.title), degree, "at the client" if where == "the client"
+                               else "at %s" % where, ", %s" % row.values["role"] if row.values.get("role") else "")
+            for row, degree, where in known) + ".")
+    else:
+        lines.append("- **People you know there:** none in your network at the client or the agency.")
+    if on_platform:
+        lines.append("- **How to reach them:** through %s. No email address is guessed for a platform gig." % via)
+    text = scoring.scrub_confidential("\n".join(lines), names)
+    return text, scoring.scrub_confidential(first + ".", names)
+
+
 def intake(state, handoff, profile, store, today=None):
     """Filter and score what research found, write the notes, and record what happened."""
     today = today or datetime.date.today()
+    names = scoring.confidential_names(profile)
     items = []
     for entry in handoff.get("finds") or []:
         if isinstance(entry, dict) and entry.get("title") and entry.get("url"):
@@ -376,6 +455,15 @@ def intake(state, handoff, profile, store, today=None):
     state["finds_read"] = state.get("finds_read", 0) + len(items)
     items, folded = merge_agency_copies(items)
     state["merged"] = state.get("merged", 0) + folded
+
+    # Knowing someone at the client or the agency raises the odds, so it is worked out before scoring.
+    people_rows = store.rows("person")
+    known_by_link = {}
+    for item in items:
+        known = known_people(item, people_rows, profile)
+        known_by_link[merge.link_key(item.get("url"))] = (item, known)
+        if known:
+            item["warm"] = known[0][1]
 
     result = merge.plan_intake("contract", items, store, profile, today)
     store.apply(result.operations)
@@ -389,6 +477,21 @@ def intake(state, handoff, profile, store, today=None):
                              "client": row.values.get("client") or "", "via": row.values.get("via") or "",
                              "url": row.values.get("link")})
     state["new"].sort(key=lambda entry: -entry["fit"])
+
+    # A light contact step for the best few, from the listing and the People notes only.
+    platforms = set(merge.normalize_company(row.title) for row in store.rows("channel"))
+    exclusions = scoring.active_exclusions(profile, today)
+    for entry in [e for e in state["new"] if "contact_first" not in e][:budget(profile)["contact"]]:
+        item, known = known_by_link.get(merge.link_key(entry["url"]), ({}, []))
+        if not item:
+            continue
+        exclusion = scoring.match_exclusion(item, item.get("client"), exclusions)
+        flagged = exclusion is not None and exclusion.get("action", "skip") != "skip"
+        text, first = contact_part(item, known, platforms, flagged, store, names)
+        store.apply([{"type": "contract", "id": entry["id"], "values": {}, "force": [],
+                      "part": (model.PART_WARM_PATH, text)}])
+        entry["contact_first"] = first
+        entry["warm"] = known[0][1] if known and not flagged else None
     state["seen_again"] = sorted(set(state["seen_again"]) | set(op["id"] for op in result.seen_again))
     for label, reason in result.dropped:
         if "already in your tracker as" in reason and "Closed" in reason:
@@ -502,7 +605,9 @@ def write_digest(state, profile, store, problems, today=None):
             bits.append("terms not stated, confirm them first")
         if values.get("via"):
             bits.append("via %s" % values["via"])
-        lines.append("- %s **Win odds %d.** %s." % (store.link("contract", entry["title"]), entry["fit"], ", ".join(bits)))
+        lines.append("- %s **Win odds %d.** %s.%s" % (
+            store.link("contract", entry["title"]), entry["fit"], ", ".join(bits),
+            " Contact first: %s" % entry["contact_first"] if entry.get("contact_first") else ""))
     if not featured:
         lines.append("Nothing new that fits this time.")
     if more:
@@ -569,8 +674,9 @@ def finish_report(state, profile, title, featured, more, pending, due, problems)
         lines += ["", "TOP %d" % len(featured)]
         for entry in featured:
             who = entry["client"] or "client not named"
-            lines.append("  Win odds %d  %s (%s%s)." % (entry["fit"], entry["title"], who,
-                                                      ", via %s" % entry["via"] if entry["via"] else ""))
+            lines.append("  Win odds %d  %s (%s%s).%s" % (
+                entry["fit"], entry["title"], who, ", via %s" % entry["via"] if entry["via"] else "",
+                " Someone you know can help." if entry.get("warm") else ""))
     if more:
         lines.append("  %d more %s in the tracker." % (more, "is" if more == 1 else "are"))
     if pending:

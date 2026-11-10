@@ -625,6 +625,20 @@ class Start(SweepCase):
         _, report = self.run_step(sweep_tool.intake, fetcher=self.fetcher, today=TODAY)
         self.assertNotIn("BEFORE WARM PATHS", report)
 
+    def test_a_posting_whose_title_names_a_confidential_employer_is_left_out(self):
+        self.start()
+        base = {"company": "Front Range Robotics", "fit_assessment": 30, "work_mode": "remote", "source": "Board"}
+        self.hand_off({"finds": [
+            dict(base, title="Head of Product, Granite Peak Software integrations",
+                 url="https://job-boards.greenhouse.io/frontrangerobotics/jobs/1"),
+            dict(base, title="Head of Product, Platform", url="https://job-boards.greenhouse.io/frontrangerobotics/jobs/2"),
+        ], "searches": 9})
+        _, report = self.run_step(sweep_tool.intake, fetcher=self.fetcher, today=TODAY)
+        self.assertEqual(sorted(self.jobs()), ["Head of Product, Platform, Front Range Robotics"])
+        self.assertNotIn("Granite Peak", report)
+        for row in self.jobs().values():
+            self.assertNotIn("Granite Peak", row.title + row.section)
+
     def test_a_candidate_from_a_live_job_list_is_always_verified(self):
         self.start()
         self.hand_off({"assessed": [{"id": "c1", "fit_assessment": 30, "why": "Same scope.", "link_verified": False}]})

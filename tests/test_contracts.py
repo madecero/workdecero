@@ -434,6 +434,77 @@ class Finish(ContractCase):
             self.assertNotIn("Cascadia", row.title + row.section)
 
 
+class Contact(ContractCase):
+    def person(self, name, company, relationship, role=None):
+        store = self.store()
+        store.ensure_layout()
+        rows = store.rows("person")
+        values = {"company": store.link("company", company), "relationship": relationship}
+        if role:
+            values["role"] = role
+        store.upsert("person", "P-%d" % (len(rows) + 1), name, values)
+
+    def part(self, title):
+        return self.gigs()[title].section.split("### Warm path")[1]
+
+    def test_contact_first_comes_from_the_listing_and_people_already_known(self):
+        self.person("Imani Brooks", "Example Tea Company", "1st", "Marketing Director")
+        self.person("Lars Novak", "Rose City Creative Staffing", "2nd")
+        self.start()
+        _, report = self.intake([
+            gig("a", "Packaging system for a tea company", client="Example Tea Company", engagement="1099", rate_max=95,
+                via="Rose City Creative Staffing", poster={"name": "Dana Whitcombe", "title": "Recruiter"}),
+            gig("b", "Brand identity for a cafe group", engagement="fixed price", fixed_price=6000,
+                via="Design marketplace", poster={"name": "Sam Okoro"}),
+            gig("c", "Label design for a brewery", engagement="1099", rate_max=85, via="Northside Staffing",
+                poster={"name": "Priya Raman", "title": "Account Manager", "inferred": True}),
+            gig("d", "Website refresh for a bakery", engagement="1099", rate_max=75),
+        ])
+        tea = self.part("Packaging system for a tea company")
+        self.assertIn("- **Contact first:** Imani Brooks (1st), who works at the client, for a warm introduction.", tea)
+        self.assertIn("- **Named on the listing:** Dana Whitcombe, Recruiter.", tea)
+        self.assertIn("Imani Brooks|Imani Brooks]] (1st, at the client, Marketing Director)", tea)
+        self.assertIn("Lars Novak|Lars Novak]] (2nd, at Rose City Creative Staffing)", tea)
+        cafe = self.part("Brand identity for a cafe group")
+        self.assertIn("- **Contact first:** Reply on Design marketplace.", cafe)
+        self.assertIn("No email address is guessed for a platform gig.", cafe)
+        self.assertNotIn("@", cafe)
+        brewery = self.part("Label design for a brewery")
+        self.assertIn("- **Contact first:** Priya Raman, likely the contact for this gig (not named as such on the "
+                      "listing), at Northside Staffing.", brewery)
+        self.assertIn("- **Named on the listing:** Likely Priya Raman, Account Manager.", brewery)
+        # Lite covers the best three. The fourth keeps a plain note.
+        self.assertNotIn("### Warm path", self.gigs()["Website refresh for a bakery"].section)
+        # Knowing someone there raises the odds, and nothing about people reaches research.
+        self.assertIn("warm path 12/15", self.gigs()["Packaging system for a tea company"].section)
+        for name in ("Imani", "Lars", "Dana", "Priya"):
+            self.assertNotIn(name, report)
+        _, summary = self.finish()
+        self.assertIn("Contact first: Imani Brooks (1st), who works at the client, for a warm introduction.",
+                      self.digest().section)
+        self.assertIn("Someone you know can help.", summary)
+        self.assertNotIn("Imani", summary)
+
+    def test_no_one_named_and_no_one_known(self):
+        self.start()
+        self.intake([gig("a", "Illustration set", engagement="1099", rate_max=90, via="Northside Staffing"),
+                     gig("b", "Poster series for a roastery", engagement="1099", rate_max=90)])
+        self.assertIn("- **Contact first:** Apply through Northside Staffing.", self.part("Illustration set"))
+        plain = self.part("Poster series for a roastery")
+        self.assertIn("- **Contact first:** Apply through the listing.", plain)
+        self.assertIn("- **Named on the listing:** no one.", plain)
+        self.assertIn("none in your network at the client or the agency", plain)
+
+    def test_a_quiet_search_is_never_routed_through_a_coworker(self):
+        self.raw["person"]["current_employer"] = "Example Tea Company"
+        self.raw.setdefault("jobs", {})["search_visibility"] = "quiet"
+        self.write_profile()
+        self.person("Imani Brooks", "Example Tea Company", "1st")
+        people = self.store().rows("person")
+        item = {"title": "Packaging refresh", "client": "Example Tea Company", "via": "Rose City Creative Staffing"}
+        self.assertEqual(contracts.known_people(item, people, self.profile), [])
+
+
 class Updates(ContractCase):
     def setUp(self):
         super(Updates, self).setUp()
