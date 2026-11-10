@@ -105,7 +105,8 @@ Claude Code normally asks before it runs a command or writes a file. Setup and t
 What that means in practice:
 
 * The helpers take no arguments, so an approved command cannot be aimed at another file. They read and write your profile, your local map, the workdecero folder in your vault, and the temporary folder above. A command that changes anything only works while its skill has a run open, so a stray call in another conversation changes nothing.
-* Any other command, any extra word on those command lines, any other file: Claude Code asks you as usual. The hook never blocks anything and never approves anything it does not recognise in full.
+* Any other command, any extra word on those command lines, any other file: Claude Code asks you as usual. The hook never approves anything it does not recognise in full.
+* One thing is refused outright. While a sweep or a local map build is running and browser use is off in your profile (it is off unless you turn it on), any tool that drives a browser, such as Claude in Chrome, is refused with the reason "workdecero: browser use is off in your profile". Nothing else is ever refused, and outside a running sweep your browser tools behave as they always do.
 * Three things still ask on purpose:
   * Reading your resume if it is a PDF outside the folder you started in. That is your file, so you get to say yes.
   * Starting a skill by plain words. A slash command such as `/workdecero:job-sweep` asks nothing. If you say "run the job sweep" instead, Claude Code asks once to allow it, and you can allow it permanently from that prompt.

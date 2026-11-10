@@ -110,6 +110,7 @@ def start(out=None, fetcher=None, today=None, force=False):
     handoff.ensure_folder()                  # private, and never a link, before anything is written into it
     source_map = sources.load()
     state = sweep.start(profile, store, source_map, fetcher or liveness.HttpFetcher(), today)
+    state["browser_pass"] = handoff.browser_pass(profile)      # the plugin hook reads this
     sweep.save_state(work_dir(), state)
     print(sweep.start_report(state, profile), file=out)
     if not any(source_map.get(track) for track in sources.TRACKS):

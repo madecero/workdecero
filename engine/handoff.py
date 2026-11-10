@@ -51,13 +51,18 @@ def _run_path(skill):
     return os.path.join(folder(), "%s-run.json" % skill)
 
 
-def open_run(skill, now=None):
-    """Start (or restart) a run for this skill."""
+def browser_pass(profile):
+    """Whether this person has turned the browser pass on. Recorded with each run, for the plugin hook to read."""
+    return (((profile or {}).get("integrations") or {}).get("browser") or {}).get("enabled") is True
+
+
+def open_run(skill, now=None, extra=None):
+    """Start (or restart) a run for this skill. `extra` is recorded with it."""
     ensure_folder()
     now = now or datetime.datetime.now()
     handle = os.open(_run_path(skill), os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0), 0o600)
     with os.fdopen(handle, "w", encoding="utf-8") as out:
-        json.dump({"started": now.isoformat(timespec="seconds")}, out)
+        json.dump(dict(extra or {}, started=now.isoformat(timespec="seconds")), out)
 
 
 def run_is_open(skill, now=None, minutes=RUN_MINUTES):

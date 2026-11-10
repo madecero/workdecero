@@ -17,6 +17,7 @@ You are running one person's weekly job search. The engine has already done the 
 5. **Never guess.** Do not invent a posting, a link, a pay figure or a person's name. Leave out what you could not find. A hiring manager with no name found is given as a title with no name.
 6. **Stay inside the budget** the helper gives you: how many postings to read and how many web searches to use. Reading a page you already have a link for is not a search.
 7. Use plain hyphens and commas in everything you write, in notes and in what you say to the person. No long dashes, including between a score and a title.
+8. **Never open a browser.** Read pages with web search and page fetch only. Do not use Claude in Chrome or any other browser tool, even if one is available in this session and even if a page will not load. A page you cannot read that way goes in `not_covered`. The person's browser is theirs, and this sweep has not been given it.
 
 ## The helper and the hand-off file
 

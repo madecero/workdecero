@@ -18,9 +18,16 @@ What it approves, exactly:
     is new or a plain file. A link at the folder or at the file is refused,
     so the permission can never be bent into writing somewhere else.
 
+What it refuses, exactly one thing:
+  * A browser tool (Claude in Chrome, or any connected tool whose name says
+    it drives a browser), while a workdecero sweep is running for a person
+    who has not turned the browser pass on. A sweep must not
+    open someone's browser unless they asked for that. When no sweep is
+    running, nothing is refused.
+
 Everything else is left alone: this hook prints nothing, and the normal
-permission prompt decides. It never blocks anything and never approves a
-command it does not recognise in full.
+permission prompt decides. It never approves a command it does not
+recognise in full.
 
 The helpers take no arguments, so an approved call cannot be pointed at
 another file. They read and write only the profile, the local map, the
@@ -34,6 +41,7 @@ import json
 import os
 import stat
 import sys
+import time
 
 # skill folder -> (helper script, subcommands allowed, hand-off file the assistant may write)
 HELPERS = {
@@ -114,6 +122,63 @@ def write_allowed(path):
     return stat.S_ISREG(info.st_mode)              # exists: only a plain file, never a link or a folder
 
 
+# Files a sweep keeps in the hand-off folder while it runs. Each records whether the person has turned
+# the browser pass on.
+RUN_FILES = ("sweep-state.json", "contract-state.json", "networking-state.json", "sources-run.json")
+# Tools that drive a browser. Claude in Chrome by name, and any other connected tool whose name says it
+# drives one. A name is all the hook has to go on, so the words are chosen to be unmistakable.
+# A sweep counts as running while its file was written in the last half hour. Every helper step rewrites it,
+# and finishing or cancelling deletes it, so an abandoned sweep stops mattering after 30 minutes.
+RUN_ACTIVE_SECONDS = 30 * 60
+BROWSER_PREFIX = "mcp__claude-in-chrome__"
+BROWSER_WORDS = ("browser", "playwright", "puppeteer", "selenium", "chrome", "chromium", "webdriver")
+
+
+def is_browser_tool(tool):
+    if not isinstance(tool, str) or not tool.startswith("mcp__"):
+        return False
+    name = tool.lower()
+    return name.startswith(BROWSER_PREFIX) or any(word in name for word in BROWSER_WORDS)
+
+
+def browser_is_off_for_a_running_sweep(now=None):
+    """True while a workdecero sweep is in progress for a person who has not turned the browser pass on.
+
+    A sweep must never open the person's browser unless they asked for that.
+    The skills say so, and this makes it hold: while a sweep is running with
+    the browser pass off, browser tools are refused outright. Nothing is
+    refused when no sweep is running, so the person's own use of their
+    browser in other work is left alone.
+    """
+    now = now if now is not None else time.time()
+    folder = handoff_dir()
+    if not folder_is_private(folder):
+        return False
+    for name in RUN_FILES:
+        path = os.path.join(folder, name)
+        try:
+            info = os.lstat(path)
+            if not stat.S_ISREG(info.st_mode) or now - info.st_mtime > RUN_ACTIVE_SECONDS:
+                continue
+            with open(path, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+        except (OSError, ValueError):
+            continue
+        if isinstance(data, dict) and data.get("browser_pass") is False:
+            return True
+    return False
+
+
+def refuse(event):
+    """A reason, when this tool call must be refused. Only ever a browser tool during a sweep with the pass off."""
+    tool = event.get("tool_name")
+    if is_browser_tool(tool) and browser_is_off_for_a_running_sweep():
+        return ("workdecero: browser use is off in your profile. A sweep is running, so the browser is not opened. "
+                "Do not try another way to open one. Carry on with public web pages, and name what could not be read "
+                "under not covered. Browser use can be turned on with /workdecero:setup.")
+    return None
+
+
 def decide(event):
     """True when this exact tool call is one of ours."""
     tool = event.get("tool_name")
@@ -132,6 +197,14 @@ def main():
     try:
         event = json.load(sys.stdin)
     except ValueError:
+        return 0
+    reason = refuse(event) if isinstance(event, dict) else None
+    if reason:
+        print(json.dumps({"hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": reason,
+        }}))
         return 0
     if isinstance(event, dict) and decide(event):
         print(json.dumps({"hookSpecificOutput": {
