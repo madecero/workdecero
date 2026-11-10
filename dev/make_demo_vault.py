@@ -183,10 +183,10 @@ def build(target, folder="workdecero", today=None, backup_dir=None):
                                                "virtual": virtual, "where": where, "cost": cost,
                                                "group": link("group", group), "fit": fit, "first_seen": day(-8),
                                                "link": "https://events.example.com/" + note_id.lower()})
-    store.upsert("event", "E-1", "", {"going": True}, force=["going"])
-    store.upsert("event", "E-5", "", {"going": True, "attended": True,
+    store.upsert("event", "E-1", "", {"going": True, "status": "Registered"}, force=["going", "status"])
+    store.upsert("event", "E-5", "", {"going": True, "attended": True, "status": "Went",
                                       "people_met": [link("person", "Priya Raman")]},
-                 force=["going", "attended", "people_met"])
+                 force=["going", "attended", "people_met", "status"])
 
     store.upsert("digest", "D-1", "%s Job sweep" % day(-1),
                  {"date": day(-1), "track": "Jobs", "new": 3, "closed": 1,

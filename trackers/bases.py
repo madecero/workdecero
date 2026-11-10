@@ -266,12 +266,14 @@ def events_base(folder):
     views = [
         _view("Next 30 days",
               {"and": ["%s >= today()" % date, "%s <= today() + '30d'" % date]},
-              _columns(event, "name", "date", "formula.day_time", "formula.kind", "formula.place", "cost", "group",
+              # Status is here to be changed after an event. Evening-or-virtual made way for it: Where says
+              # when an event is online, and Day and time shows the hour.
+              _columns(event, "name", "status", "date", "formula.day_time", "formula.place", "cost", "group",
                        "going"),
               _sort(event, ("date", "ASC"))),
         _view("Going",
               {"and": ["%s == true" % _key("going"), "%s >= today()" % date]},
-              _columns(event, "name", "date", "formula.day_time", "formula.place", "prep"),
+              _columns(event, "name", "status", "date", "formula.day_time", "formula.place", "prep"),
               _sort(event, ("date", "ASC"))),
         _view("Met, follow up",
               {"and": ["%s == true" % _key("attended"), "%s >= today() - '14d'" % date, "%s <= today()" % date,
