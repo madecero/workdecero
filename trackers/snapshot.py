@@ -7,6 +7,7 @@ and is gone after the next sweep. The banner on every sheet says so.
 
     File     <vault>/<tracker folder>/workdecero snapshot.xlsx
     Sheets   Summary, then Jobs, Contracts, Channels, Groups, Events, People
+    Columns  about ten a sheet: what the main view shows, plus the next step
     Rows     in the order of the default views, filled by stage
     Links    the first cell of each row opens its note in Obsidian
 
@@ -38,7 +39,19 @@ BANNER = "Read-only snapshot from %s. Edit in Obsidian; this file is rebuilt eve
 # One soft fill per stage, in pipeline order. A status nobody recognises gets no fill.
 STAGE_FILLS = ("FFE8F1FB", "FFE6F4EA", "FFFFF4D6", "FFFDE9D9", "FFEFE6F7", "FFE2F0EE", "FFEDEDED")
 HEADER_FILL, BANNER_FILL = "FFD9D9D9", "FFFFF2CC"
-HIDDEN = ("type",)                      # bookkeeping nobody reads in a grid
+# About ten columns a sheet: what the main view shows, plus the next step where there is one. Ids, check
+# dates and sources are left out. The link in the first cell leads to everything else.
+COLUMNS = {
+    "job": ("status", "fit", "pay_min", "pay_max", "company", "work_mode", "approach", "near_reason", "closes",
+            "next_step", "next_step_date"),
+    "contract": ("status", "fit", "rate_min", "rate_max", "client", "via", "engagement", "closes", "next_step",
+                 "next_step_date"),
+    "channel": ("status", "why", "profile_url", "last_checked"),
+    "group": ("status", "fit", "focus", "cadence", "next_meeting", "next_time", "next_where", "members",
+              "cost_per_year"),
+    "event": ("status", "date", "time", "where", "cost", "group", "going", "follow_up_by"),
+    "person": ("company", "role", "relationship", "met", "follow_up_by", "last_contact"),
+}
 MAX_WIDTH, MIN_WIDTH = 60, 8
 _EPOCH = (1980, 1, 1, 0, 0, 0)          # a fixed time inside the zip, so the same notes give the same bytes
 
@@ -107,7 +120,7 @@ def note_link(store, row):
 def sheet_data(store, type_name, names):
     """(headers, rows) for one sheet. Each row is (cells, link for the first cell, stage number or None)."""
     note_type = model.BY_NAME[type_name]
-    fields = [field for field in note_type.fields if field.name not in HIDDEN]
+    fields = [note_type.field(name) for name in COLUMNS[type_name] if note_type.has_field(name)]
     headers = [note_type.title_display] + [field.display for field in fields]
     data = []
     for row in _sorted_rows(type_name, store.rows(type_name)):

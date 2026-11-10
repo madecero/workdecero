@@ -131,6 +131,17 @@ class Workbook(SnapshotCase):
             self.assertIn('<mergeCell ref="A1:', sheet)
         contracts = cells(book.read("xl/worksheets/sheet3.xml").decode("utf-8"))
         self.assertEqual([contracts[ref][0] for ref in ("A2", "B2", "C2")], ["Gig", "Status", "Win odds"])
+        # About ten columns a sheet, and no bookkeeping.
+        for index, most in ((2, 12), (3, 11), (4, 5), (5, 10), (6, 9), (7, 7)):
+            sheet = cells(book.read("xl/worksheets/sheet%d.xml" % index).decode("utf-8"))
+            headers = [sheet[ref][0] for ref in sorted(sheet) if ref[1:] == "2" and len(ref) == 2]
+            self.assertLessEqual(len(headers), most)
+            for hidden in ("ID", "Type", "Last checked by", "First seen", "Posting check", "Found on"):
+                self.assertNotIn(hidden, headers)
+        jobs = cells(book.read("xl/worksheets/sheet2.xml").decode("utf-8"))
+        heads = [jobs[ref][0] for ref in sorted(jobs) if ref[1:] == "2" and len(ref) == 2]
+        self.assertIn("Next step", heads)
+        self.assertIn("Next step date", heads)
 
     def test_rows_are_in_view_order_and_filled_by_stage(self):
         found = cells(self.book().read("xl/worksheets/sheet3.xml").decode("utf-8"))
