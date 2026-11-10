@@ -58,7 +58,7 @@ Say **build my local map** after setup. In about 3 minutes it finds where your s
 
 ## The job sweep
 
-Say **run the job sweep**, about once a week. It re-checks which of your open postings are still live, reads the job lists of the employers in your local map, searches a little further inside a small budget, scores what it finds against your profile, and writes the results into your tracker with a digest note that puts deadlines first. In Lite mode it takes about 10 minutes.
+Say **run the job sweep**, about once a week. In Lite mode it takes a few minutes. It re-checks which of your open postings are still live, reads the job lists of the employers in your local map, searches a little further inside a small budget, scores what it finds against your profile, and writes the results into your tracker with a digest note that puts deadlines first. In Lite mode it takes about 10 minutes.
 
 It never applies, messages, follows or saves anything, and it does not sign in anywhere. The part that reads web pages is never told your pay floor, your exclusions, your current employer or who you know. Those are applied on your computer after the reading is done.
 

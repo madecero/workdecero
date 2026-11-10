@@ -204,6 +204,15 @@ class Found(WarmCase):
         self.assertEqual(first({"hiring_manager": manager}),
                          "Marcus Oyelaran, the hiring manager, directly. No email was found, so use LinkedIn or the "
                          "application.")
+        guessed = dict(manager, inferred=True)                # worked out from a leadership page, not named on the posting
+        self.assertEqual(first({"hiring_manager": guessed}),
+                         "Marcus Oyelaran, likely the hiring manager (not named on the posting), directly. No email "
+                         "was found, so use LinkedIn or the application.")
+        self.assertEqual(first({"hiring_manager": guessed, "email_format": TWO}),
+                         "Marcus Oyelaran, likely the hiring manager (not named on the posting), directly by email "
+                         "(email confidence 75%). No one in your network works there.")
+        self.assertEqual(first({"hiring_manager": {"title": "VP of Product (likely)"}}),
+                         "No one found yet. Apply directly; the hiring manager is likely VP of Product.")
         self.assertEqual(first({"hiring_manager": {"title": "VP of Product"}}),
                          "No one found yet. Apply directly; the hiring manager is likely VP of Product.")
         self.assertEqual(first({}), "No one found yet. Apply directly.")

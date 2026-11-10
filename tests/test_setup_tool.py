@@ -563,7 +563,7 @@ class Write(SetupCase):
         self.assertTrue(os.path.isfile(os.path.join(self.vault, "workdecero", "Start here.md")))
         self.assertIn("workdecero is set up.", out)
         self.assertIn("  Tracker      Notes / workdecero / Start here   (8 files added)", out)
-        self.assertIn('Next:   say "run the job sweep". The first one takes about 10 minutes in Lite mode.', out)
+        self.assertIn('Next:   say "run the job sweep". The first one takes a few minutes in Lite mode.', out)
         self.assertIn("Open:   obsidian://open?path=", out)
         self.assertIn("Start%20here.md", out)
         self.assertIn('Say "build my local map"', out)

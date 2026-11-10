@@ -839,7 +839,7 @@ def write(draft, out=None):
     print("               employers and groups for %s." % (profile.get("location", {}).get("home_base") or "your area"),
           file=out)
     print("", file=out)
-    print("Next:   say \"%s\". The first one takes about 10 minutes in %s mode." % (first, mode), file=out)
+    print("Next:   say \"%s\". The first one takes a few minutes in %s mode." % (first, mode), file=out)
     if link:
         print("Open:   %s   (opens Start here in Obsidian)" % link, file=out)
     else:

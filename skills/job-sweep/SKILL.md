@@ -48,7 +48,7 @@ Run `TOOL start`. It takes a minute or two, because it checks every open posting
 * If it says there is no profile, tell the person to run `/workdecero:setup` and stop.
 * If it says **A SWEEP IS ALREADY IN PROGRESS** and you did not start it in this conversation, tell the person. Only if they say to discard it, run `TOOL restart`.
 
-Otherwise it prints what the engine already did, a short description of the person, your budget, the candidates to read, and the places to search. Tell the person in two lines what is happening and roughly how long it takes (about 10 minutes in Lite mode), then get on with it.
+Otherwise it prints what the engine already did, a short description of the person, your budget, the candidates to read, and the places to search. Tell the person in two lines what is happening and roughly how long it takes (a few minutes in Lite mode), then get on with it.
 
 ## Step 2: read, judge, search
 
@@ -115,7 +115,7 @@ For each role, find what you can of:
 
 | Key | What to put |
 | --- | --- |
-| `hiring_manager` | `{"name", "title", "source_url"}`. If you can tell the likely title but found no name, give `{"title": "..."}` alone. Never guess a name |
+| `hiring_manager` | `{"name", "title", "source_url"}`. Add `"inferred": true` unless the posting itself names this person as the manager: someone you worked out from a leadership or team page is inferred, and the note will say "likely". If you can tell the likely title but found no name, give `{"title": "..."}` alone. Never guess a name |
 | `skip_level` | The same, for that person's manager, if it is easy to see |
 | `recruiter` | `{"name", "title", "source_url", "scope"}`. `scope` is `posting` if they are named on this posting, `function` if they simply recruit for this kind of role |
 | `email_format` | `{"domain", "pattern", "evidence", "source_url"}` only if you saw real addresses at that company. `pattern` is one of `first.last`, `firstlast`, `first_last`, `flast`, `f.last`, `firstl`, `first`, `last.first`. `evidence` is `two-current` (two or more current addresses seen), `one-example`, `aggregator` (only seen on a contact-data site) or `guess`. Never test an address, and never sign up for an email-finder |

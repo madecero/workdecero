@@ -269,10 +269,12 @@ def build(job_row, research, people_rows, store, profile, taken_ids=()):
             title = (person.get("title") or "").strip()
             return "- **%s:** Likely %s (name not found)." % (label, title) if title else None
         link, address, percent, basis = plan_person(person, role_label)
-        line = "- **%s:** %s" % (label, link)
+        line = "- **%s:** %s%s" % (label, "Likely " if person.get("inferred") is True else "", link)
         if person.get("title"):
             line += ", %s" % person["title"].strip()
         line += _source(person) + "."
+        if person.get("inferred") is True:
+            line += " Not named on the posting. Worked out from the company's public pages."
         if address:
             line += " Email: %s (email confidence %d%%: %s)." % (address, percent, basis)
         else:
@@ -400,6 +402,9 @@ def build(job_row, research, people_rows, store, profile, taken_ids=()):
     # Who to contact first, in one sentence. It leads the block and is also a property.
     manager_email = email_for(manager, email_format) if _named(manager) else (None, None, None)
     recruiter_email = email_for(recruiter, email_format) if _named(recruiter) else (None, None, None)
+    # Never sound surer than the research was: a manager worked out from a leadership page is "likely".
+    manager_role = ("likely the hiring manager (not named on the posting)"
+                    if isinstance(manager, dict) and manager.get("inferred") is True else "the hiring manager")
     if caution:
         first = "No one for now. See the caution below"
     elif result.warm == "1st-hiring-team":
@@ -414,14 +419,14 @@ def build(job_row, research, people_rows, store, profile, taken_ids=()):
         else:
             first = "%s (2nd), through a shared connection. Works there" % row.title
     elif _named(manager) and manager_email[0]:
-        first = ("%s, the hiring manager, directly by email (email confidence %d%%). No one in your network "
-                 "works there" % (manager["name"].strip(), manager_email[1]))
+        first = ("%s, %s, directly by email (email confidence %d%%). No one in your network "
+                 "works there" % (manager["name"].strip(), manager_role, manager_email[1]))
     elif _named(recruiter) and recruiter_email[0] and (recruiter.get("scope") or "posting") == "posting":
         first = ("%s, the recruiter on this posting, directly by email (email confidence %d%%)"
                  % (recruiter["name"].strip(), recruiter_email[1]))
     elif _named(manager):
-        first = "%s, the hiring manager, directly. No email was found, so use LinkedIn or the application" \
-            % manager["name"].strip()
+        first = "%s, %s, directly. No email was found, so use LinkedIn or the application" \
+            % (manager["name"].strip(), manager_role)
     else:
         title = (manager or {}).get("title") if isinstance(manager, dict) else None
         first = "No one found yet. Apply directly" + ("; the hiring manager is likely %s" % re.sub(r"(?i)[\s,]*\(?\b(likely|probably)\)?\s*$", "", title.strip()) if title else "")
