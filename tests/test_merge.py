@@ -281,8 +281,9 @@ class Intake(IntakeCase):
                  url="https://gigs.example.com/4"),
         ]
         intake = merge.plan_intake("contract", gigs, self.store, profile, TODAY)
-        self.assertEqual([op["title"] for op, _ in intake.new], ["Brand identity for a cold brew startup"])
-        reasons = dict(intake.dropped)
+        self.assertEqual([op["title"] for op, _ in intake.new], ["Brand identity for a cold brew startup, Tidewater Coffee"])
+        reasons = dict((label.split(", ")[0], reason) for label, reason in intake.dropped)
+        self.assertIn("Packaging refresh, Vapor Cloud", [label for label, _ in intake.dropped])   # told apart by client
         self.assertIn("industry", reasons["Packaging refresh"])
         self.assertIn("keyword", reasons["Unpaid internship design"])
         self.assertIn("under your floor of 70", reasons["Logo sprint"])

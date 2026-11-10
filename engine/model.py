@@ -192,6 +192,8 @@ CONTRACT = NoteType(
         Field("rate_min", NUMBER, "Rate from ($/hr)"),
         Field("client", TEXT, "Client or platform"),
         Field("via", TEXT, "Via"),
+        Field("near_miss", CHECKBOX, "Near miss"),
+        Field("near_reason", TEXT, "Why a near miss"),
         Field("hours_per_week", NUMBER, "Hours per week"),
         Field("length_weeks", NUMBER, "Length (weeks)"),
         Field("remote", CHECKBOX, "Remote"),

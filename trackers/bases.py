@@ -227,7 +227,8 @@ def contracts_base(folder):
         names.setdefault("note." + field.key, {"displayName": field.display})
     views = [
         _view("New gigs",
-              {"and": [_is(contract), _status_is("New"), "%s >= today() - '7d'" % _key("first_seen")]},
+              {"and": [_is(contract), _status_is("New"), "%s >= today() - '7d'" % _key("first_seen"),
+                       "%s != true" % _key("near_miss")]},
               _columns(contract, "name", "rate_max", "status", "client", "hours_per_week", "length_weeks", "remote",
                        "link"),
               _sort(contract, ("fit", "DESC"))),

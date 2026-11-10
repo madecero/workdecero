@@ -84,15 +84,19 @@ _CONTRACT_FRESHNESS = ((3, 10), (7, 8), (14, 5), (21, 2))
 _UNDATED_POINTS = 3
 
 ENGAGEMENT_WORDS = {
-    "independent-1099": ("1099", "independent"),
-    "corp-to-corp": ("c2c", "corp to corp", "corp-to-corp"),
+    "independent-1099": ("1099", "independent", "independent contractor", "self employed"),
+    "corp-to-corp": ("c2c", "corp to corp", "corp-to-corp", "b2b contract"),
     "w2-contract": ("w2", "w-2"),
-    "fixed-price": ("fixed", "sow", "project"),
-    "retainer": ("retainer",),
-    "fractional": ("fractional",),
-    "expert-call": ("expert call", "expert network", "consultation"),
-    "public-bid": ("rfp", "bid", "solicitation"),
+    "fixed-price": ("fixed", "sow", "project", "project based", "statement of work", "milestone", "deliverable"),
+    "retainer": ("retainer", "monthly", "ongoing", "advisory", "advisor", "advisory board"),
+    "fractional": ("fractional", "part time", "part-time", "interim", "advisory", "advisor"),
+    "expert-call": ("expert call", "expert network", "consultation", "hourly consult", "paid call"),
+    "public-bid": ("rfp", "rfq", "bid", "solicitation", "tender"),
 }
+# Wording that says "this is contract work" without saying which kind. It fits any kind the person takes
+# except a W2 contract, and the note asks them to confirm the terms.
+GENERIC_CONTRACT_WORDS = ("contract", "contractor", "freelance", "freelancer", "consulting", "consultant",
+                          "consulting engagement", "gig", "temporary", "contract to hire")
 
 
 class ScoreResult(object):
@@ -416,6 +420,8 @@ def engagement_type(item):
         return [given]
     found = [name for name, words in ENGAGEMENT_WORDS.items()
              if any(" %s " % _text(word) in wording for word in words)]
+    if not found and any(" %s " % _text(word) in wording for word in GENERIC_CONTRACT_WORDS):
+        return ["generic"]
     return found or None
 
 
@@ -430,7 +436,11 @@ def score_contract(item, profile, today=None):
 
     accepted = contracts.get("engagement_types") or []
     kinds = engagement_type(item)
-    if kinds is None:
+    if kinds == ["generic"] and [kind for kind in accepted if kind != "w2-contract"]:
+        # "Contract" or "consulting" with no more said: it fits what the person takes. They confirm the kind.
+        result.parts["engagement"] = int(round(CONTRACT_WEIGHTS["engagement"] * 0.7))
+        result.caveats.append("The listing says contract work without saying which kind. Confirm the terms")
+    elif kinds is None or kinds == ["generic"]:
         result.parts["engagement"] = CONTRACT_WEIGHTS["engagement"] // 2
         result.caveats.append("How the work is engaged is not stated. Confirm the terms before you spend time on it")
     else:
@@ -479,6 +489,10 @@ def score_contract(item, profile, today=None):
         result.caveats.append("Runs %s weeks, shorter than the %s you asked for" % (weeks, shortest))
 
     result.parts["fit"] = _fit_points(item, CONTRACT_WEIGHTS["fit"], result)
+    assessed = _number(item.get("fit_assessment"))
+    if result.near is None and assessed is not None and assessed < NEAR_MISS_BELOW:
+        result.near = "the background fit is %d of %d, under the %d that counts as a fit" % (
+            round(assessed), CONTRACT_WEIGHTS["fit"], NEAR_MISS_BELOW)
     located = dict(item)
     if item.get("remote") is True and not item.get("work_mode"):
         located["work_mode"] = "remote"

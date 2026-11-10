@@ -34,7 +34,8 @@ WORKDAY_PAGE = 20
 # Words that mean the same thing in a title: a "Product Manager" does product management.
 _SAME_WORD = {"manager": "management", "managers": "management", "managing": "management",
               "designer": "design", "engineer": "engineering", "engineers": "engineering", "nursing": "nurse",
-              "analyst": "analytics", "analysis": "analytics", "marketer": "marketing"}
+              "analyst": "analytics", "analysis": "analytics", "marketer": "marketing", "advisory": "advisor",
+              "advisors": "advisor", "consulting": "consultant", "coaching": "coach"}
 # Senior specialist titles. They are often paid like the level above, so a person who asked for director
 # and up still wants to see one in their own field. The pay floor and the fit judgement sort them out.
 _SENIOR_SPECIALIST = ("principal", "distinguished", "group")
@@ -242,7 +243,7 @@ BOARD_LEADS = 12
 MIN_LINKS_ON_A_LIST = 5
 
 
-def board_leads(boards, profile, fetcher, limit=BOARD_LEADS):
+def board_leads(boards, profile, fetcher, limit=BOARD_LEADS, matches=None):
     """Postings a job board's own listing page shows, whose titles match the profile.
 
     A board page is a list of links. This reads the page as text and keeps the
@@ -251,6 +252,7 @@ def board_leads(boards, profile, fetcher, limit=BOARD_LEADS):
     Returns (leads, names of boards read, names of boards that did not answer).
     """
     leads, read, failed, seen = [], [], [], set()
+    matches = matches or (lambda text: title_matches(text, profile))
     for entry in boards:
         page = entry.get("url") or ""
         response = fetcher.get(page, accept="text/html")
@@ -265,7 +267,7 @@ def board_leads(boards, profile, fetcher, limit=BOARD_LEADS):
         base = response.final_url or page
         for href, label in anchors:
             title = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", label))).strip()
-            if not title or len(title) > 140 or not title_matches(title, profile):
+            if not title or len(title) > 140 or not matches(title):
                 continue
             link = urllib.parse.urljoin(base, html.unescape(href.strip()))
             key = merge.link_key(link)

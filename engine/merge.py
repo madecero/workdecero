@@ -204,7 +204,11 @@ def row_as_item(kind, row):
         return {"title": values.get("role") or row.title, "company": link_label(values.get("company")),
                 "req_id": values.get("req_id"), "url": values.get("apply_url")}
     if kind == CONTRACT:
-        return {"title": row.title, "client": values.get("client"), "job_id": None, "url": values.get("link")}
+        title = row.title
+        for tail in (values.get("client"), "via %s" % values.get("via") if values.get("via") else None):
+            if tail and title.endswith(", %s" % tail):
+                title = title[:-len(", %s" % tail)]          # the note's title carries the client or platform
+        return {"title": title, "client": values.get("client"), "job_id": None, "url": values.get("link")}
     if kind == EVENT:
         return {"title": row.title, "date": values.get("date"), "url": values.get("link")}
     return {"name": row.title, "url": values.get("link")}
@@ -234,7 +238,14 @@ def next_id(note_type, rows, taken=()):
 def _note_title(kind, item):
     if kind == JOB:
         return "%s, %s" % (item.get("title") or "Untitled role", item.get("company") or "Unknown employer")
-    return item.get("title") or "Untitled"
+    # A gig's title alone is often generic. The client, or the platform it is on, tells two apart.
+    title = item.get("title") or "Untitled"
+    client, via = (item.get("client") or "").strip(), (item.get("via") or "").strip()
+    if client and normalize_company(client) not in _UNDISCLOSED and normalize_company(client) not in normalize_company(title):
+        return "%s, %s" % (title, client)
+    if via and normalize_company(via) not in normalize_company(title):
+        return "%s, via %s" % (title, via)
+    return title
 
 
 def _section(kind, item, result, names):
@@ -283,6 +294,7 @@ def _values(kind, item, result, store, today, names):
             "hours_per_week": item.get("hours_per_week"), "length_weeks": item.get("length_weeks"),
             "remote": item.get("remote"), "engagement": item.get("engagement"), "link": item.get("url"),
             "posted": item.get("posted"), "closes": item.get("closes"),
+            "near_miss": bool(result.near), "near_reason": (result.near or None),
         }
     values.update({"last_seen": day, "updated": day})
     values = dict((key, value) for key, value in values.items() if value not in (None, ""))

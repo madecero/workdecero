@@ -499,6 +499,16 @@ def page_posting(url, fetcher, limit=1800):
     return {}
 
 
+def page_text(url, fetcher, limit=1800):
+    """The words of a page, from its first heading on. For a listing with no structured data. Empty when it will not load."""
+    response = fetcher.get(url, accept="text/html")
+    if response.status != 200 or not response.body:
+        return ""
+    body = re.sub(r"(?is)<(script|style|nav|header|footer|noscript)[^>]*>.*?</\1>", " ", response.body)
+    start = re.search(r"(?i)<h1\b", body)
+    return _plain(body[start.start():] if start else body, limit)
+
+
 def _parse_date(text):
     match = re.match(r"^(\d{4})-(\d{2})-(\d{2})", text or "")
     if not match:
