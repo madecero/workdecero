@@ -72,6 +72,29 @@ class Approves(PrivateFolder):
         self.assertEqual((script, sorted(commands)), ("setup_tool.py", sorted(setup_tool.COMMANDS)))
         self.assertEqual(handoff, setup_tool.ANSWERS_NAME)
 
+    def test_every_helper_is_listed_exactly_and_shares_no_file(self):
+        import importlib
+        for skill, (script, commands, handoff) in allow_helper.HELPERS.items():
+            scripts = os.path.join(ROOT, "skills", skill, "scripts")
+            if scripts not in sys.path:
+                sys.path.insert(0, scripts)
+            module = importlib.import_module(script[:-3])
+            self.assertEqual(sorted(commands), sorted(module.COMMANDS), skill)
+            with open(os.path.join(ROOT, "skills", skill, "SKILL.md"), encoding="utf-8") as handle:
+                front = handle.read().split("---")[1]
+            listed = sorted(rule.rsplit(" ", 1)[1] for rule in re.findall(r"Bash\(([^)]*)\)", front))
+            self.assertEqual(listed, sorted(commands), skill)
+            self.assertIn("Write(~/.cache/workdecero/%s)" % handoff, front)
+            for subcommand in commands:
+                line = 'python3 "%s" %s' % (os.path.join(scripts, script), subcommand)
+                self.assertTrue(allow_helper.decide({"tool_name": "Bash", "tool_input": {"command": line}}), line)
+                self.assertFalse(allow_helper.decide({"tool_name": "Bash", "tool_input": {"command": line + " x"}}))
+        names = [name for _, _, name in allow_helper.HELPERS.values()]
+        self.assertEqual(len(names), len(set(names)))
+        skills = os.path.join(ROOT, "skills")
+        with_helpers = [name for name in os.listdir(skills) if os.path.isfile(os.path.join(skills, name, "SKILL.md"))]
+        self.assertEqual(sorted(with_helpers), sorted(allow_helper.HELPERS))
+
     def test_the_skill_front_matter_lists_the_same_commands(self):
         with open(os.path.join(ROOT, "skills", "setup", "SKILL.md"), encoding="utf-8") as handle:
             front = handle.read().split("---")[1]

@@ -21,13 +21,19 @@ Commands (none takes an argument):
     plan            what to research: the area, the field, the search budget, what is already
                     in the map, and a checklist in priority order (reads only)
     plan-refresh    the same for a refresh, with what is due for a re-check
+    open            start a single change made by hand (an add or a remove) without a plan
     add             check the entries in the hand-off file and save the good ones
     reverify        re-check entries not verified for four weeks and drop dead ones
     remove          take the named source out and never add it back
-    finish          record the run and print the summary for the person
+    finish          record the run, print the summary for the person and end the run
+    close           end a run started with `open`
     show            the map in plain words (reads only)
 
 The hand-off file is deleted after each command that reads it.
+
+`plan`, `plan-refresh` and `open` start a run. The commands that change the map
+(add, reverify, remove, finish) only work while a run is open, and a run ends
+with `finish` or `close`, or by itself after two hours.
 
 Exit codes: 0 fine, 1 nothing usable or a problem to fix, 2 the command could not run.
 Standard library only, Python 3.9+.
@@ -41,6 +47,7 @@ import sys
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 sys.path.insert(0, os.path.join(_ROOT, "engine"))
 
+import handoff  # noqa: E402
 import merge  # noqa: E402
 import scoring  # noqa: E402
 import sources  # noqa: E402
@@ -60,40 +67,23 @@ KIND_ONE = {
     "user-group": "user group", "association": "association", "conference": "conference",
 }
 TRACK_WORDS = {"jobs": "Jobs", "contracts": "Contract work", "networking": "Networking"}
-DRAFT_DIR_ENV = "WORKDECERO_DRAFT_DIR"       # for tests: where the hand-off file lives
+DRAFT_DIR_ENV = handoff.DRAFT_DIR_ENV        # for tests: where the hand-off file lives
+RUN = "sources"
 HANDOFF_NAME = "sources-entries.json"
-COMMANDS = ("plan", "plan-refresh", "add", "reverify", "remove", "finish", "show")
+COMMANDS = ("plan", "plan-refresh", "open", "add", "reverify", "remove", "finish", "close", "show")
+CHANGES = ("add", "reverify", "remove", "finish")     # only work while a run is open
 
 
 def handoff_path():
-    folder = os.path.expanduser(os.environ.get(DRAFT_DIR_ENV) or os.path.join("~", ".cache", "workdecero"))
-    return os.path.join(folder, HANDOFF_NAME)
+    return os.path.join(handoff.folder(), HANDOFF_NAME)
 
 
 def read_handoff():
     """What the assistant wrote for this command. The file is removed once read."""
-    path = handoff_path()
-    if not os.path.isfile(path):
-        raise ValueError("Nothing to read. Write what you found to %s first, then run this command again."
-                         % _tilde(path))
-    with open(path, "r", encoding="utf-8") as handle:
-        text = handle.read()
-    os.remove(path)
-    folder = os.path.dirname(path)
-    if os.path.isdir(folder) and not os.listdir(folder):
-        os.rmdir(folder)
-    try:
-        data = json.loads(text)
-    except ValueError as exc:
-        raise ValueError("The hand-off file was not valid JSON (%s). Write it again as one JSON object." % exc)
-    if not isinstance(data, dict):
-        raise ValueError("The hand-off file must hold one JSON object.")
-    return data
+    return handoff.read(HANDOFF_NAME)
 
 
-def _tilde(path):
-    home = os.path.expanduser("~")
-    return "~" + path[len(home):] if path.startswith(home + os.sep) else path
+_tilde = handoff.tilde
 
 
 def _profile():
@@ -379,10 +369,22 @@ def main(argv=None):
             print("This helper takes no arguments. Put what you found in the hand-off file.", file=sys.stderr)
         return 2
     try:
-        if command == "plan":
-            return plan()
-        if command == "plan-refresh":
-            return plan(refresh=True)
+        if command in CHANGES:
+            handoff.require_run(RUN, "plan` (or `open` for a single change")
+        if command == "plan" or command == "plan-refresh":
+            code = plan(refresh=command == "plan-refresh")
+            if code == 0:
+                handoff.open_run(RUN)
+            return code
+        if command == "open":
+            _profile()
+            handoff.open_run(RUN)
+            print("Ready. Write the hand-off file, run `add` or `remove`, then run `close`.")
+            return 0
+        if command == "close":
+            handoff.close_run(RUN)
+            print("Closed.")
+            return 0
         if command == "add":
             return add(read_handoff())
         if command == "reverify":
@@ -397,7 +399,9 @@ def main(argv=None):
             searches = data.get("searches")
             if isinstance(searches, bool) or not isinstance(searches, int) or searches < 0:
                 raise ValueError('Write {"searches": <number>, "skipped": [...]} to the hand-off file first.')
-            return finish(searches, data.get("skipped") or [])
+            code = finish(searches, data.get("skipped") or [])
+            handoff.close_run(RUN)
+            return code
         if command == "show":
             return show()
     except (ValueError, sources.SourceError) as exc:

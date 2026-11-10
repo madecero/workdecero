@@ -41,6 +41,9 @@ HELPERS = {
               ("status", "takeover", "fields", "save", "read-resume", "check-vault", "preview", "preview-details",
                "preview-file", "write", "cancel", "import-connections"),
               "setup-answers.json"),
+    "sources": ("sources_tool.py",
+                ("plan", "plan-refresh", "open", "add", "reverify", "remove", "finish", "close", "show"),
+                "sources-entries.json"),
 }
 HANDOFF_DIR = os.path.join("~", ".cache", "workdecero")
 

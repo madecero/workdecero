@@ -16,6 +16,7 @@ Shared logic for the sweeps. Standard library Python only (3.9 or newer), so it 
 | `scoring.py` | Fit for jobs and Win odds for contracts, 0 to 100, from the profile. Applies exclusions. |
 
 | `sources.py` | The local source map: checks each proposed source with a live call, removes duplicates, re-checks old entries, and keeps `sources.yaml`. |
+| `handoff.py` | The private temporary folder the helpers share with the assistant, and whether a skill has a run open. Commands that change saved data only work during a run. |
 | `warmpath.py` | Writes the Warm path part of a job note, rates email confidence from published evidence, links People notes, and imports LinkedIn's connections export. |
 
 ## Liveness rules

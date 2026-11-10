@@ -356,14 +356,23 @@ class Tool(MapCase):
             self.assertEqual(sources_tool.main(["remove", "--name", "X"]), 2)
             self.assertEqual(sources_tool.main(["add", '{"jobs": []}']), 2)
         self.assertIn("takes no arguments", err.getvalue())
+        self.hand_off({"remove": "Anything"})
+        code, _, err = self.command("remove")                    # no run open: nothing changes
+        self.assertEqual(code, 2)
+        self.assertIn("Nothing is in progress, so nothing was changed.", err)
+        self.assertEqual(sources.load().get("removed") or [], [])
+        os.remove(sources_tool.handoff_path())
+        self.assertEqual(self.command("open")[0], 0)
+        folder = os.path.dirname(sources_tool.handoff_path())
+        self.assertEqual(os.stat(folder).st_mode & 0o777, 0o700)  # private before the assistant writes into it
         code, _, err = self.command("add")
         self.assertEqual(code, 2)
-        self.assertIn("Write what you found to", err)
+        self.assertIn("Write the hand-off file", err)
         self.hand_off({"remove": "St. David's \"Old\" Board; $x `y`"})
         code, out, _ = self.command("remove")
         self.assertEqual(code, 0)
         self.assertEqual(sources.load()["removed"], ["St. David's \"Old\" Board; $x `y`"])   # exact, any characters
-        self.assertFalse(os.path.exists(os.path.dirname(sources_tool.handoff_path())))        # read once, then gone
+        self.assertFalse(os.path.exists(sources_tool.handoff_path()))                         # read once, then gone
         self.hand_off({"searches": 3, "skipped": ["field boards"]})
         code, out, _ = self.command("finish")
         self.assertEqual(code, 0)
@@ -436,8 +445,10 @@ class Tool(MapCase):
         self.assertIn("Employers they asked to watch (include these): Front Range Robotics.", plan)
         self.assertNotIn("Granite Peak", plan)
         self.assertNotIn("Summit Ledger", plan)
+        self.command("open")
         self.hand_off({"searches": 1, "skipped": []})
-        self.command("finish")
+        self.assertEqual(self.command("finish")[0], 0)
+        self.assertEqual(self.command("reverify")[0], 2)          # finish ended the run
         with open(sources.path(), encoding="utf-8") as handle:
             self.assertNotIn("Granite Peak", handle.read())
 
@@ -530,7 +541,7 @@ class Tool(MapCase):
         self.assertEqual(sorted(rule[len(prefix):] for rule in rules), sorted(sources_tool.COMMANDS))
         self.assertNotIn("*", front)                                   # no wildcard anywhere in the permissions
         self.assertEqual(re.findall(r"(?:Write|Edit)\(([^)]*)\)", front),
-                         ["~/.cache/workdecero/sources-entries.json"] * 2)
+                         ["~/.cache/workdecero/sources-entries.json"])
         self.assertIn("WebSearch, WebFetch", front)
         lines = [line.strip() for line in text.splitlines() if line.strip().startswith("python3 ")]
         self.assertEqual(sorted(line[len(prefix):] for line in lines), sorted(sources_tool.COMMANDS))

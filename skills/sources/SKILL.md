@@ -1,7 +1,7 @@
 ---
 name: sources
 description: Build or refresh the person's local source map for workdecero, the list of employers, job boards, marketplaces, agencies, groups and associations their sweeps look at. Use when the user says "build my local map", "find local job boards and employers", "refresh my sources", asks what sources the sweeps use, or wants a source added or removed.
-allowed-tools: Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" plan), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" plan-refresh), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" add), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" reverify), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" remove), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" finish), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" show), Write(~/.cache/workdecero/sources-entries.json), Edit(~/.cache/workdecero/sources-entries.json), WebSearch, WebFetch
+allowed-tools: Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" plan), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" plan-refresh), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" open), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" add), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" reverify), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" remove), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" finish), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" close), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" show), Write(~/.cache/workdecero/sources-entries.json), WebSearch, WebFetch
 ---
 
 # workdecero local source map
@@ -26,14 +26,18 @@ Run the helper with Bash, always as exactly one of these lines and nothing else:
 ```
 python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" plan
 python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" plan-refresh
+python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" open
 python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" add
 python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" reverify
 python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" remove
 python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" finish
+python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" close
 python3 "${CLAUDE_SKILL_DIR}/scripts/sources_tool.py" show
 ```
 
-Below, `TOOL plan` means the first line, `TOOL add` the third, and so on.
+Below, `TOOL plan` means the first line, `TOOL add` the fourth, and so on.
+
+`TOOL plan`, `TOOL plan-refresh` and `TOOL open` start a run. The commands that change the map only work while a run is open, so always begin with one of those three. `TOOL finish` and `TOOL close` end the run.
 
 The hand-off file is always this one file, written whole with the **Write tool**:
 
@@ -45,10 +49,12 @@ The hand-off file is always this one file, written whole with the **Write tool**
 | --- | --- | --- |
 | `TOOL plan` | nothing | The area, the field, the search budget, what is already in the map and a checklist. Reads only |
 | `TOOL plan-refresh` | nothing | The same for a refresh, with what is due for a re-check |
+| `TOOL open` | nothing | Starts a single change made by hand, without a plan |
 | `TOOL add` | `{"jobs": [...], "contracts": [...], "networking": [...]}` | Checks each entry live and saves the good ones. At most 10 entries per call |
 | `TOOL reverify` | nothing | Re-checks entries not verified for four weeks and drops dead ones. Uses no searches |
 | `TOOL remove` | `{"remove": "Name of the source"}` | Takes that source out and never adds it back |
 | `TOOL finish` | `{"searches": 9, "skipped": ["what you did not get to"]}` | Records the run and prints the summary to show the person |
+| `TOOL close` | nothing | Ends a run started with `TOOL open` |
 | `TOOL show` | nothing | The map in plain words. Reads only |
 
 The helper deletes the hand-off file each time it reads it, so write it fresh before each `add`, `remove` or `finish`.
@@ -111,12 +117,12 @@ Sweeps call this every few weeks, and the person can ask for it.
 
 ## Adding and removing by hand
 
-* "Add X to my sources": find its link (one search at most), then `TOOL add` with `"added_by": "user"` in the entry. An entry the person added is never dropped by a refresh.
-* "Remove X": write `{"remove": "X"}` to the hand-off file, then `TOOL remove`.
+* "Add X to my sources": find its link (one search at most), run `TOOL open`, write the entry with `"added_by": "user"` to the hand-off file, run `TOOL add`, then `TOOL close`. An entry the person added is never dropped by a refresh.
+* "Remove X": run `TOOL open`, write `{"remove": "X"}` to the hand-off file, run `TOOL remove`, then `TOOL close`.
 * "Show my sources" or "what do my sweeps look at": `TOOL show`.
 
 ## If something goes wrong
 
-* The helper says a command could not run: read its message. The usual causes are a missing or malformed hand-off file, or an argument added to the command. Write the file again and run the same fixed line.
+* The helper says a command could not run: read its message. The usual causes are a missing or malformed hand-off file, an argument added to the command, or no run open (start with `TOOL plan`, or `TOOL open` for a single change). Write the file again and run the same fixed line.
 * Many entries are dropped as gone: you are probably building links from memory. Read the page and copy the link you see.
 * Web search is not available in this session: tell the person plainly, and offer to add any sources they name by hand.
