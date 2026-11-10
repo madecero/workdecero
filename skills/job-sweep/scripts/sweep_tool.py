@@ -150,6 +150,11 @@ def finish(out=None, today=None):
     out = out or sys.stdout
     profile, store = _context()
     state = _state()
+    refusal = sweep.refusal(state, profile)
+    if refusal:
+        sweep.save_state(work_dir(), state)      # it refuses once: the next finish goes ahead
+        print(refusal, file=out)
+        return 1
     store.refresh_rollups()
     problems = sweep.verify(state, store)
     title, featured, more = sweep.write_digest(state, profile, store, problems, today)

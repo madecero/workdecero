@@ -367,6 +367,41 @@
         "title": "Director of Product Management, Compliance",
         "content": "&lt;p&gt;Requires an active CPA licence.&lt;/p&gt;"
       }
+    },
+    {
+      "url": "https://boards.example.org/product",
+      "status": 200,
+      "body": "<html><body><nav><a href=\"/\">Home</a><a href=\"/companies\">Companies</a><a href=\"/salaries\">Salaries</a></nav><div class=\"card\"><a href=\"/job/principal-product-manager-ai/101\">Principal Product Manager, AI</a><span>Juniper Commerce</span></div><div class=\"card\"><a href=\"/job/director-product-ml/102\">Director of Product Management &ndash; AI/ML</a></div><div class=\"card\"><a href=\"/job/vp-product/103\"><h2>VP of Product</h2></a></div><div class=\"card\"><a href=\"/job/head-of-product/104\">Head of Product</a></div><div class=\"card\"><a href=\"/job/senior-product-designer/105\">Senior Product Designer</a></div><div class=\"card\"><a href=\"/job/vp-product-old/106\">VP of Product, Payments</a></div><a href=\"/job/principal-product-manager-ai/101#apply\">Apply</a></body></html>"
+    },
+    {
+      "url": "https://boards.example.org/job/principal-product-manager-ai/101",
+      "status": 200,
+      "body": "<html><head><script type=\"application/ld&#x2B;json\">{\"@context\": \"https://schema.org\", \"@graph\": [{\"@context\": \"https://schema.org\", \"@type\": \"JobPosting\", \"title\": \"Principal Product Manager, AI\", \"description\": \"<p>Own the AI roadmap for a creator commerce platform.</p><ul><li>Lead three squads</li></ul>\", \"datePosted\": \"2026-11-04T08:00:00Z\", \"hiringOrganization\": {\"@type\": \"Organization\", \"name\": \"Juniper Commerce\"}, \"jobLocation\": [{\"@type\": \"Place\", \"address\": {\"@type\": \"PostalAddress\", \"addressLocality\": \"Denver\", \"addressRegion\": \"CO\"}}], \"baseSalary\": {\"@type\": \"MonetaryAmount\", \"currency\": \"USD\", \"value\": {\"@type\": \"QuantitativeValue\", \"minValue\": 190000, \"maxValue\": 235000, \"unitText\": \"YEAR\"}}}]}</script></head><body><h1>Principal Product Manager, AI</h1></body></html>"
+    },
+    {
+      "url": "https://boards.example.org/job/director-product-ml/102",
+      "status": 200,
+      "body": "<html><head><script type=\"application/ld+json\">{\"@context\": \"https://schema.org\", \"@graph\": [{\"@context\": \"https://schema.org\", \"@type\": \"JobPosting\", \"title\": \"Director of Product Management, AI/ML\", \"description\": \"<p>Direct AI and ML product for a cloud platform.</p>\", \"datePosted\": \"2026-11-06T08:00:00Z\", \"hiringOrganization\": {\"@type\": \"Organization\", \"name\": \"Blue Mesa Cloud\"}, \"jobLocation\": [{\"@type\": \"Place\", \"address\": {\"@type\": \"PostalAddress\", \"addressLocality\": \"Denver\", \"addressRegion\": \"CO\"}}]}]}</script></head><body><h1>Director of Product Management, AI/ML</h1></body></html>"
+    },
+    {
+      "url": "https://boards.example.org/job/vp-product/103",
+      "status": 200,
+      "body": "<html><head><script type=\"application/ld+json\">{\"@context\": \"https://schema.org\", \"@graph\": [{\"@context\": \"https://schema.org\", \"@type\": \"JobPosting\", \"title\": \"VP of Product\", \"description\": \"<p>Lead the product team.</p>\", \"datePosted\": \"2026-11-05T08:00:00Z\", \"hiringOrganization\": {\"@type\": \"Organization\", \"name\": \"Lakeshore Fintech\"}, \"jobLocation\": [{\"@type\": \"Place\", \"address\": {\"@type\": \"PostalAddress\", \"addressLocality\": \"Chicago\", \"addressRegion\": \"IL\"}}], \"jobLocationType\": \"TELECOMMUTE\"}]}</script></head><body><h1>VP of Product</h1></body></html>"
+    },
+    {
+      "url": "https://boards.example.org/job/head-of-product/104",
+      "status": 200,
+      "body": "<html><body><h1>Head of Product</h1><p>Apply on our site.</p></body></html>"
+    },
+    {
+      "url": "https://boards.example.org/job/vp-product-old/106",
+      "status": 200,
+      "body": "<html><head><script type=\"application/ld+json\">{\"@context\": \"https://schema.org\", \"@graph\": [{\"@context\": \"https://schema.org\", \"@type\": \"JobPosting\", \"title\": \"VP of Product, Payments\", \"description\": \"<p>Lead the product team.</p>\", \"datePosted\": \"2026-09-01T08:00:00Z\", \"hiringOrganization\": {\"@type\": \"Organization\", \"name\": \"Old Posting Co\"}, \"jobLocation\": [{\"@type\": \"Place\", \"address\": {\"@type\": \"PostalAddress\", \"addressLocality\": \"Denver\", \"addressRegion\": \"CO\"}}]}]}</script></head><body><h1>VP of Product, Payments</h1></body></html>"
+    },
+    {
+      "url": "https://unreadable.example.org/jobs",
+      "status": 200,
+      "body": "<html><body><div id=\"app\"></div><script src=\"/app.js\"></script></body></html>"
     }
   ]
 }

@@ -17,10 +17,12 @@ Standard library only, Python 3.9+.
 """
 
 import datetime
+import html
 import json
 import re
 import urllib.parse
 
+import liveness
 import merge
 import scoring
 import sources
@@ -233,6 +235,77 @@ def _workable(entry, profile, fetcher, today, terms):
 
 _READERS = {"workday": _workday, "greenhouse": _greenhouse, "lever": _lever, "ashby": _ashby,
             "smartrecruiters": _smartrecruiters, "workable": _workable}
+
+
+_ANCHOR = re.compile(r"""<a\b[^>]*?href\s*=\s*["']([^"'#]+)["'][^>]*>(.*?)</a>""", re.IGNORECASE | re.DOTALL)
+BOARD_LEADS = 12
+MIN_LINKS_ON_A_LIST = 5
+
+
+def board_leads(boards, profile, fetcher, limit=BOARD_LEADS):
+    """Postings a job board's own listing page shows, whose titles match the profile.
+
+    A board page is a list of links. This reads the page as text and keeps the
+    links whose words are a matching title. It knows nothing more about a
+    posting than its title and link, so research opens each one and reads it.
+    Returns (leads, names of boards read, names of boards that did not answer).
+    """
+    leads, read, failed, seen = [], [], [], set()
+    for entry in boards:
+        page = entry.get("url") or ""
+        response = fetcher.get(page, accept="text/html")
+        if response.status != 200 or not response.body:
+            failed.append(entry.get("name"))
+            continue
+        anchors = _ANCHOR.findall(response.body)
+        if len(anchors) < MIN_LINKS_ON_A_LIST:
+            failed.append(entry.get("name"))        # built in the browser, or not a list: nothing to read here
+            continue
+        read.append(entry.get("name"))
+        base = response.final_url or page
+        for href, label in anchors:
+            title = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", label))).strip()
+            if not title or len(title) > 140 or not title_matches(title, profile):
+                continue
+            link = urllib.parse.urljoin(base, html.unescape(href.strip()))
+            key = merge.link_key(link)
+            if not link.lower().startswith(("http://", "https://")) or not key or key in seen or \
+                    key == merge.link_key(base):
+                continue
+            seen.add(key)
+            leads.append({"title": title, "url": link, "board": entry.get("name")})
+            if len(leads) >= limit:
+                return leads, read, failed
+    return leads, read, failed
+
+
+def read_leads(leads, fetcher):
+    """Turn board leads into full finds by reading each posting's page.
+
+    A posting page that publishes structured job data gives the employer, the
+    place, the date and the words of the posting, so research can judge it
+    without opening anything. Returns (finds, leads that could not be read
+    that way and are left for research to open).
+    """
+    finds, left = [], []
+    for lead in leads:
+        details = liveness.page_posting(lead["url"], fetcher)
+        if not details.get("company"):
+            left.append(lead)
+            continue
+        find = {"title": details.get("title") or lead["title"], "company": details["company"], "url": lead["url"],
+                "source": lead["board"], "link_verified": True}
+        for key in ("location", "work_mode", "posted", "closes", "pay_min", "pay_max"):
+            if details.get(key) not in (None, ""):
+                find[key] = details[key]
+        if "work_mode" not in find and find.get("location"):
+            mode = _mode(find["location"])
+            if mode:
+                find["work_mode"] = mode
+        if details.get("text"):
+            find["_text"] = details["text"]
+        finds.append(find)
+    return finds, left
 
 
 class Harvest(object):

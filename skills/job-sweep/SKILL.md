@@ -83,6 +83,8 @@ Judge each candidate against the description of the person and record:
 
 If you have neither posting text nor a page that loads, give your best `fit_assessment` from the title alone (no higher than 20) and say so in `why`. For a posting you found yourself, also set `link_verified` to `false`.
 
+**Read what the boards show.** If the helper printed **POSTINGS SEEN ON BOARDS**, the engine has already read the boards' listing pages and picked out the titles that match. It knows only the title and the link. Open **every** one (reading a link you were given costs no search), and for each real, current posting record it under `finds` with its `company` and everything else you would record for a find. If one turns out not to be a fit worth a note (wrong field, expired), put its id, such as `b4`, in a list called `leads_not_fits`. Every lead ends up in one of the two.
+
 **Then search for more**, with the web searches you have left. Work through PLACES TO SEARCH. Good searches name a target title and the area, or a target title and "remote". For each real posting you find that is not already a candidate, read it and record the same keys, plus `title`, `company`, `url` (the link to the posting itself, on the employer's own site when you can find it) and `source` (where you found it). Put these under `finds`.
 
 **A lead you did not read is worth nothing to the person.** When a search shows a posting that could fit, open it and read it before moving on, and record it. Do not finish this step with searches unused and leads unread: use the budget. Naming unread leads under `not_covered` is for places you could not read, not for ones you chose not to.
@@ -99,14 +101,19 @@ Do not record postings older than about a month, staffing-agency reposts of a jo
   "finds": [
     {"title": "Head of Product", "company": "Example Analytics", "url": "https://jobs.example.com/head-of-product", "source": "State job board", "fit_assessment": 27, "why": "...", "work_mode": "remote", "level": "director", "industry": "Data software"}
   ],
+  "leads_not_fits": ["b4"],
+  "leads_seen": [{"title": "Director of Product, Platform", "url": "https://jobs.example.com/director-platform"}],
+  "leads_closed": ["https://jobs.example.com/an-expired-posting"],
   "searches": 7,
   "not_covered": ["A board that needed a login"]
 }
 ```
 
-`searches` is the true number of web searches you used. `not_covered` lists any place you were pointed to but could not read.
+`leads_seen` is every posting you saw in a search result or on a page and did **not** open, with its title and link. Be complete: the engine checks the titles against the person's profile, and `TOOL finish` refuses once if one that matches was left unread. `leads_closed` is the links of ones you opened that turned out to be closed or not real postings. `searches` is the true number of web searches you used. `not_covered` lists any place you were pointed to but could not read.
 
 Then run `TOOL intake`. If its answer starts a section **BEFORE WARM PATHS**, do what it says: search and read more, write a new hand-off file with only the new `finds` (and the updated `searches`), and run `TOOL intake` once more. The engine scores everything, drops what the person's profile rules out, and writes the notes. It will not tell you why something was left out, and you should not ask.
+
+**If `TOOL finish` later answers NOT FINISHED YET**, it lists matching postings that were seen and not read. Open each one, write a hand-off file with the real ones under `finds` and the dead ones under `leads_closed`, run `TOOL intake`, then `TOOL finish` again.
 
 ## Step 3: warm paths
 

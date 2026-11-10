@@ -420,6 +420,85 @@ def posting_text(url, fetcher, limit=1800):
     return ""
 
 
+_LD_JSON = re.compile(r"<script[^>]*type=[\"']application/ld(?:\+|&#x2B;|&#43;)json[\"'][^>]*>(.*?)</script>",
+                      re.IGNORECASE | re.DOTALL)
+
+
+def _job_postings(node):
+    """Every schema.org JobPosting inside a piece of structured data."""
+    if isinstance(node, list):
+        return [found for item in node for found in _job_postings(item)]
+    if not isinstance(node, dict):
+        return []
+    kinds = node.get("@type")
+    kinds = kinds if isinstance(kinds, list) else [kinds]
+    found = [node] if "JobPosting" in kinds else []
+    return found + _job_postings(node.get("@graph"))
+
+
+def _money(value):
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def page_posting(url, fetcher, limit=1800):
+    """What a posting page says about the job, from the structured data job sites publish for search engines.
+
+    Returns a dict with any of: title, company, location, work_mode, posted,
+    closes, pay_min, pay_max, text. An empty dict when the page did not load
+    or carries no structured job data. Nothing is guessed.
+    """
+    response = fetcher.get(url, accept="text/html")
+    if response.status != 200 or not response.body:
+        return {}
+    for block in _LD_JSON.findall(response.body):
+        try:
+            data = json.loads(html.unescape(block) if "&quot;" in block else block)
+        except ValueError:
+            continue
+        for job in _job_postings(data):
+            found = {}
+            if isinstance(job.get("title"), str):
+                found["title"] = html.unescape(job["title"]).strip()
+            organization = job.get("hiringOrganization")
+            if isinstance(organization, dict) and isinstance(organization.get("name"), str):
+                found["company"] = html.unescape(organization["name"]).strip()
+            places = job.get("jobLocation")
+            places = places if isinstance(places, list) else [places]
+            names = []
+            for place in places:
+                address = place.get("address") if isinstance(place, dict) else None
+                if isinstance(address, dict):
+                    name = ", ".join(str(address[key]).strip() for key in ("addressLocality", "addressRegion")
+                                     if address.get(key))
+                    if name and name not in names:
+                        names.append(name)
+            if names:
+                found["location"] = "; ".join(names[:4])
+            if "TELECOMMUTE" in str(job.get("jobLocationType") or "").upper():
+                found["work_mode"] = "remote"
+            for key, source in (("posted", "datePosted"), ("closes", "validThrough")):
+                match = re.match(r"\d{4}-\d{2}-\d{2}", str(job.get(source) or ""))
+                if match:
+                    found[key] = match.group(0)
+            salary = job.get("baseSalary")
+            value = salary.get("value") if isinstance(salary, dict) else None
+            if isinstance(value, dict) and str(value.get("unitText") or "").upper() in ("YEAR", "ANNUAL", "YEARLY"):
+                low, high = _money(value.get("minValue")), _money(value.get("maxValue"))
+                if low and low >= 10000:
+                    found["pay_min"] = low
+                if high and high >= 10000:
+                    found["pay_max"] = high
+            text = _plain(job.get("description"), limit)
+            if text:
+                found["text"] = text
+            if found.get("title"):
+                return found
+    return {}
+
+
 def _parse_date(text):
     match = re.match(r"^(\d{4})-(\d{2})-(\d{2})", text or "")
     if not match:
