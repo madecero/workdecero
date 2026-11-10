@@ -397,8 +397,8 @@ def intake(state, handoff, profile, store, source_map, fetcher=None, today=None)
     if isinstance(handoff.get("searches"), int) and not isinstance(handoff.get("searches"), bool):
         state["searches"] = max(0, handoff["searches"])
     for name in handoff.get("not_covered") or []:
-        if isinstance(name, str) and name.strip() and name.strip() not in state["not_covered"]:
-            state["not_covered"].append(name.strip())
+        if isinstance(name, str):
+            scoring.add_not_covered(state["not_covered"], name)
     return state
 
 

@@ -441,6 +441,14 @@ class BrowserInAWorkdeceroSession(PrivateFolder):
                 text = handle.read()
             self.assertIn("a small check runs each time you send a prompt", text, name)
             self.assertIn("sends nothing anywhere", text, name)
+            self.assertNotIn("reads nothing but the name", text, name)   # it also compares the command or the path
+        sentences = []
+        for name in ("README.md", os.path.join("docs", "permissions.md")):
+            with open(os.path.join(ROOT, name), encoding="utf-8") as handle:
+                text = handle.read()
+            start = text.index("To do this, a small check runs")
+            sentences.append(text[start:text.index("\n", start)])
+        self.assertEqual(sentences[0], sentences[1])                    # word for word the same in both
 
     def test_the_check_is_quick(self):
         started = time.time()

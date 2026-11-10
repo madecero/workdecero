@@ -664,8 +664,8 @@ def intake(state, handoff, profile, store, today=None):
     for name in handoff.get("not_covered") or []:
         if isinstance(name, str) and name.strip() and name.strip() not in state["not_covered"]:
             name = already_read_removed(name.strip(), state.get("platforms_read") or [])
-            if name and name not in state["not_covered"]:
-                state["not_covered"].append(name)
+            if name:
+                scoring.add_not_covered(state["not_covered"], name)   # one place, one line
     return state
 
 

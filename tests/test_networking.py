@@ -384,6 +384,66 @@ class GoingOnAStatedDay(NetCase):
         self.assertIn("Portland Brand Meetup, Wed Nov 11: now Going.", out)
 
 
+class UnknownTime(NetCase):
+    """From the tester's run: a weekday in-person event with no posted time was the first pick, tagged Daytime,
+    for a person who had ruled out weekday daytime."""
+
+    def setUp(self):
+        super(UnknownTime, self).setUp()
+        self.raw["networking"]["unavailable"] = ["Weekday daytime (9 to 5), unless the event is virtual"]
+        self.raw["networking"]["max_events_per_month"] = 2
+        self.write_profile()
+
+    def no_time(self, slug, title, date, **extra):
+        found = event(slug, title, date, **extra)
+        found.pop("time")
+        found.pop("evening")
+        return found
+
+    def test_it_is_not_a_pick_and_is_never_called_daytime(self):
+        self.sweep([], [self.no_time("summit", "City Design Summit", "2026-11-10", fit_assessment=38),   # a Tuesday
+                        event("eve", "Founders supper", "2026-11-12", time="6:00 PM", fit_assessment=20)])
+        digest = self.digest().section
+        picks = digest.split("## This month's picks")[1].split("##")[0]
+        also = digest.split("## Also coming up")[1].split("##")[0]
+        self.assertNotIn("City Design Summit", picks)                  # the best fit, and still not picked
+        self.assertIn("Founders supper", picks)
+        self.assertIn("City Design Summit", also)
+        self.assertIn("*Time not posted, check before going.*", also)
+        self.assertNotIn("Daytime", digest)
+
+    def test_a_known_daytime_event_under_a_daytime_limit_is_never_picked(self):
+        self.sweep([], [event("lunch", "Chamber luncheon", "2026-11-10", time="12:00 PM", evening=False, fit_assessment=38),
+                        event("eve", "Founders supper", "2026-11-12", time="6:00 PM", fit_assessment=20)])
+        digest = self.digest().section
+        picks = digest.split("## This month's picks")[1].split("##")[0]
+        self.assertNotIn("Chamber luncheon", picks)
+        self.assertIn("Founders supper", picks)
+        self.assertIn("*Daytime, outside your times.*", digest.split("## Also coming up")[1].split("##")[0])
+
+    def test_the_engine_check_and_the_tag(self):
+        day = datetime.date(2026, 11, 10)
+        self.assertTrue(networking.outside_times(self.profile, day, None, None, False))
+        self.assertTrue(networking.outside_times(self.profile, day, None, None, None))      # in person unless said
+        self.assertFalse(networking.outside_times(self.profile, day, None, None, True))     # virtual is allowed
+        self.assertFalse(networking.outside_times(self.profile, day, "6:00 PM", None, False))
+        self.assertFalse(networking.outside_times(self.profile, datetime.date(2026, 11, 14), None, None, False))  # Saturday
+        self.assertEqual(networking.schedule_tag(None, None, True), "Time not posted, check before going")
+        self.assertEqual(networking.schedule_tag(None, None, False), "Time not posted")
+        self.assertEqual(networking.schedule_tag(None, None, False, "10:00 AM"), "Daytime")
+        self.assertEqual(networking.schedule_tag(None, None, False, "6:30 PM"), "Evening")
+        self.assertEqual(networking.schedule_tag(False, None, True), "Daytime, outside your times")
+        self.assertEqual(networking.schedule_tag(None, True, False), "Virtual")
+
+    def test_with_no_rule_for_that_day_an_unknown_time_can_still_be_picked(self):
+        self.raw["networking"]["unavailable"] = ["Sundays"]
+        self.write_profile()
+        self.sweep([], [self.no_time("summit", "City Design Summit", "2026-11-10", fit_assessment=38)])
+        picks = self.digest().section.split("## This month's picks")[1].split("##")[0]
+        self.assertIn("City Design Summit", picks)
+        self.assertIn("*Time not posted.*", picks)                     # said plainly, never guessed
+
+
 class OneAnEvening(NetCase):
     def test_two_events_on_the_same_evening_take_one_pick_between_them(self):
         # From the tester's run: both picks were on one evening, half an hour apart, and the month's limit was spent.
@@ -434,7 +494,7 @@ class Housekeeping(NetCase):
                 ("E-4", "Speaking and passed", "2026-11-04", {"status": "Speaking"}),
                 ("E-5", "Ticked going by hand", "2026-11-05", {"going": True}),
                 ("E-6", "Went already", "2026-11-06", {"status": "Went", "attended": True}),
-                ("E-7", "Still ahead", "2026-11-20", {})):
+                ("E-7", "Still ahead", "2026-11-20", {"time": "6:00 PM"})):
             store.upsert("event", note_id, title, dict(values, date=date, link=SITE + note_id))
             if values:
                 store.upsert("event", note_id, title, values, force=list(values))

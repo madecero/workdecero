@@ -238,6 +238,10 @@ def outside_times(profile, day, time_text, evening, virtual):
     for rule in time_rules(profile):
         if when.weekday() not in rule["days"] or (rule["in_person_only"] and virtual is True):
             continue
+        if part is None and virtual is not True:
+            # Nobody knows when it starts, and the person has ruled out part of this day. An in-person event
+            # is not picked on a guess: it counts as a clash until the time is known.
+            return True
         if rule["before"] is not None or rule["after"] is not None:
             if hour is None:
                 continue
@@ -253,13 +257,21 @@ def outside_times(profile, day, time_text, evening, virtual):
     return False
 
 
-def schedule_tag(evening, virtual, outside):
+def time_known(time_text, evening):
+    return _hour(time_text) is not None or evening is True or evening is False
+
+
+def schedule_tag(evening, virtual, outside, time_text=None):
+    """The short word after a meeting: Virtual, Evening, Daytime, or that nobody has posted its time."""
     if virtual is True:
         tag = "Virtual"
-    elif evening is True:
+    elif evening is True or (_hour(time_text) is not None and _hour(time_text) >= 17):
         tag = "Evening"
-    else:
+    elif time_known(time_text, evening):
         tag = "Daytime"
+    else:
+        # Never call an unknown time Daytime. It is not picked while a rule covers that day.
+        return "Time not posted, check before going" if outside is True else "Time not posted"
     return "%s, outside your times" % tag if outside is True else tag
 
 
@@ -833,8 +845,8 @@ def intake(state, handoff, profile, store, today=None):
     if isinstance(handoff.get("searches"), int) and not isinstance(handoff.get("searches"), bool):
         state["searches"] = max(0, handoff["searches"])
     for name in handoff.get("not_covered") or []:
-        if isinstance(name, str) and name.strip() and name.strip() not in state["not_covered"]:
-            state["not_covered"].append(name.strip())
+        if isinstance(name, str):
+            scoring.add_not_covered(state["not_covered"], name)
     for line in handoff.get("not_found") or []:
         line = scoring.scrub_confidential(discreet(line), names).strip()
         if line and line not in state.setdefault("not_found", []):
@@ -959,7 +971,7 @@ def _coming_line(entry, store, cap):
     line = "- **%s**: %s. %s. %s." % (when_text(entry["date"], entry["time"]), what, place, cost[:1].upper() + cost[1:])
     if entry["why"]:
         line += " %s" % entry["why"].rstrip(".") + "."
-    line += " *%s.*" % schedule_tag(entry["evening"], entry["virtual"], entry["outside"])
+    line += " *%s.*" % schedule_tag(entry["evening"], entry["virtual"], entry["outside"], entry["time"])
     if entry["going"]:
         line += " You said you are going."
     return line
@@ -1140,7 +1152,7 @@ def finish_report(state, profile, title, picks, rest, overdue, due):
     lines += ["", "THIS MONTH'S PICK%s (%d)" % ("" if len(picks) == 1 else "S", len(picks))]
     for entry in picks:
         lines.append("  %s  %s  %s" % (when_text(entry["date"], entry["time"]), entry["title"],
-                                       schedule_tag(entry["evening"], entry["virtual"], entry["outside"])))
+                                       schedule_tag(entry["evening"], entry["virtual"], entry["outside"], entry["time"])))
     if not picks:
         lines.append("  none that fit their times this month")
     if rest:

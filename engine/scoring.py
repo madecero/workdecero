@@ -140,6 +140,21 @@ def _date(value):
         return None
 
 
+def covered_name(line):
+    """The place a "not covered" line is about: its words before the first bracket, colon or comma."""
+    return _text(re.split(r"[(:,]", str(line), 1)[0])
+
+
+def add_not_covered(lines, line):
+    """Add a "not covered" line unless that place is already listed. One place, one line."""
+    line = str(line).strip()
+    name = covered_name(line)
+    if not line or line in lines or (name and any(covered_name(other) == name for other in lines)):
+        return False
+    lines.append(line)
+    return True
+
+
 def _contains_phrase(haystack, needle):
     needle = _text(needle)
     return bool(needle) and re.search(r"(?:^| )%s(?: |$)" % re.escape(needle), _text(haystack)) is not None

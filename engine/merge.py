@@ -274,13 +274,24 @@ def _section(kind, item, result, names):
     return scoring.scrub_confidential("\n\n".join(lines), names)
 
 
+def _mode_shown(item, result):
+    """The work mode as the note shows it. Hybrid or onsite with no place given says so, so it is not read as near."""
+    mode = (item.get("work_mode") or "").strip().lower()
+    if not mode:
+        return None
+    unclear = any("Location not clear" in caveat for caveat in getattr(result, "caveats", []) or [])
+    if mode in ("hybrid", "onsite", "on site") and unclear:
+        return "%s, location not posted" % mode.capitalize()
+    return mode.capitalize()
+
+
 def _values(kind, item, result, store, today, names):
     day = today.isoformat()
     if kind == JOB:
         values = {
             "role": item.get("title"), "company": store.link("company", item["company"]) if item.get("company") else None,
             "fit": result.total, "pay_min": item.get("pay_min"), "pay_max": item.get("pay_max"),
-            "work_mode": (item.get("work_mode") or "").capitalize() or None,
+            "work_mode": _mode_shown(item, result),
             "distance_miles": item.get("distance_miles"), "location": item.get("location"),
             "posted": item.get("posted"), "closes": item.get("closes"), "apply_url": item.get("url"),
             "source": item.get("source"), "req_id": item.get("req_id"),

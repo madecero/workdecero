@@ -18,6 +18,7 @@ import contract_tool  # noqa: E402
 import contracts  # noqa: E402
 import liveness  # noqa: E402
 import miniyaml  # noqa: E402
+import scoring  # noqa: E402
 import sources  # noqa: E402
 import vault  # noqa: E402
 import wdprofile  # noqa: E402
@@ -385,6 +386,34 @@ class Intake(ContractCase):
         self.assertEqual(fix(kept, read), kept)
         other = "Two leads seen in search were not read"
         self.assertEqual(fix(other, read), other)
+
+    def test_an_unclear_place_is_never_shown_as_plain_hybrid(self):
+        # From the tester's run: a note said Hybrid while its caveat said the location was not clear.
+        import merge
+
+        class Result(object):
+            def __init__(self, caveats):
+                self.caveats = caveats
+        unclear = Result(["Location not clear from the posting"])
+        self.assertEqual(merge._mode_shown({"work_mode": "hybrid"}, unclear), "Hybrid, location not posted")
+        self.assertEqual(merge._mode_shown({"work_mode": "Onsite"}, unclear), "Onsite, location not posted")
+        self.assertEqual(merge._mode_shown({"work_mode": "hybrid"}, Result([])), "Hybrid")
+        self.assertEqual(merge._mode_shown({"work_mode": "remote"}, unclear), "Remote")
+        self.assertIsNone(merge._mode_shown({}, unclear))
+
+    def test_a_place_is_listed_once_under_not_covered(self):
+        # From the tester's run: one marketplace appeared twice, once from the engine and once from research.
+        lines = ["Marketplace One (its listing page could not be read)"]
+        self.assertFalse(scoring.add_not_covered(lines, "Marketplace One (listing page could not be read without a browser)"))
+        self.assertFalse(scoring.add_not_covered(lines, "marketplace one: needs a login"))
+        self.assertTrue(scoring.add_not_covered(lines, "Marketplace Two (needs a browser)"))
+        self.assertTrue(scoring.add_not_covered(lines, "Two leads seen in search were not read"))
+        self.assertEqual(len(lines), 3)
+        self.start()
+        self.intake([], not_covered=["Agency Site (page would not load)", "Agency Site, no gigs shown", "Agency Site (page would not load)"])
+        self.finish()
+        covered = self.digest().section.split("## Not covered")[1]
+        self.assertEqual(covered.count("Agency Site"), 1)
 
     def test_the_closing_report_gives_each_top_gig_its_note_id(self):
         self.start()
