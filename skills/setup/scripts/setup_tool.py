@@ -657,7 +657,9 @@ def short_card(profile, inferred=()):
     if later_line(tracks):
         row("", later_line(tracks))
     if tracks.get("jobs") and jobs:
-        row("Jobs", "%s%s" % (_join((jobs.get("titles") or [])[:6]), mark("jobs.titles")))
+        titles = jobs.get("titles") or []
+        row("Jobs", "%s%s%s" % (_join(titles[:6]), " and %d more" % (len(titles) - 6) if len(titles) > 6 else "",
+                                mark("jobs.titles")))
         bits = []
         if jobs.get("levels"):
             bits.append("Levels: %s" % _join(jobs["levels"]))
@@ -707,7 +709,7 @@ def short_card(profile, inferred=()):
     if confidential:
         row("", "Never named in your notes: %s." % _join(confidential))
     mode = full.get("mode")
-    row("Each sweep", "Up to %s new items in the digest. %s mode." % (
+    row("Each sweep", "Up to %s new items in the digest. %s mode. Say so if you want either changed." % (
         (full.get("digest") or {}).get("max_new_items"), "Lite" if mode == "lite" else "Full"))
     row("", "Browser, signed-in LinkedIn, calendar and spreadsheet copy: off unless you turned them on.")
     storage = full.get("storage") or {}
@@ -843,6 +845,7 @@ def write(draft, out=None):
     path = wdprofile.profile_path()
     text = profile_text(profile)
     changed = True
+    rerun = os.path.isfile(path)               # a profile was already there: this is a change, not a first setup
     if os.path.isfile(path):
         with open(path, "r", encoding="utf-8") as handle:
             previous = handle.read()
@@ -885,7 +888,11 @@ def write(draft, out=None):
     print("", file=out)
     if ready:
         skill, words = ready[0]
-        print("Next:   run /workdecero:%s. The first one takes a few minutes in %s mode." % (skill, mode), file=out)
+        if rerun:
+            print("Next:   your sweeps use the new settings from now on. Run /workdecero:%s when you are ready."
+                  % skill, file=out)
+        else:
+            print("Next:   run /workdecero:%s. The first one takes a few minutes in %s mode." % (skill, mode), file=out)
         print("        Or just say \"%s\"%s. Claude Code asks once to allow it." % (
             words, " or \"build my local map\"" if has_sources else ""), file=out)
     else:

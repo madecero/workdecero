@@ -1016,6 +1016,15 @@ class Updates(SweepCase):
         self.assertEqual(code, 0, out)
         self.assertEqual(self.jobs()["VP of Product, Example Analytics"].values["status"], "Passed")
 
+    def test_a_raw_text_link_is_stored_as_the_page_a_person_opens(self):
+        # From the final run: an apply link ending in .md showed raw markup in the browser.
+        import merge
+        self.assertEqual(merge.tidy_link("https://jobs.workable.com/jobs/abc123.md"), "https://jobs.workable.com/jobs/abc123")
+        self.assertEqual(merge.tidy_link("https://jobs.workable.com/jobs/abc123.md?x=1"), "https://jobs.workable.com/jobs/abc123?x=1")
+        self.assertEqual(merge.tidy_link("https://docs.example.com/guide.md"), "https://docs.example.com/guide.md")
+        self.assertEqual(merge.tidy_link("https://jobs.workable.com/jobs/abc123"), "https://jobs.workable.com/jobs/abc123")
+        self.assertIsNone(merge.tidy_link(None))
+
     def test_the_skill_says_how_and_never_to_edit_a_note_by_hand(self):
         with open(os.path.join(_paths.REPO_ROOT, "skills", "job-sweep", "SKILL.md"), encoding="utf-8") as handle:
             text = handle.read()

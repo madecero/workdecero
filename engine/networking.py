@@ -923,6 +923,7 @@ def coming_up(store, today, profile=None):
             if not entry["outside"] and outside_times(profile, entry["date"], entry["time"], entry["evening"],
                                                       entry["virtual"]):
                 entry["outside"] = True
+            entry["far"] = beyond_reach(profile, entry["miles"], entry["where"], entry["virtual"])
     # One gathering listed by two groups shows once: the better fit, with the other named beside it.
     kept = []
     for entry in sorted(found, key=lambda entry: (entry["kind"] != "event", -entry["fit"])):
@@ -936,11 +937,33 @@ def coming_up(store, today, profile=None):
     return kept
 
 
+def beyond_reach(profile, miles, where, virtual):
+    """The person's travel limit in miles, when an in-person meeting is farther than that. Otherwise None.
+
+    A town they named as one they go to (networking.areas, or other_areas) is in reach however far it is.
+    """
+    if virtual is True or isinstance(miles, bool) or not isinstance(miles, (int, float)):
+        return None
+    location = profile.get("location") or {}
+    radius = location.get("radius_miles")
+    if isinstance(radius, bool) or not isinstance(radius, (int, float)) or miles <= radius:
+        return None
+    named = list(_net(profile).get("areas") or []) + list(location.get("other_areas") or [])
+    place = scoring._text(where)
+    for area in named:
+        town = scoring._text(str(area).split(",")[0])
+        if town and town != scoring._text(str(location.get("home_base") or "").split(",")[0]) and \
+                scoring._contains_phrase(place, town):
+            return None
+    return int(radius)
+
+
 def choose(found, cap):
     """Split what is coming up into (picks, the rest). The cap is hard, and a pick always fits the schedule."""
     order = sorted(found, key=lambda entry: (-entry["fit"], entry["date"]))
     going = [entry for entry in order if entry["going"]]
-    eligible = [entry for entry in order if not entry["going"] and not entry["outside"]]
+    # A pick fits the schedule and is within the distance they said they travel.
+    eligible = [entry for entry in order if not entry["going"] and not entry["outside"] and not entry.get("far")]
     picks = list(going[:max(0, cap)])
     for entry in eligible:
         if len(picks) >= cap:
@@ -960,6 +983,8 @@ def _coming_line(entry, store, cap):
         place = "In person"
         if isinstance(entry["miles"], (int, float)) and not isinstance(entry["miles"], bool):
             place += ", %d miles" % round(entry["miles"])
+            if entry.get("far"):
+                place += " (outside your %d)" % entry["far"]
         if entry["where"]:
             place += ", %s" % str(entry["where"]).strip()
     what = "%s (its regular meeting)" % link if entry["kind"] == "group" else link

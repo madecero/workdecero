@@ -157,7 +157,7 @@ Say the step line at the start of each block, such as **"Step 2 of 5: where you 
 
 ### Step 4 of 5: time and tools
 
-1. Picker: **digest size** (10 (Recommended) / 5 / 20 new items each sweep) and **mode** (Lite, for a Pro plan (Recommended) / Full, for a Max plan).
+1. **Do not ask about digest size or mode.** They start at 10 new items each sweep and Lite mode, and the summary shows both with "say so if you want either changed". Only if the person asks to change one, use a picker: digest size (10 (Recommended) / 5 / 20) or mode (Lite, for a Pro plan (Recommended) / Full, for a Max plan). Setup should take about a dozen answers, not twenty: ask only what the summary cannot show as a sensible default.
 2. If networking is on, three things. Goals can stay as you drafted them.
    * Show your suggestions for who to meet and ask them to keep or change them.
    * Picker, multi-select: **When can you not go to events?** Weekday daytime (9 to 5) / Weekday evenings / Weekends / No limits. They can also type their own, such as "Tuesday evenings" or "before 8 AM". Save what they pick or type, in their words, as the list `networking.unavailable`. "No limits" saves an empty list. The sweep never picks an event at a time on this list.

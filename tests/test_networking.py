@@ -444,6 +444,43 @@ class UnknownTime(NetCase):
         self.assertIn("*Time not posted.*", picks)                     # said plainly, never guessed
 
 
+class WithinReach(NetCase):
+    """From the final run: both weeks picked an in-person event 30 miles away for a person whose limit is 25."""
+
+    def setUp(self):
+        super(WithinReach, self).setUp()
+        self.raw["location"]["radius_miles"] = 25
+        self.raw["networking"]["areas"] = ["Portland, OR", "Beaverton, OR"]
+        self.write_profile()
+
+    def test_an_event_past_their_limit_is_shown_and_never_picked(self):
+        self.sweep([], [event("far", "Valley product night", "2026-11-11", distance_miles=30, where="Old Saloon, Salem",
+                              fit_assessment=38),
+                        event("near", "Founders supper", "2026-11-12", distance_miles=3, fit_assessment=15)])
+        digest = self.digest().section
+        picks = digest.split("## This month's picks")[1].split("##")[0]
+        also = digest.split("## Also coming up")[1].split("##")[0]
+        self.assertNotIn("Valley product night", picks)                # the best fit, and still too far
+        self.assertIn("Founders supper", picks)
+        self.assertIn("Valley product night", also)
+        self.assertIn("In person, 30 miles (outside your 25), Old Saloon, Salem", also)
+
+    def test_a_town_they_named_is_in_reach_however_far(self):
+        self.assertEqual(networking.beyond_reach(self.profile, 30, "Old Saloon, Salem", False), 25)
+        self.assertIsNone(networking.beyond_reach(self.profile, 30, "Example Hall, Beaverton", False))
+        self.assertIsNone(networking.beyond_reach(self.profile, 25, "Old Saloon, Salem", False))    # at the limit is fine
+        self.assertIsNone(networking.beyond_reach(self.profile, 300, "Anywhere", True))             # virtual
+        self.assertIsNone(networking.beyond_reach(self.profile, None, "Old Saloon, Salem", False))  # distance unknown
+
+    def test_an_event_they_said_they_are_going_to_stays_a_pick(self):
+        self.sweep([], [event("far", "Valley product night", "2026-11-11", distance_miles=30, where="Old Saloon, Salem")])
+        row = self.events()["Valley product night"]
+        self.update({"id": row.id, "going": True})
+        entries = networking.coming_up(self.store(), TODAY, self.profile)
+        picks, _ = networking.choose(entries, 2)
+        self.assertEqual([entry["title"] for entry in picks], ["Valley product night"])
+
+
 class OneAnEvening(NetCase):
     def test_two_events_on_the_same_evening_take_one_pick_between_them(self):
         # From the tester's run: both picks were on one evening, half an hour apart, and the month's limit was spent.

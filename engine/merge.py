@@ -274,6 +274,20 @@ def _section(kind, item, result, names):
     return scoring.scrub_confidential("\n\n".join(lines), names)
 
 
+def tidy_link(url):
+    """A posting's link as a person should open it. One job site serves a raw text copy at an address ending
+    in .md, which shows as plain markup in a browser: the page itself is the same address without it."""
+    if not isinstance(url, str):
+        return url
+    try:
+        parts = urllib.parse.urlsplit(url.strip())
+    except ValueError:
+        return url
+    if parts.netloc.lower().endswith("workable.com") and parts.path.lower().endswith(".md"):
+        return urllib.parse.urlunsplit((parts.scheme, parts.netloc, parts.path[:-3], parts.query, parts.fragment))
+    return url
+
+
 def _mode_shown(item, result):
     """The work mode as the note shows it. Hybrid or onsite with no place given says so, so it is not read as near."""
     mode = (item.get("work_mode") or "").strip().lower()
@@ -293,7 +307,7 @@ def _values(kind, item, result, store, today, names):
             "fit": result.total, "pay_min": item.get("pay_min"), "pay_max": item.get("pay_max"),
             "work_mode": _mode_shown(item, result),
             "distance_miles": item.get("distance_miles"), "location": item.get("location"),
-            "posted": item.get("posted"), "closes": item.get("closes"), "apply_url": item.get("url"),
+            "posted": item.get("posted"), "closes": item.get("closes"), "apply_url": tidy_link(item.get("url")),
             "source": item.get("source"), "req_id": item.get("req_id"),
             "near_miss": bool(result.near), "near_reason": (result.near or None),
             "fit_background": item.get("fit_assessment"), "text_hash": item.get("text_hash"),
@@ -303,7 +317,7 @@ def _values(kind, item, result, store, today, names):
             "client": item.get("client"), "via": item.get("via"), "fit": result.total,
             "rate_min": item.get("rate_min"), "rate_max": item.get("rate_max"),
             "hours_per_week": item.get("hours_per_week"), "length_weeks": item.get("length_weeks"),
-            "remote": item.get("remote"), "engagement": item.get("engagement"), "link": item.get("url"),
+            "remote": item.get("remote"), "engagement": item.get("engagement"), "link": tidy_link(item.get("url")),
             "posted": item.get("posted"), "closes": item.get("closes"),
             "near_miss": bool(result.near), "near_reason": (result.near or None),
         }

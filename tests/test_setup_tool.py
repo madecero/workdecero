@@ -493,6 +493,21 @@ class Preview(SetupCase):
         self.assertNotIn("Networking", nurse)
         self.assertLessEqual(len(nurse.split("\n\n")[0].splitlines()), 14)
 
+    def test_the_summary_counts_the_titles_it_does_not_show_and_states_the_defaults(self):
+        # From the final run: 6 of 8 saved titles were listed with no "and 2 more".
+        answers = self.example()
+        answers["jobs"]["titles"] = ["VP of Product", "Head of Product", "Chief Product Officer", "Director of Product",
+                                     "Group Product Manager", "Principal Product Manager", "Product Lead", "GM, Product"]
+        self.put(answers)
+        card = self.call("preview")[1]
+        self.assertIn("Principal Product Manager and 2 more", card)
+        self.assertNotIn("Product Lead", card)
+        self.assertIn("Lite mode. Say so if you want either changed.", card)
+        with open(os.path.join(_paths.REPO_ROOT, "skills", "setup", "SKILL.md"), encoding="utf-8") as handle:
+            skill = handle.read()
+        self.assertIn("**Do not ask about digest size or mode.**", skill)
+        self.assertIn("about a dozen answers, not twenty", skill)
+
     def test_the_summary_card_shows_when_they_cannot_go_and_how_many_events_a_month(self):
         # From the tester's run: setup asked about networking times, and the summary showed neither answer.
         answers = self.example()
@@ -636,6 +651,13 @@ class Write(SetupCase):
         self.assertIn("Next:   run /workdecero:job-sweep. The first one takes a few minutes in Lite mode.", out)
         self.assertIn('Or just say "run the job sweep" or "build my local map". Claude Code asks once to allow it.', out)
         self.assertIn("Run /workdecero:sources (about 3 minutes)", out)
+        # Saved again with a change: it is not a first setup any more, and does not say "the first one".
+        changed = self.example()
+        changed["digest"] = {"max_new_items": 5}
+        code, again, _ = self.save(changed)
+        self.assertEqual(code, 0, again)
+        self.assertNotIn("The first one takes", again)
+        self.assertIn("Next:   your sweeps use the new settings from now on.", again)
         self.assertIn("Open:   obsidian://open?path=", out)
         self.assertIn("Start%20here.md", out)
         self.assertIn("Change anything later:   /workdecero:setup", out)
