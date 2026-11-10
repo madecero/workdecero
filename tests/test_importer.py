@@ -130,7 +130,7 @@ class Check(ImportCase):
     def test_a_first_look_shows_only_column_names_and_counts(self):
         code, out = self.check({"tables": [{"csv": self.files["Jobs.csv"], "type": "job"},
                                            {"csv": self.files["Groups.csv"], "type": "group"}]})
-        self.assertEqual(code, 1)
+        self.assertEqual(code, 0)
         self.assertIn("  Jobs.csv (job, 6 rows): Role, Employer, Low, High, Status, Applied, Link, Hiring manager, "
                       "My notes, Priority", out)
         self.assertIn("  Groups.csv (group, 2 rows): Group, Status, Site, Dues, Thoughts", out)
@@ -150,7 +150,7 @@ class Check(ImportCase):
         self.assertIn('Dates in "Applied" that could not be read (1), kept as text in the note: "next week".', out)
         self.assertIn("Contacts.csv -> person notes", out)
         self.assertIn("  Rows: 2. Would be written: 2.", out)
-        self.assertIn("Every row is accounted for: 10 rows, 10 written or already there or listed above", out)
+        self.assertIn("Every row is accounted for: 10 rows, 10 that would be written or already there or listed above", out)
         self.assertIn("READY.", out)
         self.assertFalse(os.path.isdir(os.path.join(self.vault_dir, "workdecero")))   # nothing in the vault yet
         # No row is named in what the conversation sees. The detail is in a private file.
@@ -166,7 +166,8 @@ class Check(ImportCase):
 
     def test_a_status_word_is_never_guessed(self):
         code, out = self.check(self.plan(statuses={"sent": "Applied"}))
-        self.assertEqual(code, 1)
+        self.assertEqual(code, 0)                                      # a report to act on, not an error
+        self.assertIn("offering the choices listed and marking none of them as likely", out)
         self.assertIn('STATUS WORDS WITH NO MEANING YET (the import cannot run until each is mapped): "ghosted" (1).', out)
         self.assertIn("A job note can be: New, Interested, Applied, Interviewing, Offer, Passed, Rejected, Closed.", out)
         self.assertIn("NOT READY.", out)
@@ -185,7 +186,7 @@ class Check(ImportCase):
     def test_a_tick_box_word_that_is_not_yes_or_no_is_never_read_as_no(self):
         # From the tester's run: "Went?" = "went" became attended false, silently.
         code, out = self.check(self.events_plan())
-        self.assertEqual(code, 1)
+        self.assertEqual(code, 0)
         self.assertIn('YES OR NO? "Went?" is a tick box, and these words are neither (the import cannot run until each '
                       'is mapped under "yes_no" as true or false): "WENT" (1), "skipped" (1), "went" (1).', out)
         self.assertIn("NOT READY.", out)
@@ -345,6 +346,50 @@ class Run(ImportCase):
         self.assertIn("Nothing is in progress", err)
 
 
+class PeopleInRows(ImportCase):
+    def test_people_met_at_an_event_say_where_and_a_referrer_is_not_given_a_job_title(self):
+        # From the tester's run: People notes made from an event's "met" column were empty, and a referrer's
+        # role read "Referral".
+        events = os.path.join(self.exports, "Met.csv")
+        with open(events, "w", encoding="utf-8") as handle:
+            handle.write("Event,When,Who I met\nBrand Summit,2026-10-02,Priya Raman; Dana Ruiz\n")
+        jobs = os.path.join(self.exports, "Refs.csv")
+        with open(jobs, "w", encoding="utf-8") as handle:
+            handle.write("Role,Employer,Referred by,Recruiter\nBrand Designer,Example Tea Company,Sam Okoro,Lee Park\n")
+        plan = {"tables": [
+            {"csv": events, "type": "event", "title": "Event", "columns": {"When": "date", "Who I met": "people_met"}},
+            {"csv": jobs, "type": "job", "title": "Role",
+             "columns": {"Employer": "company", "Referred by": "warm_path", "Recruiter": "contact"}}]}
+        code, out = self.check(plan)
+        self.assertIn("READY.", out)
+        self.run_import()
+        people = self.notes("person")
+        self.assertEqual(people["Priya Raman"].values["met"], "Brand Summit")
+        self.assertEqual(people["Dana Ruiz"].values["met"], "Brand Summit")
+        event = self.notes("event")["Brand Summit"]
+        self.assertEqual(len(event.values["people_met"]), 2)            # and the event links to both of them
+        self.assertIn("People/Priya Raman", event.values["people_met"][0])
+        self.assertEqual(people["Sam Okoro"].values["role"], "Referred you")
+        self.assertEqual(people["Lee Park"].values["role"], "Recruiter")
+        self.assertIn("Companies/Example Tea Company", people["Sam Okoro"].values["company"])
+
+    def test_the_private_report_says_would_be_before_a_run_and_was_after(self):
+        self.check()
+        os.remove(self.files["Jobs.csv"])
+        with open(self.files["Jobs.csv"], "w", encoding="utf-8") as handle:
+            handle.write("Role,Employer\nBrand Designer,Example Tea Company\n")
+        plan = {"tables": [{"csv": self.files["Jobs.csv"], "type": "job", "title": "Role", "columns": {"Employer": "company"}}]}
+        self.check(plan)
+        with open(os.path.join(self.home, "import-report.txt"), encoding="utf-8") as handle:
+            before = handle.read()
+        self.assertIn("check only", before)
+        self.assertIn("every row would be imported", before)
+        self.assertNotIn("was imported", before)
+        self.run_import()
+        with open(os.path.join(self.home, "import-report.txt"), encoding="utf-8") as handle:
+            self.assertIn("every row was imported", handle.read())
+
+
 class AfterAnImport(unittest.TestCase):
     def test_a_closed_posting_says_the_persons_status_was_kept(self):
         # From the tester's run: the first sweep after an import listed a closed posting with no word on the status.
@@ -387,12 +432,13 @@ class SkillText(unittest.TestCase):
         for tool in ("Read", "WebSearch", "WebFetch", "mcp__"):
             self.assertNotIn(tool, front)
         self.assertIn("Write(~/.cache/workdecero/import-plan.json)", front)
-        for rule in ("**Never open, read or print the CSV files yourself.**", "**Never guess what a status word means.**",
+        for rule in ("**Never open, read or print the CSV files yourself.**", "**Never guess what a status word means, and never suggest a guess.**",
                      "**Check first, and get a clear yes before `run`.**", "**Nothing is left behind.**",
                      "**Show the mapping and get a yes before the first full check.**",
                      "**Never guess what a word in a tick-box column means.**",
                      "**Columns that name people link to People by default.**",
-                     "Never say which step you are on"):
+                     "Never say which step you are on", "and never suggest a guess", "no option is marked recommended",
+                     "A check that says NOT READY has not failed"):
             self.assertIn(rule, text)
         self.assertEqual(import_tool.fields(out=io.StringIO()), 0)
         self.assertIn("job  (one row becomes one note in Jobs)", importer.fields_report())

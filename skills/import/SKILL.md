@@ -12,7 +12,7 @@ You are moving one person's existing tracker into their vault. They export each 
 
 1. **Never open, read or print the CSV files yourself.** They hold the person's private tracker: employers, pay, people, their own notes. Only the helper reads them. You see column names, counts, status words and dates that could not be read. That is all you need.
 2. **Never put a path, a column name or a status word on a command line.** Everything goes in the hand-off file with the Write tool. Every helper command is one fixed line with no arguments.
-3. **Never guess what a status word means.** If the helper lists a status word with no meaning, ask the person. Offer the plugin's statuses for that kind of note as the choices.
+3. **Never guess what a status word means, and never suggest a guess.** Ask the person about each word with its own picker: the question is the word as they wrote it, the options are that kind of note's statuses exactly as the helper lists them, and no option is marked recommended or pre-selected. Do not write "my guess is" or "probably". The same goes for yes or no words: the options are Yes and No.
 4. **Show the mapping and get a yes before the first full check.** After you have seen the column names, show the person what each column would become, as a short table, and wait for their yes or their corrections. Do not run a check with a mapping they have not seen.
 5. **Never guess what a word in a tick-box column means.** If the helper says a word is neither yes nor no ("went", "skipped", "maybe"), ask the person, and put their answer under `"yes_no"`. It is never read as "no".
 6. **Columns that name people link to People by default.** A referral, a contact, a recruiter or a hiring manager column goes to `contact` or `warm_path`, so each person becomes a linked note. Leave such a column as plain text only if the person asks.
@@ -89,12 +89,12 @@ For each table, decide from the column names:
 
 `TOOL check` prints, for each table: rows, how many would be written, how many are already in the vault, how many would not be imported and why, the columns kept as text, dates and numbers it could not read, and status words with no meaning.
 
-* **Status words with no meaning.** Ask the person what each one means, with a picker of that kind of note's statuses. Add each answer to `"statuses"`, such as `{"sent": "Applied", "ghosted": "Closed"}`. Their own word is kept in the note as well.
-* **Yes or no words.** A tick-box column (going, attended, remote and the like) with a word that is neither. Ask what each word means and add it to `"yes_no"`, such as `{"went": true, "skipped": false}`.
+* **Status words with no meaning.** One picker per word, with that kind of note's statuses as the options and none marked as likely. Never offer your own reading of a word. Add each answer to `"statuses"`, such as `{"sent": "Applied", "ghosted": "Closed"}`. Their own word is kept in the note as well.
+* **Yes or no words.** A tick-box column (going, attended, remote and the like) with a word that is neither. One picker per word, with Yes and No as the options and neither marked as likely. Add each answer to `"yes_no"`, such as `{"went": true, "skipped": false}`.
 * **Dates it could not read.** If the examples show a pattern, add it to `"date_formats"` (`"%d.%m.%Y"` for 05.11.2026). If they are not dates at all ("next week"), leave them. They are kept as text.
 * **Rows not imported.** Say how many and why, in the helper's words. The row-by-row detail is in a private file the helper names. Tell the person where it is. Do not open it.
 
-Write the corrected plan and run `TOOL check` again. Repeat until it says READY.
+Write the corrected plan and run `TOOL check` again. Repeat until it says READY. A check that says NOT READY has not failed: it is telling you what to ask.
 
 ## Step 5: yes, then run
 

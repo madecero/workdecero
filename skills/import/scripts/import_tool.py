@@ -23,7 +23,7 @@ counts, column names, status words and dates that could not be read. Rows
 are never named in it. The row-by-row detail goes to a private file beside
 the profile, for the person to read.
 
-Exit codes: 0 fine, 1 something to fix before running, 2 the command could not run.
+Exit codes: 0 the command ran (read its answer: it may say NOT READY), 2 the command could not run.
 Standard library only, Python 3.9+.
 """
 
@@ -90,7 +90,7 @@ def _save_report(reports, wrote):
     """The row-by-row detail, for the person only."""
     text = "workdecero import, %s, %s\n\n%s" % (
         "written" if wrote else "check only", datetime.datetime.now().isoformat(timespec="seconds"),
-        importer.detail_text(reports))
+        importer.detail_text(reports, wrote))
     wdprofile.write_private(report_path(), text)
 
 
@@ -117,7 +117,7 @@ def check(out=None, today=None):
             if people:
                 print("    These look like people. Map them to contact or warm_path so each becomes a linked People "
                       "note: %s." % ", ".join(people), file=out)
-        return 1
+        return 0
     reports, _ = importer.plan_import(plan, store, profile, today)
     handoff.ensure_folder()
     handle = os.open(checked_path(), os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0), 0o600)
@@ -129,9 +129,10 @@ def check(out=None, today=None):
     print("\nThe row-by-row detail is in %s, for the person to read. It is not shown here." % handoff.tilde(report_path()),
           file=out)
     if importer.unmapped_statuses(reports):
-        print("\nNOT READY. Ask the person what each word above means. Status words go under \"statuses\", yes or no "
-              "words under \"yes_no\". Then run check again.", file=out)
-        return 1
+        print("\nNOT READY. Nothing can be written yet. Ask the person what each word above means, one question "
+              "per word, offering the choices listed and marking none of them as likely. Status words go under "
+              "\"statuses\", yes or no words under \"yes_no\". Then run check again.", file=out)
+        return 0                               # a report, not a failure. The run command is the hard stop
     print("\nREADY. Show the person the counts above and ask for a clear yes. Only then run the run command.", file=out)
     return 0
 

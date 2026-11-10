@@ -402,9 +402,12 @@ def plan_table(table, store, profile, today, taken, linked):
                     values["_company"] = people[0]
                 about = None
                 if LINK_TARGETS[target] == "person" and target in ("contact", "warm_path"):
-                    about = {"role": header}
+                    # "Referral" as a job title would be wrong: say what they did, in plain words.
+                    about = {"role": "Referred you" if "referr" in header.lower() else header}
                     if employer:
                         about["company"] = link_to("company", employer)
+                elif target == "people_met":
+                    about = {"met": scoring.scrub_confidential(title, names)}     # where they met: this event
                 links = [link_to(LINK_TARGETS[target], name, about) for name in people]
                 values[target] = links if field.kind == model.LINKS else links[0]
                 if field.kind == model.LINK and len(people) > 1:
@@ -507,18 +510,19 @@ def report_text(reports, profile, wrote=False):
         lines.append("")
     total = sum(report.rows for report in reports)
     accounted = sum(report.new + report.already + report.skipped() for report in reports)
-    lines.append("Every row is accounted for: %d rows, %d written or already there or listed above as not imported."
-                 % (total, accounted))
+    lines.append("Every row is accounted for: %d rows, %d %s or already there or listed above as not imported."
+                 % (total, accounted, "written" if wrote else "that would be written"))
     return scoring.scrub_confidential("\n".join(lines), names, "[withheld]")
 
 
-def detail_text(reports):
+def detail_text(reports, wrote=False):
     """Row by row, for the private report file only. Never printed into the conversation."""
     lines = []
     for report in reports:
         lines.append("%s" % report.label)
         lines += ["  " + line for line in report.details] or [
-            "  nothing to list: every row was imported, was already in the vault, or was counted as confidential"]
+            "  nothing to list: every row %s, is already in the vault, or was counted as confidential"
+            % ("was imported" if wrote else "would be imported")]
     return "\n".join(lines) + "\n"
 
 
