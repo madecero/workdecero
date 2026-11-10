@@ -20,6 +20,7 @@ You are setting up workdecero for one person: turning their resume and a short c
 8. **Do not turn on anything risky.** Browser use, signed-in LinkedIn, calendar and the spreadsheet copy stay off. Mention that they exist, and do not ask.
 9. **Do not read, list or search the person's files** beyond the resume they point to and what the helper reports.
 10. Use plain hyphens and commas in everything you write. No long dashes.
+11. **Do not start subagents or background tasks.** Do every step in this conversation. The one exception: if this session has no page fetch tool of its own, the built-in page reader (the `web-fetch` agent) may be used to read a public page, in the foreground.
 
 ## The helper and the answers file
 

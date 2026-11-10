@@ -435,6 +435,14 @@ class BrowserInAWorkdeceroSession(PrivateFolder):
         wdprofile.load(os.path.join(ROOT, "examples", "profiles", "product-leader-denver.yaml"))
         self.assertFalse(os.path.exists(path))
 
+    def test_every_skill_says_no_subagents(self):
+        skills = os.path.join(ROOT, "skills")
+        for name in sorted(os.listdir(skills)):
+            if not os.path.isfile(os.path.join(skills, name, "SKILL.md")):
+                continue
+            with open(os.path.join(skills, name, "SKILL.md"), encoding="utf-8") as handle:
+                self.assertIn("**Do not start subagents or background tasks.**", handle.read(), name)
+
     def test_every_web_skill_says_never_open_a_browser(self):
         for name in ("job-sweep", "contract-sweep", "sources"):
             with open(os.path.join(ROOT, "skills", name, "SKILL.md"), encoding="utf-8") as handle:
