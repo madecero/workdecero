@@ -195,8 +195,12 @@ def plan(refresh=False, out=None, today=None):
             "whose job site was not found: search the employer name with the word careers and a system name "
             "such as Workday." % (max(2, share), 12 if mode == "lite" else 30),
             "The state's public workforce job board, the one its labor department runs. Every state has one. "
-            "It goes in every map (1 search). Then any city or regional job board.",
-            "Job boards and association career centers for this field (1 to %d searches)." % max(1, share),
+            "It goes in every map (1 search). Then any city or regional job board. For every board, pass the "
+            "page that LISTS postings for this field and area (a search-results or category page), never the "
+            "board's home page: a sweep reads exactly the page you give. The helper opens it and refuses a page "
+            "with no posting that matches the person's titles.",
+            "Job boards and association career centers for this field (1 to %d searches). The same rule: the "
+            "listing page for the field, not the home page." % max(1, share),
         ):
             step += 1
             print("  %d. JOBS: %s" % (step, text), file=out)
@@ -241,6 +245,29 @@ def _print_result(result, out):
         print("Nothing to do.", file=out)
 
 
+def _field(profile):
+    words = field_words(profile, 2)
+    return " and ".join(words) if words else "your field"
+
+
+def board_problem(entry, profile, fetcher):
+    """None when a job board entry is a page that lists postings in the person's field, else what is wrong.
+
+    A sweep reads a board by opening this exact page and picking out the
+    postings whose titles match. A board's home page, or a page of postings in
+    another field, gives it nothing.
+    """
+    leads, read, failed = harvest.board_leads([entry], profile, fetcher, limit=3)
+    where = _area(profile) or "your area"
+    if failed:
+        return ("its page has no list of postings a sweep can read. Add the page that lists %s jobs in %s (a search "
+                "results or category page)" % (_field(profile), where))
+    if not leads:
+        return ("this looks like the board's home page, or a list with nothing in your field: none of the postings "
+                "linked on it matches your titles. Add the page that lists %s jobs in %s" % (_field(profile), where))
+    return None
+
+
 def has_matching_role(entry, profile, fetcher, today):
     """None when a new employer has an open role that matches the person's titles, else why it is left out."""
     if entry.get("how") != "api" or not isinstance(entry.get("ats"), dict):
@@ -282,7 +309,10 @@ def add(text, out=None, fetcher=None, today=None):
         # A refresh. The map grows only by employers that have something for this person right now.
         def keep(entry):
             return has_matching_role(entry, profile, fetcher or liveness.HttpFetcher(), today)
-    result = sources.add_entries(source_map, proposals, fetcher=fetcher, today=today, keep_new_employer=keep)
+    live = fetcher or liveness.HttpFetcher()
+    result = sources.add_entries(source_map, proposals, fetcher=fetcher, today=today, keep_new_employer=keep,
+                                 check_board=(lambda entry: board_problem(entry, profile, live))
+                                 if (profile.get("tracks") or {}).get("jobs") else None)
     if result.added or result.updated:
         sources.save(source_map)
     _print_result(result, out)
@@ -293,12 +323,33 @@ def add(text, out=None, fetcher=None, today=None):
 
 def reverify(out=None, fetcher=None, today=None):
     out = out or sys.stdout
-    _profile()
+    profile = _profile()
     source_map = sources.load()
     result = sources.reverify(source_map, fetcher=fetcher, today=today)
-    if result.updated or result.dropped:
+    # A board is re-checked every time: is it still a page of postings in the person's field?
+    weak = []
+    if (profile.get("tracks") or {}).get("jobs"):
+        live = fetcher or liveness.HttpFetcher()
+        for entry in source_map.get("jobs") or []:
+            if entry.get("kind") in sources.BOARD_KINDS and entry.get("how") != "browser":
+                problem = board_problem(entry, profile, live)
+                flag = "Weak: %s." % problem if problem else None
+                notes = [part for part in (entry.get("notes") or "").split(" Weak: ")[0:1] if part.strip()]
+                wanted = " ".join(notes + ([flag] if flag else [])).strip()
+                if wanted != (entry.get("notes") or "").strip():
+                    if wanted:
+                        entry["notes"] = wanted
+                    else:
+                        entry.pop("notes", None)
+                if problem:
+                    weak.append((entry["name"], problem))
+    if result.updated or result.dropped or weak:
         sources.save(source_map)
     _print_result(result, out)
+    if weak:
+        print("Boards a sweep will get nothing from (%d). Replace each with a better page:" % len(weak), file=out)
+        for name, problem in weak:
+            print("  %s: %s." % (name, problem), file=out)
     return 0
 
 

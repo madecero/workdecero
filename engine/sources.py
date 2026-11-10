@@ -542,13 +542,20 @@ class AddResult(object):
         self.dropped = []    # (track, name, reason)
 
 
-def add_entries(source_map, proposals, fetcher=None, today=None, keep_new_employer=None):
+BOARD_KINDS = ("job-board", "field-board")
+
+
+def add_entries(source_map, proposals, fetcher=None, today=None, keep_new_employer=None, check_board=None):
     """Check proposed entries and merge the good ones into the map. `proposals` is {track: [entries]}.
 
     `keep_new_employer` is an optional test for an employer that is not in the
     map yet: it is given the checked entry and returns None to keep it, or the
     reason to leave it out. A refresh uses it so that the map only grows by
     employers that have something for this person.
+
+    `check_board` is an optional test for a job board: it is given the checked
+    entry and returns None to keep it, or the reason to refuse it. A board is
+    only useful as the page that lists postings in the person's field.
     """
     fetcher = fetcher or liveness.HttpFetcher()
     today = today or datetime.date.today()
@@ -565,6 +572,12 @@ def add_entries(source_map, proposals, fetcher=None, today=None, keep_new_employ
             except SourceError as exc:
                 result.dropped.append((track, label, str(exc)))
                 continue
+            if check_board and clean.get("kind") in BOARD_KINDS and clean.get("how") != "browser" \
+                    and clean.get("added_by") != "user":
+                reason = check_board(clean)
+                if reason:
+                    result.dropped.append((track, label, reason))
+                    continue
             existing = [item for item in source_map[track] if same_entry(item, clean)]
             if existing:
                 kept = existing[0]

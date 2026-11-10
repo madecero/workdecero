@@ -558,7 +558,7 @@ class Tool(MapCase):
         self.use_profile("nurse-manager-texas")
         text = json.dumps({"jobs": [employer("Example Health", "https://examplehealth.wd5.myworkdayjobs.com/Careers"),
                                     employer("Lone Star Regional Health", "https://careers.lonestarregional.example.org/jobs"),
-                                    {"name": "State job board", "url": "https://jobs.statework.example.gov/", "kind": "job-board"}]})
+                                    {"name": "State job board", "url": "https://jobs.statework.example.gov/search/listings", "kind": "job-board"}]})
         self.run_tool(sources_tool.add, text, fetcher=self.fetcher, today=TODAY)
         code, out = self.run_tool(sources_tool.finish, 9, "field job boards; city job board", today=TODAY)
         self.assertEqual(code, 0)
@@ -609,7 +609,7 @@ class Tool(MapCase):
         self.use_profile("product-leader-denver")
         self.assertEqual(self.command("plan")[0], 0)
         found = {"jobs": [employer("Front Range Robotics", "https://job-boards.greenhouse.io/frontrangerobotics"),
-                          {"name": "State job board", "url": "https://jobs.statework.example.gov/", "kind": "job-board"}],
+                          {"name": "State job board", "url": "https://jobs.statework.example.gov/search/listings", "kind": "job-board"}],
                  "networking": [{"name": "Denver Product Leaders", "kind": "meetup", "last_active": "2026-10-20",
                                  "url": "https://www.meetup.example.com/denver-product-leaders/"}]}
         self.assertEqual(self.run_tool(sources_tool.add, found, fetcher=self.fetcher, today=TODAY)[0], 0)
@@ -660,6 +660,55 @@ class Tool(MapCase):
         self.assertEqual(sources_tool.field_words(wdprofile.load()[0], 2), ["product", "AI"])
         self.use_profile("freelance-designer-portland")
         self.assertEqual(sources_tool.field_words(wdprofile.load()[0], 2), ["brand", "designer"])
+
+    def test_a_board_must_be_the_page_that_lists_postings_in_their_field(self):
+        self.use_profile("product-leader-denver")
+        home = {"name": "State job board", "url": "https://jobs.statework.example.gov/", "kind": "job-board"}
+        trades = {"name": "State trades list", "url": "https://jobs.statework.example.gov/search/trades",
+                  "kind": "job-board"}
+        listing = {"name": "State job board", "url": "https://jobs.statework.example.gov/search/listings",
+                   "kind": "job-board"}
+        code, out = self.run_tool(sources_tool.add, {"jobs": [home, trades]}, fetcher=self.fetcher, today=TODAY)
+        self.assertEqual(code, 1)
+        self.assertIn("State job board: its page has no list of postings a sweep can read. Add the page that lists "
+                      "product and AI jobs in Denver, CO", out)
+        self.assertIn("State trades list: this looks like the board's home page, or a list with nothing in your field: "
+                      "none of the postings linked on it matches your titles.", out)
+        self.assertEqual(sources.load()["jobs"], [])
+        code, out = self.run_tool(sources_tool.add, {"jobs": [listing]}, fetcher=self.fetcher, today=TODAY)
+        self.assertEqual(code, 0)
+        self.assertEqual(sources.load()["jobs"][0]["url"], "https://jobs.statework.example.gov/search/listings")
+        # A board the person added themselves is theirs to keep.
+        code, out = self.run_tool(sources_tool.add, {"jobs": [dict(trades, added_by="user")]}, fetcher=self.fetcher,
+                                  today=TODAY)
+        self.assertEqual(code, 0)
+        # The plan says which page to pass.
+        _, plan = self.run_tool(sources_tool.plan, today=TODAY)
+        self.assertIn("never the board's home page", plan)
+
+    def test_a_refresh_names_boards_a_sweep_gets_nothing_from(self):
+        self.use_profile("product-leader-denver")
+        saved = sources.empty_map()
+        saved["jobs"] = [
+            {"name": "State job board", "url": "https://jobs.statework.example.gov/search/listings", "kind": "job-board",
+             "how": "page", "verified_on": "2026-11-09"},
+            {"name": "Old home page entry", "url": "https://jobs.statework.example.gov/search/trades",
+             "kind": "field-board", "how": "page", "verified_on": "2026-11-09", "notes": "Added in an earlier build."},
+        ]
+        sources.save(saved)
+        code, out = self.run_tool(sources_tool.reverify, fetcher=self.fetcher, today=TODAY)
+        self.assertEqual(code, 0)
+        self.assertIn("Boards a sweep will get nothing from (1). Replace each with a better page:", out)
+        self.assertIn("  Old home page entry: this looks like the board's home page", out)
+        self.assertNotIn("  State job board:", out)
+        notes = dict((entry["name"], entry.get("notes", "")) for entry in sources.load()["jobs"])
+        self.assertIn("Added in an earlier build. Weak: this looks like the board's home page", notes["Old home page entry"])
+        self.assertNotIn("Weak", notes["State job board"])
+        # Flagged, not dropped, and flagged once however often it is re-checked.
+        self.run_tool(sources_tool.reverify, fetcher=self.fetcher, today=TODAY)
+        again = dict((entry["name"], entry.get("notes", "")) for entry in sources.load()["jobs"])
+        self.assertEqual(again["Old home page entry"].count("Weak:"), 1)
+        self.assertEqual(len(sources.load()["jobs"]), 2)
 
     def test_show_remove_and_refresh_plan(self):
         self.use_profile("freelance-designer-portland")

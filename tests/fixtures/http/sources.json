@@ -299,6 +299,16 @@
       "url": "https://www.marketplace.example.com/hire/designers",
       "status": 200,
       "body": "<html><body>Hire a designer</body></html>"
+    },
+    {
+      "url": "https://jobs.statework.example.gov/search/listings",
+      "status": 200,
+      "body": "<html><body><nav><a href=\"/\">Home</a><a href=\"/help\">Help</a><a href=\"/employers\">Employers</a></nav><ul><li><a href=\"/posting/5001\">Nurse Manager, Medical Surgical</a></li><li><a href=\"/posting/5002\">VP of Product</a></li><li><a href=\"/posting/5003\">Warehouse Associate</a></li><li><a href=\"/posting/5004\">Brand Designer</a></li><li><a href=\"/posting/5005\">Accountant II</a></li></ul></body></html>"
+    },
+    {
+      "url": "https://jobs.statework.example.gov/search/trades",
+      "status": 200,
+      "body": "<html><body><nav><a href=\"/\">Home</a><a href=\"/help\">Help</a></nav><ul><li><a href=\"/posting/6001\">Electrician</a></li><li><a href=\"/posting/6002\">Welder</a></li><li><a href=\"/posting/6003\">Plumber</a></li><li><a href=\"/posting/6004\">Carpenter</a></li></ul></body></html>"
     }
   ]
 }
