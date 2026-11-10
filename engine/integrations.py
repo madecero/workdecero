@@ -231,10 +231,29 @@ def screen(handoff, profile, home, today=None):
         if day["pages"] > caps["pages"] or day["searches"] > caps["searches"]:
             lines.append("The day's LinkedIn limit was passed. No more signed-in LinkedIn today.")
     for entry in handoff.get("integrations_skipped") or []:
-        if isinstance(entry, str) and entry.strip():
-            lines.append("Skipped: %s." % scoring.scrub_confidential(entry.strip().rstrip("."),
-                                                                     scoring.confidential_names(profile)))
+        if not (isinstance(entry, str) and entry.strip()):
+            continue
+        off = switched_off(entry, use)
+        # Something that is off in the profile gets one plain line, however research worded it or how often.
+        line = ("Skipped: %s off in your profile." % off if off else
+                "Skipped: %s." % scoring.scrub_confidential(entry.strip().rstrip("."), scoring.confidential_names(profile)))
+        if line not in lines:
+            lines.append(line)
     return cleaned, lines
+
+
+OFF_WORDS = (("linkedin", "linkedin", "signed-in LinkedIn is"), ("browser", "browser", "the browser pass is"),
+             ("chrome", "browser", "the browser pass is"), ("calendar", "calendar", "the calendar is"),
+             ("tracker", "tracker", "the task tracker is"), ("linear", "tracker", "the task tracker is"))
+
+
+def switched_off(entry, use):
+    """The plain name of the connection a skipped line is about, when that connection is off. Otherwise None."""
+    said = entry.lower()
+    for word, key, name in OFF_WORDS:
+        if word in said and not use.get(key):
+            return name
+    return None
 
 
 def connections(handoff_part):
@@ -289,8 +308,10 @@ def calendar_lines(profile, title, day, time_text, where, link, why):
              "       timezone: %s" % ((profile.get("location") or {}).get("timezone") or "their local time"),
              "       location: %s" % (scoring.scrub_confidential(where or "", names) or "(none)"),
              "       body:     %s" % (body or "(none)"),
-             "  3. If no %s calendar tool is in this session, do not try another way. Tell the person to add it "
-             "themselves." % use["calendar"]]
+             "  3. If no %s calendar tool is in this session, do not try another way. Say exactly this to the person: "
+             "\"Your calendar is switched on in your profile, but no %s calendar is connected to Claude Code in this "
+             "session, so nothing was added. Add it yourself, or connect the calendar and ask me again.\""
+             % (use["calendar"], use["calendar"].capitalize())]
     if dry_run():
         lines.insert(1, "  DRY RUN: do not call the calendar tool. Show the person the event above and say it was not "
                         "added.")

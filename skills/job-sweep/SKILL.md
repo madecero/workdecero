@@ -153,7 +153,7 @@ If the list was empty, skip this step.
 
 Run `TOOL finish`. It checks the tracker, writes the digest note, and prints a summary. Show the person that summary as it is, then add in your own words, briefly:
 
-* anything under "Not covered", and that a browser pass can be turned on later in setup,
+* anything under "Not covered". Only if the start report said the browser pass is OFF, add that it can be turned on in setup. If it was ON, never say that,
 * that the full digest, with deadlines first, is in the Digests folder of their tracker.
 
 Do not add pay figures, reasons something was left out, or names of people. Those are in the notes, where they belong.

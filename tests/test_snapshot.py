@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.join(_paths.REPO_ROOT, "trackers"))
 import contract_tool  # noqa: E402
 import miniyaml  # noqa: E402
 import snapshot  # noqa: E402
+import model  # noqa: E402
 import sources  # noqa: E402
 import vault  # noqa: E402
 import wdprofile  # noqa: E402
@@ -156,10 +157,42 @@ class Workbook(SnapshotCase):
         self.assertEqual(found["B%d" % applied][1], snapshot._fill_style(3))
         self.assertNotEqual(snapshot._fill_style(1), snapshot._fill_style(3))
         styles = self.book().read("xl/styles.xml").decode("utf-8")
-        self.assertEqual(styles.count("<xf "), 1 + 4 + 2 * len(snapshot.STAGE_FILLS))
+        self.assertEqual(styles.count("<xf "), 1 + 4 + 2 * len(snapshot.STAGE_FILLS) + 1 + len(snapshot.STAGE_FILLS))
         people = cells(self.book().read("xl/worksheets/sheet7.xml").decode("utf-8"))
         self.assertEqual([people["A3"][0], people["A4"][0]], ["Imani Brooks", "Aaron Zed"])      # 1st before 2nd
         self.assertEqual(people["B3"][0], "Example Tea Company")        # a link shows as its label
+
+    def test_pay_is_shown_as_money_and_stays_a_number(self):
+        book = self.book()
+        found = cells(book.read("xl/worksheets/sheet3.xml").decode("utf-8"))
+        headers = dict((found["%s2" % letter][0], letter) for letter in "ABCDEFGHIJK" if "%s2" % letter in found)
+        low = headers[model.CONTRACT.field("rate_min").display]
+        self.assertEqual(found["%s3" % low], (80.0, snapshot._fill_style(1, money=True)))     # still a number to sort by
+        self.assertNotEqual(snapshot._fill_style(1, money=True), snapshot._fill_style(1))
+        self.assertEqual(found["C3"][1], snapshot._fill_style(1))                             # win odds are not money
+        styles = book.read("xl/styles.xml").decode("utf-8")
+        self.assertIn('<numFmt numFmtId="164" formatCode="&quot;$&quot;#,##0"/>', styles)
+        self.assertEqual(snapshot.money_format({"jobs": {"currency": "GBP"}}), '"\u00a3"#,##0')
+        self.assertEqual(snapshot.money_format({"contracts": {"currency": "sar"}}), '"SAR "#,##0')
+        self.assertEqual(snapshot.money_format({"jobs": {"currency": '"><x'}}), '"$"#,##0')     # never breaks the file
+        events = cells(book.read("xl/worksheets/sheet6.xml").decode("utf-8"))
+        cost = [ref for ref, (value, style) in events.items() if value == 25.0][0]
+        self.assertEqual(events[cost][1], snapshot._fill_style(1, money=True))
+
+    def test_near_misses_sit_in_their_own_block_below_the_fits(self):
+        self.store.upsert("contract", "C-5", "Illustration for a seed catalogue", {"fit": 95, "near_miss": True,
+                                                                                   "near_reason": "Not brand work."})
+        snapshot.write(self.store, self.profile, TODAY)
+        found = cells(self.book().read("xl/worksheets/sheet3.xml").decode("utf-8"))
+        titles = [found["A%d" % row][0] for row in range(3, 12) if "A%d" % row in found]
+        self.assertEqual(titles[-2:], [snapshot.NEAR_LABEL, "Illustration for a seed catalogue"])   # last, whatever its odds
+        self.assertEqual(titles.count(snapshot.NEAR_LABEL), 1)
+        self.assertNotIn(snapshot.NEAR_LABEL, titles[:-2])
+        label_row = 3 + titles.index(snapshot.NEAR_LABEL)
+        sheet = self.book().read("xl/worksheets/sheet3.xml").decode("utf-8")
+        self.assertNotIn('<hyperlink ref="A%d"' % label_row, sheet)      # the label opens nothing
+        jobs = cells(self.book().read("xl/worksheets/sheet2.xml").decode("utf-8"))
+        self.assertNotIn(snapshot.NEAR_LABEL, [value for value, _ in jobs.values()])            # no block when none
 
     def test_the_first_cell_of_each_row_opens_its_note_in_obsidian(self):
         book = self.book()
@@ -185,7 +218,7 @@ class Workbook(SnapshotCase):
         self.assertIn(("Contracts", "Applied", 1.0), rows)
         self.assertIn(("Jobs", "None yet", 0.0), rows)
         self.assertIn(("People", "All", 2.0), rows)
-        self.assertEqual([found["A2"][0], found["B2"][0], found["C2"][0]], ["Tracker", "Status", "Notes"])
+        self.assertEqual([found["A2"][0], found["B2"][0], found["C2"][0]], ["Tracker", "Status", "Count"])
 
     def test_confidential_names_never_appear(self):
         book = self.book()

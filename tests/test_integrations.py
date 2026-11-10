@@ -130,6 +130,30 @@ class Gates(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.home, "usage.json")))   # nothing is counted when it is off
         self.assertEqual(handoff["finds"][0]["read_with"], "browser")              # the caller's copy is untouched
 
+    def test_a_switch_that_is_off_gets_one_plain_skipped_line(self):
+        # From the tester's run: the same switched-off connection was reported in several wordings.
+        handoff = {"integrations_skipped": ["browser: Claude in Chrome is not connected", "browser pass was off",
+                                            "Chrome was not used", "linkedin: not signed in",
+                                            "calendar: no Outlook tool in this session"]}
+        _, lines = integrations.screen(handoff, profile(), self.home, TODAY)
+        self.assertEqual(lines, ["Skipped: the browser pass is off in your profile.",
+                                 "Skipped: signed-in LinkedIn is off in your profile.",
+                                 "Skipped: the calendar is off in your profile."])
+        # A connection that is on and could not be used keeps what research said about it.
+        _, lines = integrations.screen({"integrations_skipped": ["browser: Claude in Chrome is not connected"]},
+                                       profile(ALL_ON), self.home, TODAY)
+        self.assertEqual(lines, ["Skipped: browser: Claude in Chrome is not connected."])
+
+    def test_a_missing_calendar_tool_is_said_plainly(self):
+        lines = "\n".join(integrations.calendar_lines(profile(ALL_ON), "Brand Meetup", "2026-11-18", "6:00 PM", "Example Hall",
+                                                      "https://groups.example.org/x", "A room of designers."))
+        self.assertIn("Your calendar is switched on in your profile, but no", lines)
+        self.assertIn("calendar is connected to Claude Code in this session, so nothing was added.", lines)
+        with open(os.path.join(_paths.REPO_ROOT, "skills", "job-sweep", "SKILL.md"), encoding="utf-8") as handle:
+            skill = handle.read()
+        self.assertNotIn("a browser pass can be turned on later in setup", skill)
+        self.assertIn("Only if the start report said the browser pass is OFF", skill)
+
     def test_results_are_kept_and_counted_when_the_connection_is_on(self):
         handoff = {"finds": [{"title": "VP of Product", "url": "https://jobs.example.com/1", "read_with": "browser"}],
                    "warm": {"J-1": {"connections": [{"name": "Priya Raman", "degree": "1st", "title": "VP Engineering"},

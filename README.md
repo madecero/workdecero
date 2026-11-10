@@ -68,6 +68,8 @@ Three steps, once, in order. Each is a slash command you type in Claude Code.
 
 You can also use plain words, such as "run the job sweep". When you do, Claude Code asks once whether it may start that part of workdecero. Say yes. The slash commands ask nothing.
 
+**Two things on screen are Claude Code's own, and workdecero has no say in them.** The first time you open a folder, Claude Code asks whether you trust it, and it may ask about a tool the first time one is used. And it sometimes shows a grey suggested reply in the box where you type. Those suggestions are guesses. They can contain a number or an answer you never gave, such as a pay figure or "my profile there is live". Type your own answers.
+
 ## Weekly use
 
 Run the sweeps you care about about once a week. Each takes a few minutes in Lite mode.
@@ -80,9 +82,13 @@ Run the sweeps you care about about once a week. Each takes a few minutes in Lit
 
 **Or just say it,** at any time:
 
-* "I applied to C-12" or "I won the cafe one"
+* "I applied to C-12" or "I won the cafe branding gig"
 * "I'm going to the product meetup" or "I met Priya at the product meetup"
 * "Prep me for E-4", which writes a short brief into that event's note
+
+**Where codes like C-12 and E-4 come from.** Every note gets a short id when it is written: J for a job, C for a contract gig, G for a group, E for an event, P for a person. It is in the note's properties, under ID. You never have to use one. A title in plain words works just as well, and "list my gigs" or "list my events" shows each one with its id.
+
+**Expect small weeks.** Most weeks a sweep adds a handful of items, and some weeks none. That is the tool working: it shows what is new and fits you, and says what it left out. A long list every week would mean it had stopped being choosy.
 
 The contract sweep keeps your rates private and puts proposal deadlines first. The networking sweep answers one question: which one or two things are worth going to this month, and who do I owe a note?
 
@@ -108,7 +114,7 @@ Your profile and local map live in `~/.config/workdecero/`. Your trackers live i
 
 ## What workdecero runs without asking
 
-Claude Code normally asks you before it runs a command or writes a file. Setup and the sweeps have many small steps, so while workdecero is enabled it approves a short, fixed list of its own actions for you: five helper commands that take no extra words, and one temporary file for each. Nothing else. To turn that off, disable the plugin with `claude plugin disable workdecero@workdecero`.
+Claude Code normally asks you before it runs a command or writes a file. Setup and the sweeps have many small steps, so while workdecero is enabled it approves a short, fixed list of its own actions for you: five small programs of its own (one each for setup, the local map and the three sweeps), each of which can only do a fixed list of steps, and one temporary file for each. Nothing else. To turn that off, disable the plugin with `claude plugin disable workdecero@workdecero`.
 
 To do this, a small check runs each time you send a prompt and each time Claude Code is about to run a shell command, write a file, start a skill or use a connected tool. It is a short Python script on your own computer. It takes a few hundredths of a second, reads nothing but the name of what is about to happen, and sends nothing anywhere.
 

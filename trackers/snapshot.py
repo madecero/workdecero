@@ -52,6 +52,10 @@ COLUMNS = {
     "event": ("status", "date", "time", "where", "cost", "group", "going", "follow_up_by"),
     "person": ("company", "role", "relationship", "met", "follow_up_by", "last_contact"),
 }
+# Columns that hold money, shown as currency. The symbol comes from the profile's currency code.
+MONEY = ("pay_min", "pay_max", "rate_min", "rate_max", "cost", "cost_per_year")
+SYMBOLS = {"USD": "$", "CAD": "$", "AUD": "$", "NZD": "$", "EUR": "\u20ac", "GBP": "\u00a3"}
+NEAR_LABEL = "Near misses (kept for reference, not a fit as they stand)"
 MAX_WIDTH, MIN_WIDTH = 60, 8
 _EPOCH = (1980, 1, 1, 0, 0, 0)          # a fixed time inside the zip, so the same notes give the same bytes
 
@@ -101,7 +105,9 @@ def _sorted_rows(type_name, rows):
         return -value if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
 
     if type_name in ("job", "contract", "group"):
-        return sorted(rows, key=lambda row: (_stage_number(note_type, row.values.get("status")) or 0, fit(row),
+        # Near misses sit in a block of their own below everything that fits.
+        return sorted(rows, key=lambda row: (row.values.get("near_miss") is True,
+                                             _stage_number(note_type, row.values.get("status")) or 0, fit(row),
                                              row.title.lower()))
     if type_name == "channel":
         return sorted(rows, key=lambda row: (_stage_number(note_type, row.values.get("status")) or 0, row.title.lower()))
@@ -123,11 +129,31 @@ def sheet_data(store, type_name, names):
     fields = [note_type.field(name) for name in COLUMNS[type_name] if note_type.has_field(name)]
     headers = [note_type.title_display] + [field.display for field in fields]
     data = []
+    in_near = False
     for row in _sorted_rows(type_name, store.rows(type_name)):
+        if row.values.get("near_miss") is True and not in_near:
+            in_near = True
+            data.append(([NEAR_LABEL] + [""] * len(fields), None, None))
         cells = [scoring.scrub_confidential(row.title, names)] + [_plain(row.values.get(field.name), names)
                                                                   for field in fields]
         data.append((cells, note_link(store, row), _stage_number(note_type, row.values.get("status"))))
     return headers, data
+
+
+def money_columns(type_name):
+    """Which columns of a sheet hold money, counting the title as column 0."""
+    note_type = model.BY_NAME[type_name]
+    names = [name for name in COLUMNS[type_name] if note_type.has_field(name)]
+    return set(index for index, name in enumerate(names, start=1) if name in MONEY)
+
+
+def money_format(profile):
+    """The spreadsheet number format for this person's money: "$185,000", or "SAR 185,000" for a code with no sign."""
+    code = str(((profile or {}).get("jobs") or {}).get("currency") or
+               ((profile or {}).get("contracts") or {}).get("currency") or "USD").upper()[:3]
+    code = "".join(ch for ch in code if ch.isalpha()) or "USD"
+    sign = SYMBOLS.get(code)
+    return '"%s"#,##0' % sign if sign else '"%s "#,##0' % code
 
 
 def summary_data(store):
@@ -181,13 +207,17 @@ def _cell(ref, value, style):
 
 
 # Style numbers. 0 plain, 1 header, 2 banner, 3 link. Then two per stage: filled, and filled link.
-def _fill_style(stage, link=False):
-    if stage is None or not (1 <= stage <= len(STAGE_FILLS)):
+# After those: money with no fill, then money with each stage's fill.
+def _fill_style(stage, link=False, money=False):
+    staged = stage is not None and 1 <= stage <= len(STAGE_FILLS)
+    if money and not link:
+        return 4 + 2 * len(STAGE_FILLS) + (stage if staged else 0)
+    if not staged:
         return 3 if link else 0
     return 4 + (stage - 1) * 2 + (1 if link else 0)
 
 
-def styles_xml():
+def styles_xml(money='"$"#,##0'):
     fills = ['<fill><patternFill patternType="none"/></fill>', '<fill><patternFill patternType="gray125"/></fill>']
     for colour in (HEADER_FILL, BANNER_FILL) + STAGE_FILLS:
         fills.append('<fill><patternFill patternType="solid"><fgColor rgb="%s"/><bgColor indexed="64"/></patternFill>'
@@ -204,18 +234,26 @@ def styles_xml():
         xfs.append('<xf numFmtId="0" fontId="0" fillId="%d" borderId="0" xfId="0" applyFill="1"/>' % (4 + index))
         xfs.append('<xf numFmtId="0" fontId="2" fillId="%d" borderId="0" xfId="0" applyFont="1" applyFill="1"/>'
                    % (4 + index))
+    xfs.append('<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>')
+    for index in range(len(STAGE_FILLS)):
+        xfs.append('<xf numFmtId="164" fontId="0" fillId="%d" borderId="0" xfId="0" applyNumberFormat="1" '
+                   'applyFill="1"/>' % (4 + index))
     return ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            '<numFmts count="1"><numFmt numFmtId="164" formatCode="%s"/></numFmts>'
             '<fonts count="4">%s</fonts><fills count="%d">%s</fills>'
             '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
             '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
             '<cellXfs count="%d">%s</cellXfs>'
             '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
-            '</styleSheet>') % (fonts, len(fills), "".join(fills), len(xfs), "".join(xfs))
+            '</styleSheet>') % (escape(money, {'"': "&quot;"}), fonts, len(fills), "".join(fills), len(xfs), "".join(xfs))
 
 
-def sheet_xml(banner, headers, rows):
-    """One worksheet. Returns (xml, [links in row order]). Row 1 is the banner, row 2 the headers."""
+def sheet_xml(banner, headers, rows, money=()):
+    """One worksheet. Returns (xml, [links in row order]). Row 1 is the banner, row 2 the headers.
+
+    `money` is the set of column numbers shown as currency.
+    """
     widths = [len(str(header)) for header in headers]
     for cells, _, _ in rows:
         for index, value in enumerate(cells):
@@ -240,8 +278,9 @@ def sheet_xml(banner, headers, rows):
     for number, (cells, link, stage) in enumerate(rows, start=3):
         parts = []
         for index, value in enumerate(cells):
+            is_money = index in money and isinstance(value, (int, float)) and not isinstance(value, bool)
             parts.append(_cell("%s%d" % (_column(index), number), value,
-                               _fill_style(stage, link=bool(link) and index == 0)))
+                               _fill_style(stage, link=bool(link) and index == 0, money=is_money)))
         out.append('<row r="%d">%s</row>' % (number, "".join(parts)))
         if link:
             links.append((number, link))
@@ -270,10 +309,10 @@ def build(store, profile, today=None):
     banner = BANNER % today.isoformat()
     sheets = []
     summary_rows = [([label, status, count], None, stage) for label, status, count, stage in summary_data(store)]
-    sheets.append(("Summary", sheet_xml(banner, ["Tracker", "Status", "Notes"], summary_rows)))
+    sheets.append(("Summary", sheet_xml(banner, ["Tracker", "Status", "Count"], summary_rows)))
     for type_name, label in SHEETS:
         headers, rows = sheet_data(store, type_name, names)
-        sheets.append((label, sheet_xml(banner, headers, rows)))
+        sheets.append((label, sheet_xml(banner, headers, rows, money_columns(type_name))))
 
     files = {}
     overrides, workbook_sheets, workbook_rels = [], [], []
@@ -311,7 +350,7 @@ def build(store, profile, today=None):
         '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">%s'
         '<Relationship Id="rId%d" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" '
         'Target="styles.xml"/></Relationships>' % ("".join(workbook_rels), style_id))
-    files["xl/styles.xml"] = styles_xml()
+    files["xl/styles.xml"] = styles_xml(money_format(profile))
     return files
 
 
