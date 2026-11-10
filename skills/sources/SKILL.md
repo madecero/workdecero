@@ -97,7 +97,7 @@ Do not pass a third-party board's copy of an employer's postings as the employer
 
 1. Run `TOOL plan`. If it says there is no profile, tell the person to run `/workdecero:setup` first and stop.
 2. Tell the person in one or two lines what you are about to do and roughly how long it takes (about 3 minutes in Lite mode), then start.
-3. Work down the checklist in order. Keep a count of the web searches you use. For each item: search, read the most useful result pages, collect entries, write up to 10 of them to the hand-off file, and run `TOOL add`. Read the helper's answer. It tells you what was added and what was dropped.
+3. **Run the plan's SEARCHES TO RUN FIRST exactly as written, in the order given,** before any search of your own. They are built from this person's profile and are the same every time, so that two builds find the same core sources. Do not reword them. Then work down the checklist in order with the searches that are left. Keep a count of the web searches you use. For each item: search, read the most useful result pages, collect entries, write up to 10 of them to the hand-off file, and run `TOOL add`. Read the helper's answer. It tells you what was added and what was dropped.
 4. Prefer a list page (a "largest employers" list, an association's chapter directory, a chamber's member directory) over many single searches. One good page can yield ten entries.
 5. Match the person's field:
    * A nurse gets hospital systems and clinics, and for contract work travel and per-diem nursing agencies.

@@ -186,6 +186,14 @@ def plan(refresh=False, out=None, today=None):
                 entry["name"] for entry in dormant), file=out)
     print("", file=out)
 
+    searches = fixed_queries(profile, refresh)
+    print("SEARCHES TO RUN FIRST (%d of your %d). Run these exact searches, in this order, before any of your own. "
+          "They are the same every time for this person, so that two builds find the same core." % (
+              len(searches), budget), file=out)
+    for number, (track, query) in enumerate(searches, start=1):
+        print("  %d. %s: %s" % (number, track, query), file=out)
+    print("  Use the searches that are left on whatever the checklist below still lacks.", file=out)
+    print("", file=out)
     print("CHECKLIST, most important first. Stop when the budget runs out and report what was skipped.", file=out)
     step = 0
     share = max(1, budget // max(1, len(tracks) * 2))
@@ -223,11 +231,11 @@ def plan(refresh=False, out=None, today=None):
             print("  %d. CONTRACT WORK: the state and local public-bid portals (1 search)." % step, file=out)
     if "networking" in tracks:
         for text in (
-            "Meetups and user groups for this field in the area (about %d searches). Search Meetup ONCE FOR EACH "
-            "of these field words, with the area: %s. From each search take the groups with the most members "
+            "Meetups and user groups for this field in the area (about %d searches). The fixed searches above "
+            "look on Meetup once for each of these words: %s. From each search take the groups with the most members "
             "that have an event coming up: the largest active groups must not be missed. Put the member count "
             "in notes. Each group needs the date of its most recent event. Skip any with nothing in the last "
-            "six months." % (max(2, share), ", ".join(field_words(profile, 2)) or "the field's main topic"),
+            "six months." % (max(2, share), ", ".join(group_words(profile)) or "the field's main topic"),
             "Professional associations and their local chapters, and the local chamber (1 to %d searches)." % max(1, share),
         ):
             step += 1
@@ -418,6 +426,94 @@ def field_words(profile, limit=3):
     return ranked[:limit]
 
 
+_PEOPLE_NOISE = set("people person leaders leader folks others other new tech professionals professional members "
+                    "owners owner local who want wants like".split())
+
+
+def _place(profile):
+    """(city or metro to search with, state as written) from the home base. Never more than that."""
+    location = profile.get("location") or {}
+    base = str(location.get("home_base") or "")
+    city = (location.get("metro") or base.split(",")[0]).strip()
+    # The state is used as the person wrote it (usually its two letters). No list of place names is kept here.
+    state = base.split(",")[1].strip() if "," in base else ""
+    return city, state
+
+
+def group_words(profile, limit=4):
+    """Words to search groups by: the field's words, then who the person wants to meet."""
+    words = field_words(profile, 2)
+    have = set(word.lower() for word in words)
+    names = scoring.confidential_names(profile)
+    counts, order = {}, []
+    for text in (profile.get("networking") or {}).get("who_to_meet") or []:
+        for word in "".join(ch if ch.isalnum() else " " for ch in scoring.scrub_confidential(text, names, " ")).split():
+            key = word.lower()
+            if key in _FIELD_NOISE or key in _PEOPLE_NOISE or key in have or key.isdigit() or \
+                    (len(key) < 3 and word != word.upper()):
+                continue
+            if key not in counts:
+                order.append(word if word == word.upper() else key)
+            counts[key] = counts.get(key, 0) + 1
+    extra = sorted(order, key=lambda word: (-counts[word.lower()], order.index(word)))
+    return (words + extra)[:limit]
+
+
+def fixed_queries(profile, refresh=False):
+    """The searches to run first, in order: [(sweep, query)]. The same profile always gives the same list.
+
+    Built only from the person's titles, field words, the kinds of people they
+    want to meet, what they sell, and their city and state. Never from pay, an
+    employer, a name, or anything else that research is not told.
+    """
+    names = scoring.confidential_names(profile)
+    tracks = profile.get("tracks") or {}
+    jobs, contracts = profile.get("jobs") or {}, profile.get("contracts") or {}
+    city, state = _place(profile)
+    words = field_words(profile, 2)
+    first = words[0] if words else ""
+    title = scoring.scrub_confidential(((jobs.get("titles") or [""])[0]), names, "").strip()
+    found = []
+
+    def add(track, text):
+        text = " ".join(scoring.scrub_confidential(text, names, "").split())
+        if text and (track, text) not in found:
+            found.append((track, text))
+
+    if tracks.get("jobs"):
+        industry = scoring.scrub_confidential(((jobs.get("preferred_industries") or [first])[0]), names, "").strip()
+        add("JOBS", "largest %s employers in %s" % (industry, city))
+        add("JOBS", "companies hiring %s in %s" % (title or first, city))
+        add("JOBS", "%s state workforce job board" % (state or city))
+        add("JOBS", "%s jobs %s job board" % (title or first, city))
+    if tracks.get("contracts"):
+        taken = contracts.get("engagement_types") or []
+        service = scoring.scrub_confidential(((contracts.get("services") or [first])[0]), names, "").strip()
+        gig_title = scoring.scrub_confidential(((contracts.get("titles") or [service])[0]), names, "").strip()
+        add("CONTRACT WORK", "%s freelance marketplace for freelancers" % service)
+        if any(kind in taken for kind in ("fractional", "retainer")):
+            add("CONTRACT WORK", "%s talent network apply as talent" % gig_title)
+        if any(kind in taken for kind in ("independent-1099", "corp-to-corp", "w2-contract")):
+            add("CONTRACT WORK", "%s contract staffing agency %s" % (first, city))
+        if "expert-call" in taken:
+            add("CONTRACT WORK", "expert network %s become an expert" % first)
+        if (contracts.get("public_bids") or {}).get("enabled"):
+            add("CONTRACT WORK", "%s government bid opportunities %s" % (state, service))
+    if tracks.get("networking"):
+        groups = group_words(profile)
+        for word in groups[:2]:
+            add("NETWORKING", "site:meetup.com %s %s" % (word, city))
+        add("NETWORKING", "%s professional association %s chapter" % (first, state or city))
+        add("NETWORKING", "%s chamber of commerce events" % city)
+        for word in groups[2:]:                    # who they want to meet, with whatever budget is left
+            add("NETWORKING", "site:meetup.com %s %s" % (word, city))
+    limit = sources.budget(profile, refresh)
+    return found[:limit]
+
+
+READABLE_SHARE = (2, 3)        # at least two thirds of the employer target should have a job list a sweep can read
+
+
 def coverage_gaps(source_map, profile):
     """What a first build still lacks, in plain words. An empty list means the plan was covered."""
     tracks = profile.get("tracks") or {}
@@ -431,6 +527,13 @@ def coverage_gaps(source_map, profile):
         employers, target = count("jobs", "employer"), EMPLOYER_TARGET.get(mode, 12)
         if employers < target:
             gaps.append("%d of %d employers" % (employers, target))
+        readable = len([entry for entry in source_map.get("jobs") or []
+                        if entry.get("kind") == "employer" and entry.get("how") == "api"])
+        wanted = (target * READABLE_SHARE[0] + READABLE_SHARE[1] - 1) // READABLE_SHARE[1]
+        if readable < wanted:
+            gaps.append("%d of %d employers have a job list a sweep can read, and %d are wanted. Prefer employers "
+                        "whose careers page leads to a job board, and give the helper each employer's own homepage "
+                        "so it can look for the board" % (readable, employers, wanted))
         if not count("jobs", "job-board", "state-board"):
             gaps.append("no state workforce job board yet")
         if not count("jobs", "field-board"):

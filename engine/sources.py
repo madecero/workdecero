@@ -386,10 +386,19 @@ def verify_page(url, fetcher, want_body=False):
     With `want_body` the page text is returned as a third value, for reading links off it.
     """
     response = fetcher.get(url, accept="text/html")
+    state, note = verify_page_result(response)
+    again = getattr(fetcher, "get_as_browser", None)
+    if state == "gone" and again is not None:
+        # Never call a link dead on one answer. Some sites say "not found" to a script and serve a browser.
+        second = again(url)
+        if second.status == 200:
+            response, state, note = second, "ok", "page loads (on a second try, asked for as a browser would)"
+        elif verify_page_result(second)[0] == "blocked":
+            state, note = "blocked", "the two tries disagreed (%s, then %s)" % (
+                note, verify_page_result(second)[1])
     if want_body:
-        state, note = verify_page_result(response)
         return state, note, (response.body if response.status == 200 else ""), response.final_url
-    return verify_page_result(response)
+    return state, note
 
 
 def verify_page_result(response):
@@ -622,13 +631,21 @@ def reverify(source_map, fetcher=None, today=None, weeks=STALE_AFTER_WEEKS):
             # to answer (see needs_activity_check), so an old date alone never drops it here.
             clean = check_entry(track, entry, fetcher, today, require_activity=False)
         except SourceError as exc:
+            failed_on = entry.get("failed_check")
             if entry.get("added_by") == "user":
                 entry["notes"] = "Check this one: %s." % str(exc).rstrip(".")
                 result.updated.append((track, entry["name"]))
-            else:
+            elif failed_on and failed_on != today.isoformat():
+                # It failed on an earlier day too. Two failures on two days: now it goes.
                 source_map[track].remove(entry)
-                result.dropped.append((track, entry["name"], str(exc)))
+                result.dropped.append((track, entry["name"], "%s, at two checks (%s and %s)" % (
+                    str(exc), failed_on, today.isoformat())))
+            else:
+                # One failed check never drops a source. It is marked and looked at again next time.
+                entry["failed_check"] = failed_on or today.isoformat()
+                result.updated.append((track, entry["name"]))
             continue
+        clean.pop("failed_check", None)
         if entry.get("last_active"):
             clean["last_active"] = entry["last_active"]
         source_map[track][source_map[track].index(entry)] = clean

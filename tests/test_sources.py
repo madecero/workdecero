@@ -377,18 +377,60 @@ class Merging(MapCase):
         later = datetime.date(2027, 6, 1)
         self.assertEqual(len(sources.stale_entries(source_map, later)), 7)
         result = sources.reverify(source_map, self.fetcher, later)
-        self.assertEqual([(name, reason) for _, name, reason in result.dropped], [("Dead board", "page is gone (HTTP 404)")])
+        # One failed check never drops a source. It is marked, and looked at again the next time.
+        self.assertEqual(result.dropped, [])
+        dead = [entry for entry in source_map["jobs"] if entry["name"] == "Dead board"][0]
+        self.assertEqual(dead["failed_check"], "2027-06-01")
+        same_day = sources.reverify(source_map, self.fetcher, later)
+        self.assertEqual(same_day.dropped, [])                         # a second look on the same day is not a second day
+        next_time = datetime.date(2027, 6, 29)
+        result = sources.reverify(source_map, self.fetcher, next_time)
+        self.assertEqual([(name, reason) for _, name, reason in result.dropped],
+                         [("Dead board", "page is gone (HTTP 404), at two checks (2027-06-01 and 2027-06-29)")])
         names = [entry["name"] for entry in source_map["jobs"]]
         self.assertIn("My friend's shop", names)                     # the person's own entry stays, with a note
         mine = [entry for entry in source_map["jobs"] if entry["name"] == "My friend's shop"][0]
         self.assertIn("Check this one", mine["notes"])
         health = [entry for entry in source_map["jobs"] if entry["name"].startswith("Example Health")][0]
         self.assertEqual(health["verified_on"], "2027-06-01")
+        self.assertNotIn("failed_check", health)
         group = source_map["networking"][-1] if source_map["networking"][-1]["kind"] == "meetup" else \
             [entry for entry in source_map["networking"] if entry["kind"] == "meetup"][0]
         self.assertEqual(group["last_active"], "2026-10-20")         # an old date alone does not drop a group
         self.assertEqual([entry["name"] for entry in sources.needs_activity_check(source_map, later)],
                          ["Denver Product Leaders"])                  # research is asked to look again
+
+    def test_a_link_is_never_called_dead_on_one_answer(self):
+        class TwoFaced(FixtureFetcher):
+            """A site that says "not found" to a script and serves a browser."""
+
+            def __init__(self, second):
+                FixtureFetcher.__init__(self)
+                self.second = second
+                self.as_browser = []
+
+            def get_as_browser(self, url):
+                self.as_browser.append(url)
+                return liveness.Response(self.second, "<html><body><a href='/x'>Jobs</a></body></html>", url, None)
+
+        board = {"name": "Field board", "url": "https://deadboard.example.com/jobs", "kind": "association"}
+        served = TwoFaced(200)
+        entry = sources.check_entry("networking", board, served, TODAY)
+        self.assertEqual(entry["how"], "page")                         # kept: the second try got the page
+        self.assertEqual(served.as_browser, ["https://deadboard.example.com/jobs"])
+        refused = TwoFaced(403)
+        entry = sources.check_entry("networking", board, refused, TODAY)
+        self.assertEqual(entry["how"], "browser")                      # the two tries disagree: kept for the browser
+        self.assertIn("the two tries disagreed", entry["notes"])
+        gone = TwoFaced(404)
+        with self.assertRaises(sources.SourceError) as caught:
+            sources.check_entry("networking", board, gone, TODAY)
+        self.assertIn("page is gone (HTTP 404)", str(caught.exception))   # dead both ways: dropped
+        # A page that loads the first time is not asked for twice.
+        fine = TwoFaced(200)
+        sources.check_entry("networking", {"name": "Chamber", "url": "https://roundrockchamber.example.org/",
+                                           "kind": "chamber"}, fine, TODAY)
+        self.assertEqual(fine.as_browser, [])
 
     def test_unreadable_file_is_reported(self):
         with open(sources.path(), "w") as handle:
@@ -597,11 +639,48 @@ class Tool(MapCase):
         names = [entry["name"] for entry in sources.load()["jobs"]]
         self.assertEqual(sorted(names), ["Front Range Robotics", "Small Shop Two"])     # the person's own add is kept
 
+    def test_the_plan_gives_the_same_exact_searches_every_time(self):
+        self.use_profile("product-leader-denver")
+        profile = wdprofile.load()[0]
+        searches = sources_tool.fixed_queries(profile)
+        self.assertEqual(searches, sources_tool.fixed_queries(profile))               # the same list, every time
+        self.assertEqual(searches[:4], [
+            ("JOBS", "largest B2B software employers in Denver"), ("JOBS", "companies hiring VP of Product in Denver"),
+            ("JOBS", "CO state workforce job board"), ("JOBS", "VP of Product jobs Denver job board")])
+        texts = [query for _, query in searches]
+        self.assertIn("site:meetup.com product Denver", texts)
+        self.assertIn("site:meetup.com AI Denver", texts)                             # one search for each field word
+        self.assertIn("Denver chamber of commerce events", texts)
+        self.assertIn("expert network product become an expert", texts)               # this person takes expert calls
+        self.assertLessEqual(len(searches), 12)                                        # inside the Lite budget
+        self.assertLessEqual(len(sources_tool.fixed_queries(profile, refresh=True)), 4)
+        _, plan = self.run_tool(sources_tool.plan, today=TODAY)
+        self.assertIn("SEARCHES TO RUN FIRST (12 of your 12). Run these exact searches, in this order", plan)
+        self.assertIn("  1. JOBS: largest B2B software employers in Denver", plan)
+        # Only what research may know goes into a search: no pay, no employer, no name, no leave-out.
+        with open(wdprofile.profile_path(), encoding="utf-8") as handle:
+            text = handle.read()
+        text = text.replace("    - VP of Product\n", "    - VP of Product at Granite Peak Software\n", 1)
+        with open(wdprofile.profile_path(), "w", encoding="utf-8") as handle:
+            handle.write(text)
+        guarded = wdprofile.load()[0]
+        joined = " | ".join(query for _, query in sources_tool.fixed_queries(guarded))
+        person = guarded["person"]
+        for private in ("Granite Peak", person["name"], person["name"].split()[0], str(guarded["jobs"]["salary_floor"]),
+                        "210", str(guarded["contracts"]["rate_floor_hourly"]), "Alpenglow", "Summit Peak"):
+            self.assertNotIn(private, joined)
+        self.assertIn("companies hiring VP of Product at in Denver", joined)          # the name is cut out, not printed
+        # A designer with no job sweep gets contract and networking searches only.
+        self.use_profile("freelance-designer-portland")
+        designer = [track for track, _ in sources_tool.fixed_queries(wdprofile.load()[0])]
+        self.assertNotIn("JOBS", designer)
+        self.assertEqual(sources_tool.group_words(wdprofile.load()[0]), ["brand", "designer", "founders", "food"])
+
     def test_the_plan_names_the_three_things_every_map_has(self):
         self.use_profile("product-leader-denver")
         _, plan = self.run_tool(sources_tool.plan, today=TODAY)
         self.assertIn("The state's public workforce job board, the one its labor department runs.", plan)
-        self.assertIn("Search Meetup ONCE FOR EACH of these field words, with the area: product, AI.", plan)
+        self.assertIn("look on Meetup once for each of these words: product, AI, startup, founders.", plan)
         self.assertIn("the largest active groups must not be missed", plan)
         self.assertIn("never the page a client uses to hire", plan)
 
@@ -636,8 +715,11 @@ class Tool(MapCase):
         self.assertEqual(code, 0)
         self.assertNotIn("COVERAGE CHECK", out)
         self.assertIn("Skipped to stay in budget: climate employers.", out)
-        self.assertIn("Not covered: 1 of 12 employers; no job board for the field yet; no marketplaces or talent "
-                      "networks yet; no agencies yet; 1 of 2 meetups", out)
+        missing = out.split("Not covered: ")[1]
+        for gap in ("1 of 12 employers", "1 of 1 employers have a job list a sweep can read, and 8 are wanted",
+                    "no job board for the field yet", "no marketplaces or talent networks yet", "no agencies yet",
+                    "1 of 2 meetups"):
+            self.assertIn(gap, missing)
         self.assertNotIn("no expert networks", out)
         self.assertTrue(sources.load()["built_on"])
         self.assertFalse(sources_tool.handoff.run_is_open("sources"))  # and the run is closed

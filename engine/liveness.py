@@ -44,6 +44,10 @@ LIVE, CLOSED, UNKNOWN = "live", "closed", "unknown"
 SUSPECT = "suspect"   # stored on a note: unknown, with one weak sign of being closed
 
 USER_AGENT = "Mozilla/5.0 (compatible; workdecero posting check)"
+# Used for one second try only, before a link is called dead (see HttpFetcher.get_as_browser).
+BROWSER_USER_AGENT = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) "
+                      "Version/17.0 Safari/605.1.15")
+BROWSER_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 TIMEOUT_SECONDS = 20
 MIN_SECONDS_PER_HOST = 1.0
 MAX_RETRIES = 2
@@ -135,6 +139,19 @@ class HttpFetcher(object):
             self._sleep(min(retry_after if retry_after is not None else 5 * (2 ** attempt), 60))
         return response
 
+    def get_as_browser(self, url):
+        """One more try at a page, asking for it the way a browser does.
+
+        Some sites answer "not found" to anything that does not look like a
+        browser. Before a link is called dead, it is asked for once more with
+        the headers a browser sends. Same pacing and limits as get.
+        """
+        host = urllib.parse.urlsplit(url).netloc.lower()
+        self._wait_for_host(host)
+        response, _ = self._once(url, BROWSER_ACCEPT, user_agent=BROWSER_USER_AGENT,
+                                 extra={"Accept-Language": "en-US,en;q=0.9"})
+        return response
+
     def post_json(self, url, payload):
         """POST a small JSON body, for job-site systems whose public job list is a POST. Same manners as get."""
         host = urllib.parse.urlsplit(url).netloc.lower()
@@ -147,8 +164,9 @@ class HttpFetcher(object):
             self._sleep(min(retry_after if retry_after is not None else 5 * (2 ** attempt), 60))
         return response
 
-    def _once(self, url, accept, body=None):
-        headers = {"User-Agent": self.user_agent, "Accept": accept}
+    def _once(self, url, accept, body=None, user_agent=None, extra=None):
+        headers = {"User-Agent": user_agent or self.user_agent, "Accept": accept}
+        headers.update(extra or {})
         if body is not None:
             headers["Content-Type"] = "application/json"
         request = urllib.request.Request(url, data=body, headers=headers)

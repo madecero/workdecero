@@ -658,6 +658,12 @@ def write_digest(state, profile, store, problems, today=None):
         lines.append("- Employers added to your local map from postings found: %d." % state["learned"])
     if state["employers_failed"]:
         lines.append("- Job lists that did not answer: %s." % ", ".join(state["employers_failed"]))
+    if state.get("employers_as_pages"):
+        lines += ["", "## Employers a sweep cannot read",
+                  "%s. Their job sites have no list a sweep can read, so their openings are only found when a search "
+                  "happens on one. If you find the link to one's job board (often on its careers page, on a site such "
+                  "as Greenhouse, Lever, Ashby or Workday), say \"add (the link) to my sources\" and it is read "
+                  "directly from then on." % ", ".join(state["employers_as_pages"])]
     if state.get("by_hand"):
         lines += ["", "## Check by hand"]
         for entry in state["by_hand"]:

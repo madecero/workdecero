@@ -533,6 +533,20 @@ class Boards(SweepCase):
         self.assertIn("- Seen and not read: [Head of Product](https://boards.example.org/job/head-of-product/104)",
                       self.digest().section)
 
+    def test_the_digest_names_employers_a_sweep_cannot_read_and_how_to_fix_that(self):
+        data = sources.load()
+        data["jobs"].append({"name": "Mountain States Hospital", "url": "https://careers.mountainstates.example.org/",
+                             "kind": "employer", "how": "page", "verified_on": "2026-11-09"})
+        sources.save(data)
+        _, report = self.start()
+        self.hand_off({"assessed": self.judge_all(report, work_mode=None, pay_max=None), "leads_not_fits": ["b1"],
+                       "searches": 9})
+        self.run_step(sweep_tool.intake, fetcher=self.fetcher, today=TODAY)
+        self.run_step(sweep_tool.finish, today=TODAY)
+        part = self.digest().section.split("## Employers a sweep cannot read")[1].split("##")[0]
+        self.assertIn("Mountain States Hospital. Their job sites have no list a sweep can read", part)
+        self.assertIn('say "add (the link) to my sources"', part)
+
     def test_a_state_board_to_check_by_hand_is_linked_in_the_digest_and_never_read(self):
         data = sources.load()
         data["jobs"].append({"name": "State workforce board", "url": "https://jobs.statework.example.gov/",
