@@ -106,7 +106,8 @@ Do not pass a third-party board's copy of an employer's postings as the employer
 7. **A refresh adds an employer only when it has an open role for this person.** Size alone is not a reason. The helper checks, and leaves out a new employer with nothing that matches.
 8. **Use the budget.** If searches are left and a section is thin (fewer employers than the plan asks for, or a sweep with only two or three sources), keep going. Stopping early with half the budget unused shortchanges the person.
 9. When the checklist is done or the budget is used, write the true number of searches and a short list of what you did not get to into the hand-off file (an empty list if nothing was skipped), and run `TOOL finish`. Show the person the summary it prints, as it is.
-10. Add one line of your own: anything notable you could not verify, and that they can say "show my sources" or "remove NAME from my sources" at any time.
+10. **If `TOOL finish` answers COVERAGE CHECK**, it lists exactly what the map is still short of and how many searches are left. Do one more pass on those gaps only, add what you find with `TOOL add`, write the hand-off file again with the new number of searches, and run `TOOL finish` again. It asks once. The second time it records the map and lists what is missing under "Not covered".
+11. Add one line of your own: anything notable you could not verify, and that they can say "show my sources" or "remove NAME from my sources" at any time.
 
 ## Refreshing the map
 

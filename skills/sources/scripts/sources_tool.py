@@ -214,11 +214,11 @@ def plan(refresh=False, out=None, today=None):
             print("  %d. CONTRACT WORK: the state and local public-bid portals (1 search)." % step, file=out)
     if "networking" in tracks:
         for text in (
-            "Meetups and user groups for this field in the area (about %d searches). Start with ONE search of "
-            "Meetup for the field's topic in the area, and take the groups with the most members that have an "
-            "event coming up: the largest active groups must not be missed. Put the member count in notes. Each "
-            "group needs the date of its most recent event. Skip any with nothing in the last six months."
-            % max(2, share),
+            "Meetups and user groups for this field in the area (about %d searches). Search Meetup ONCE FOR EACH "
+            "of these field words, with the area: %s. From each search take the groups with the most members "
+            "that have an event coming up: the largest active groups must not be missed. Put the member count "
+            "in notes. Each group needs the date of its most recent event. Skip any with nothing in the last "
+            "six months." % (max(2, share), ", ".join(field_words(profile, 2)) or "the field's main topic"),
             "Professional associations and their local chapters, and the local chamber (1 to %d searches)." % max(1, share),
         ):
             step += 1
@@ -331,12 +331,97 @@ def _summary_lines(source_map):
     return lines
 
 
+EMPLOYER_TARGET = {"lite": 12, "full": 30}
+_FIELD_NOISE = set("""a an and at for in of on the to with by vp svp evp chief officer head director senior sr junior
+    lead principal staff manager management managing associate assistant executive fractional freelance contract
+    consultant consulting advisor advisory specialist coordinator leader leaders leading team teams years year
+    recently focused focus based experience experienced b2b b2c software services service small business businesses
+    company companies features strategy strategic new work working people""".split())
+
+
+def field_words(profile, limit=3):
+    """The words that name this person's field, most used first. Group searches are run once for each."""
+    person, skills = profile.get("person") or {}, profile.get("skills") or {}
+    texts = [person.get("headline") or ""] + list((profile.get("jobs") or {}).get("titles") or []) + \
+        list((profile.get("contracts") or {}).get("titles") or []) + list(skills.get("core") or [])
+    counts, order = {}, []
+    for text in texts:
+        seen = set()
+        for word in "".join(ch if ch.isalnum() else " " for ch in scoring.scrub_confidential(
+                text, scoring.confidential_names(profile), " ")).split():
+            key = word.lower()
+            if key in _FIELD_NOISE or key.isdigit() or (len(key) < 3 and word != word.upper()) or key in seen:
+                continue
+            seen.add(key)
+            if key not in counts:
+                order.append(word if word == word.upper() else key)
+            counts[key] = counts.get(key, 0) + 1
+    ranked = sorted(order, key=lambda word: (-counts[word.lower()], order.index(word)))
+    return ranked[:limit]
+
+
+def coverage_gaps(source_map, profile):
+    """What a first build still lacks, in plain words. An empty list means the plan was covered."""
+    tracks = profile.get("tracks") or {}
+    mode = profile.get("mode") or "lite"
+    gaps = []
+
+    def count(track, *kinds):
+        return len([entry for entry in source_map.get(track) or [] if entry.get("kind") in kinds])
+
+    if tracks.get("jobs"):
+        employers, target = count("jobs", "employer"), EMPLOYER_TARGET.get(mode, 12)
+        if employers < target:
+            gaps.append("%d of %d employers" % (employers, target))
+        if not count("jobs", "job-board"):
+            gaps.append("no state workforce job board yet")
+        if not count("jobs", "field-board"):
+            gaps.append("no job board for the field yet")
+    if tracks.get("contracts"):
+        taken = (profile.get("contracts") or {}).get("engagement_types") or []
+        if not count("contracts", "marketplace", "talent-network"):
+            gaps.append("no marketplaces or talent networks yet")
+        if any(kind in taken for kind in ("independent-1099", "corp-to-corp", "w2-contract")) and \
+                not count("contracts", "agency"):
+            gaps.append("no agencies yet")
+        if "expert-call" in taken and not count("contracts", "expert-network"):
+            gaps.append("no expert networks yet")
+        if ((profile.get("contracts") or {}).get("public_bids") or {}).get("enabled") and \
+                not count("contracts", "bid-portal"):
+            gaps.append("no public-bid portal yet")
+    if tracks.get("networking"):
+        groups, wanted = count("networking", "meetup", "user-group"), max(2, len(field_words(profile, 2)))
+        if groups < wanted:
+            gaps.append("%d of %d meetups or user groups (one Meetup search for each of: %s)" % (
+                groups, wanted, ", ".join(field_words(profile, 2))))
+        if not count("networking", "association", "chamber"):
+            gaps.append("no association or chamber yet")
+    return gaps
+
+
 def finish(searches, skipped, out=None, today=None):
+    """Record the run. Returns 0 when recorded, 1 when research is asked for one more pass first."""
     out = out or sys.stdout
     today = today or datetime.date.today()
     profile = _profile()
     source_map = sources.load()
     first = not source_map.get("built_on")
+    gaps = coverage_gaps(source_map, profile) if first else []
+    left = sources.budget(profile, refresh=not first) - searches
+    if gaps and left > 0 and handoff.note(RUN, "coverage"):
+        # Said once per run. The second finish takes the map as it is and lists what is missing.
+        print("COVERAGE CHECK: %d search%s left, and the map is short of the plan." % (left, "" if left == 1 else "es"),
+              file=out)
+        for gap in gaps:
+            print("  %s" % gap, file=out)
+        print("Do one more pass on exactly these gaps with the searches you have left, add what you find, and "
+              "run finish again. If nothing more can be found, run finish again and it will record what is "
+              "missing. Nothing was recorded yet.", file=out)
+        return 1
+    if gaps:
+        listed = [str(part).strip() for part in skipped] if isinstance(skipped, (list, tuple)) else \
+            [part.strip() for part in (skipped or "").split(";")]
+        skipped = [part for part in listed if part] + ["Not covered: %s" % gap for gap in gaps]
     source_map["area"] = _area(profile)
     source_map["field"] = _safe((profile.get("person") or {}).get("headline", ""), profile)
     source_map["mode"] = profile.get("mode") or "lite"
@@ -355,8 +440,12 @@ def finish(searches, skipped, out=None, today=None):
         print(line, file=out)
     print("", file=out)
     print("  Searches used: %d of %d." % (searches, sources.budget(profile, refresh=not first)), file=out)
-    if source_map["skipped"]:
-        print("  Skipped to stay in budget: %s." % "; ".join(source_map["skipped"]), file=out)
+    notes = [part for part in source_map["skipped"] if not part.startswith("Not covered: ")]
+    missing = [part[len("Not covered: "):] for part in source_map["skipped"] if part.startswith("Not covered: ")]
+    if notes:
+        print("  Skipped to stay in budget: %s." % "; ".join(notes), file=out)
+    if missing:
+        print("  Not covered: %s." % "; ".join(missing), file=out)
     print("  Saved to %s. You can edit it, or say \"remove <name> from my sources\"." % _tilde(sources.path()), file=out)
     print("  It is re-checked every few weeks as part of your sweeps.", file=out)
     return 0
@@ -424,7 +513,8 @@ def main(argv=None):
             if isinstance(searches, bool) or not isinstance(searches, int) or searches < 0:
                 raise ValueError('Write {"searches": <number>, "skipped": [...]} to the hand-off file first.')
             code = finish(searches, data.get("skipped") or [])
-            handoff.close_run(RUN)
+            if code == 0:
+                handoff.close_run(RUN)      # a coverage reminder leaves the run open for one more pass
             return code
         if command == "show":
             return show()

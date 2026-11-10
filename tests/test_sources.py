@@ -435,6 +435,10 @@ class Tool(MapCase):
         self.assertFalse(os.path.exists(sources_tool.handoff_path()))                         # read once, then gone
         self.hand_off({"searches": 3, "skipped": ["field boards"]})
         code, out, _ = self.command("finish")
+        self.assertEqual(code, 1)                                 # an empty map with searches left: one reminder
+        self.assertIn("COVERAGE CHECK: 9 searches left", out)
+        self.hand_off({"searches": 3, "skipped": ["field boards"]})
+        code, out, _ = self.command("finish")
         self.assertEqual(code, 0)
         self.assertIn("Searches used: 3 of 12.", out)
         self.assertIn("Skipped to stay in budget: field boards.", out)
@@ -506,7 +510,7 @@ class Tool(MapCase):
         self.assertNotIn("Granite Peak", plan)
         self.assertNotIn("Summit Ledger", plan)
         self.command("open")
-        self.hand_off({"searches": 1, "skipped": []})
+        self.hand_off({"searches": 12, "skipped": []})             # the budget is used, so nothing more is asked
         self.assertEqual(self.command("finish")[0], 0)
         self.assertEqual(self.command("reverify")[0], 2)          # finish ended the run
         with open(sources.path(), encoding="utf-8") as handle:
@@ -597,9 +601,65 @@ class Tool(MapCase):
         self.use_profile("product-leader-denver")
         _, plan = self.run_tool(sources_tool.plan, today=TODAY)
         self.assertIn("The state's public workforce job board, the one its labor department runs.", plan)
-        self.assertIn("Start with ONE search of Meetup for the field's topic in the area", plan)
+        self.assertIn("Search Meetup ONCE FOR EACH of these field words, with the area: product, AI.", plan)
         self.assertIn("the largest active groups must not be missed", plan)
         self.assertIn("never the page a client uses to hire", plan)
+
+    def test_finish_asks_once_for_the_gaps_then_records_them(self):
+        self.use_profile("product-leader-denver")
+        self.assertEqual(self.command("plan")[0], 0)
+        found = {"jobs": [employer("Front Range Robotics", "https://job-boards.greenhouse.io/frontrangerobotics"),
+                          {"name": "State job board", "url": "https://jobs.statework.example.gov/", "kind": "job-board"}],
+                 "networking": [{"name": "Denver Product Leaders", "kind": "meetup", "last_active": "2026-10-20",
+                                 "url": "https://www.meetup.example.com/denver-product-leaders/"}]}
+        self.assertEqual(self.run_tool(sources_tool.add, found, fetcher=self.fetcher, today=TODAY)[0], 0)
+        self.hand_off({"searches": 8, "skipped": []})
+        code, out, _ = self.command("finish")
+        self.assertEqual(code, 1)
+        self.assertIn("COVERAGE CHECK: 4 searches left, and the map is short of the plan.", out)
+        for gap in ("1 of 12 employers", "no job board for the field yet", "no marketplaces or talent networks yet",
+                    "no agencies yet", "no expert networks yet",
+                    "1 of 2 meetups or user groups (one Meetup search for each of: product, AI)",
+                    "no association or chamber yet"):
+            self.assertIn("  " + gap, out)
+        self.assertNotIn("state workforce", out)                      # that one is covered
+        self.assertNotIn("public-bid", out)                           # bids are off in this profile
+        self.assertIn("Nothing was recorded yet.", out)
+        self.assertIsNone(sources.load().get("built_on"))
+        # One more pass finds an expert network. The second finish records the map and what is still missing.
+        self.assertTrue(sources_tool.handoff.run_is_open("sources"))  # the run stayed open for one more pass
+        more = {"contracts": [{"name": "Expert calls network", "kind": "expert-network",
+                               "url": "https://travelnurse.example.com/texas"}]}
+        self.assertEqual(self.run_tool(sources_tool.add, more, fetcher=self.fetcher, today=TODAY)[0], 0)
+        self.hand_off({"searches": 11, "skipped": ["climate employers"]})
+        code, out, _ = self.command("finish")
+        self.assertEqual(code, 0)
+        self.assertNotIn("COVERAGE CHECK", out)
+        self.assertIn("Skipped to stay in budget: climate employers.", out)
+        self.assertIn("Not covered: 1 of 12 employers; no job board for the field yet; no marketplaces or talent "
+                      "networks yet; no agencies yet; 1 of 2 meetups", out)
+        self.assertNotIn("no expert networks", out)
+        self.assertTrue(sources.load()["built_on"])
+        self.assertFalse(sources_tool.handoff.run_is_open("sources"))  # and the run is closed
+
+    def test_no_reminder_when_the_budget_is_spent_or_the_plan_is_covered(self):
+        self.use_profile("freelance-designer-portland")
+        self.command("plan")
+        self.hand_off({"searches": 12, "skipped": []})
+        code, out, _ = self.command("finish")
+        self.assertEqual(code, 0)
+        self.assertNotIn("COVERAGE CHECK", out)
+        self.assertIn("Not covered: no marketplaces or talent networks yet", out)
+        full = {"jobs": [{"kind": "employer"}] * 12 + [{"kind": "job-board"}, {"kind": "field-board"}],
+                "contracts": [{"kind": "marketplace"}, {"kind": "agency"}, {"kind": "expert-network"}],
+                "networking": [{"kind": "meetup"}, {"kind": "user-group"}, {"kind": "chamber"}]}
+        self.assertEqual(sources_tool.coverage_gaps(full, wdprofile.load()[0]), [])
+
+    def test_field_words_name_the_field_and_never_a_confidential_name(self):
+        self.use_profile("product-leader-denver")
+        self.assertEqual(sources_tool.field_words(wdprofile.load()[0], 2), ["product", "AI"])
+        self.use_profile("freelance-designer-portland")
+        self.assertEqual(sources_tool.field_words(wdprofile.load()[0], 2), ["brand", "designer"])
 
     def test_show_remove_and_refresh_plan(self):
         self.use_profile("freelance-designer-portland")

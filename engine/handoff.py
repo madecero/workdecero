@@ -74,6 +74,26 @@ def run_is_open(skill, now=None, minutes=RUN_MINUTES):
     return 0 <= age <= minutes
 
 
+def note(skill, key):
+    """Remember one thing about the open run, such as a reminder already given. True if it was new."""
+    path = _run_path(skill)
+    try:
+        if os.path.islink(path):
+            return False
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return False
+    noted = list(data.get("noted") or [])
+    if key in noted:
+        return False
+    data["noted"] = noted + [key]
+    handle = os.open(path, os.O_WRONLY | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    with os.fdopen(handle, "w", encoding="utf-8") as out:
+        json.dump(data, out)
+    return True
+
+
 def require_run(skill, opener, now=None):
     """Raise unless this skill has a run open. `opener` names the command that opens one."""
     if not run_is_open(skill, now=now):
