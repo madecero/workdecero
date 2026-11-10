@@ -95,7 +95,7 @@ For each **group**:
 | `why` | One sentence the person will read: who is in the room and why that matters to them |
 | `takes_speakers` | `true` if the group invites members or guests to give talks |
 | `speaking_angle` | Only if it takes speakers and they are interested in speaking: one sentence with a talk idea drawn from their topics that would suit this group. A draft for them to consider, never a pitch you send |
-| `conflicts` | `true` if it usually meets at one of the times they said they cannot do |
+| `conflicts` | `true` if it usually meets at one of the times they said they cannot do. The engine also checks their words itself for the common cases (weekdays, evenings, mornings, named days), so set this for anything less usual |
 
 For each **event** (special ones only):
 

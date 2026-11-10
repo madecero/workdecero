@@ -161,6 +161,97 @@ def when_text(day, time_text=None):
     return "%s, %s" % (text, str(time_text).strip()) if time_text else text
 
 
+_DAY_WORDS = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6,
+              "mon": 0, "tue": 1, "tues": 1, "wed": 2, "thu": 3, "thur": 3, "thurs": 3, "fri": 4, "sat": 5, "sun": 6}
+_DAYTIME = re.compile(r"daytime|day time|during the day|9 to 5|9-5|nine to five|work(ing)? hours|business hours|"
+                      r"office hours|work ?day\b")
+
+
+def time_rules(profile):
+    """The person's "times I cannot do", read for the common ways people say it.
+
+    Each phrase becomes a rule: which days, which part of the day, and whether
+    it only applies to going somewhere in person ("unless it's virtual"). A
+    phrase that names neither a day nor a part of the day is skipped here, and
+    research's own judgement of it still applies.
+    """
+    rules = []
+    for phrase in _net(profile).get("unavailable") or []:
+        text = " %s " % re.sub(r"[^a-z0-9: ]+", " ", str(phrase).lower())
+        days = set()
+        if re.search(r"\bweek ?days?\b|\bweek ?nights?\b|\bduring the week\b|\bwork ?days?\b", text):
+            days |= {0, 1, 2, 3, 4}
+        if re.search(r"\bweekends?\b", text):
+            days |= {5, 6}
+        for word, number in _DAY_WORDS.items():
+            if re.search(r"\b%ss?\b" % word, text):
+                days.add(number)
+        parts = set()
+        if re.search(r"\bmornings?\b", text):
+            parts.add("morning")
+        if re.search(r"\bafternoons?\b|\blunch", text):
+            parts.add("afternoon")
+        if re.search(r"\bevenings?\b|\bnights?\b|\bweek ?nights?\b|after work", text):
+            parts.add("evening")
+        if _DAYTIME.search(text):
+            parts |= {"morning", "afternoon"}
+        before = re.search(r"\bbefore (\d{1,2})(?::\d{2})? ?(am|pm)?", text)
+        after = re.search(r"\bafter (\d{1,2})(?::\d{2})? ?(am|pm)?", text)
+
+        def hour(match):
+            value = int(match.group(1))
+            if match.group(2) == "pm" and value < 12:
+                value += 12
+            return value
+        if not days and not parts and not before and not after:
+            continue
+        rules.append({"days": days or set(range(7)), "parts": parts, "before": hour(before) if before else None,
+                      "after": hour(after) if after else None,
+                      "in_person_only": bool(re.search(r"unless .*(virtual|online|remote)|\bin person\b|"
+                                                       r"except .*(virtual|online)", text))})
+    return rules
+
+
+def _hour(time_text):
+    match = re.match(r"\s*(\d{1,2})(?::(\d{2}))?\s*([ap])\.?m", str(time_text or "").lower())
+    if not match:
+        return None
+    value = int(match.group(1)) % 12
+    return value + 12 if match.group(3) == "p" else value
+
+
+def outside_times(profile, day, time_text, evening, virtual):
+    """True when a meeting falls in a time the person said they cannot do. The engine's own check."""
+    when = day if isinstance(day, datetime.date) else scoring._date(day)
+    if when is None:
+        return False
+    hour = _hour(time_text)
+    if hour is not None:
+        part = "morning" if hour < 12 else "afternoon" if hour < 17 else "evening"
+    elif evening is True:
+        part = "evening"
+    elif evening is False:
+        part = "day"                      # daytime, with the hour unknown
+    else:
+        part = None
+    for rule in time_rules(profile):
+        if when.weekday() not in rule["days"] or (rule["in_person_only"] and virtual is True):
+            continue
+        if rule["before"] is not None or rule["after"] is not None:
+            if hour is None:
+                continue
+            if (rule["before"] is not None and hour < rule["before"]) or \
+                    (rule["after"] is not None and hour >= rule["after"]):
+                if not rule["parts"] or part in rule["parts"]:
+                    return True
+            continue
+        if not rule["parts"]:
+            return True                   # the whole day is out
+        if part in rule["parts"] or (part == "day" and {"morning", "afternoon"} <= rule["parts"]):
+            return True
+    return False
+
+
 def schedule_tag(evening, virtual, outside):
     if virtual is True:
         tag = "Virtual"
@@ -766,7 +857,7 @@ def _why(row):
     return match.group(1).strip() if match else ""
 
 
-def coming_up(store, today):
+def coming_up(store, today, profile=None):
     """Everything on the calendar in the next month: special events, and each open group's next meeting once."""
     last = today + datetime.timedelta(days=PICK_WINDOW_DAYS)
     found, taken = [], set()
@@ -794,6 +885,13 @@ def coming_up(store, today):
                       "miles": row.values.get("miles"), "cost": row.values.get("next_cost"), "host": row.title,
                       "fit": row.values.get("fit") or 0, "outside": row.values.get("outside_times") is True,
                       "why": _why(row), "going": False})
+    if profile is not None:
+        # Research flags a clash when it reads the page. The engine checks the person's own words as well,
+        # so a pick never rests on research alone.
+        for entry in found:
+            if not entry["outside"] and outside_times(profile, entry["date"], entry["time"], entry["evening"],
+                                                      entry["virtual"]):
+                entry["outside"] = True
     return found
 
 
@@ -872,7 +970,7 @@ def write_digest(state, profile, store, today=None):
     net = _net(profile)
     cap = net.get("max_events_per_month") if isinstance(net.get("max_events_per_month"), int) else DEFAULT_PICKS
     event_cap, year_cap = _number(net.get("max_cost_per_event")), _number(net.get("max_cost_per_year"))
-    picks, rest = choose(coming_up(store, today), cap)
+    picks, rest = choose(coming_up(store, today, profile), cap)
     overdue, due = follow_ups(store, today)
     lines = []
 
@@ -950,9 +1048,14 @@ def write_digest(state, profile, store, today=None):
     lines += ["", "Nothing was registered for, RSVP'd, joined or messaged. Nothing was added to your calendar.",
               "Your notes and this digest stay on your computer."]
 
+    # A second sweep on the same day gets its own note. The first one is never overwritten.
     title = "%s Networking sweep" % today.isoformat()
-    existing = [row for row in store.rows("digest") if row.title == title]
-    note_id = existing[0].id if existing else merge.next_id(model.DIGEST, store.rows("digest"))
+    taken = [row.title for row in store.rows("digest")]
+    number = 2
+    while title in taken:
+        title = "%s Networking sweep %d" % (today.isoformat(), number)
+        number += 1
+    note_id = merge.next_id(model.DIGEST, store.rows("digest"))
     touched = [store.link("group", entry["title"]) for entry in state["new_groups"]] + \
               [store.link("event", entry["title"]) for entry in state["new_events"]]
     store.upsert("digest", note_id, title,
@@ -1209,9 +1312,9 @@ def write_prep(note_id, store, profile, today=None, there=None):
     if public:
         lines.append("**From the group's public page:** %s." % "; ".join(public))
     lines.append("**Opener 1:** \"What are you working on this quarter?\" Listen for %s."
-                 % (who[0].lower() if who else "people in your field"))
+                 % (who[0] if who else "people in your field"))
     lines.append("**Opener 2:** %s" % ("Have one short story ready about %s: the problem, what you did, the result."
-                                      % topics[0].lower().rstrip(".") if topics else
+                                      % topics[0].rstrip(".") if topics else
                                       "\"Who else here should I meet?\""))
     lines.append("**Bring:** one sentence on what you do, and a way to swap details.")
     lines.append("**After:** tell me who you met (\"I met ... at %s\"). Each gets a note and a follow-up date %d days "

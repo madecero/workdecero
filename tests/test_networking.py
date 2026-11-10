@@ -344,8 +344,9 @@ class Events(NetCase):
         picks = section.split("## This month's picks")[1].split("##")[0]
         self.assertEqual(picks.count("\n- **"), 3)                    # max_events_per_month is 3: a hard cap
         self.assertIn("You asked for at most 3 a month, so that is the list.", picks)
-        for index in (4, 3, 2):                                       # the three best fits
+        for index in (4, 2, 1):                                       # the best fits that fit their week
             self.assertIn("Special evening %d" % index, picks)
+        self.assertNotIn("Special evening 3", picks)                  # a Sunday, and they said no Sundays
         also = section.split("## Also coming up")[1].split("##")[0]
         self.assertEqual(also.count("\n- **"), 2)
         self.assertIn("In case you want to swap one in.", also)
@@ -555,8 +556,8 @@ class Prep(NetCase):
         self.assertIn("**People you know who may be there:** [[workdecero/People/Jane Doe|Jane Doe]]", prep)
         self.assertIn("**From the group's public page:** Organiser: Sam Okoro.", prep)
         self.assertIn("**Opener 1:**", prep)
-        self.assertIn("Listen for founders of food and drink brands.", prep)
-        self.assertIn("**Opener 2:** Have one short story ready about rebranding on a small budget", prep)
+        self.assertIn("Listen for Founders of food and drink brands.", prep)                # their own words and casing
+        self.assertIn("**Opener 2:** Have one short story ready about Rebranding on a small budget", prep)
         self.assertIn("**Bring:**", prep)
         self.assertIn("Nothing was registered or sent.", prep)
         self.assertLessEqual(len([line for line in prep.strip().splitlines() if line.strip()]), 10)
@@ -705,6 +706,68 @@ class WeekOne(NetCase):
         meeting = self.events()["Portland Brand Meetup, Wed Nov 18"]
         self.assertEqual((meeting.values["status"], meeting.values["attended"]), ("Went", True))
         self.assertIn("Priya Raman", " ".join(meeting.values["people_met"]))
+
+    def test_the_engine_reads_the_times_they_cannot_do_for_itself(self):
+        day = datetime.date
+        outside = networking.outside_times
+
+        def person(*phrases):
+            return {"networking": {"unavailable": list(phrases)}}
+        # The tester persona's phrasing: no weekday daytime unless it is virtual.
+        parent = person("No weekday daytime unless it's virtual")
+        self.assertTrue(outside(parent, day(2026, 11, 17), "10:00 AM", False, False))     # Tuesday morning, in person
+        self.assertTrue(outside(parent, day(2026, 11, 17), "1:30 PM", False, False))
+        self.assertTrue(outside(parent, day(2026, 11, 17), None, False, False))           # daytime, hour not known
+        self.assertFalse(outside(parent, day(2026, 11, 17), "10:00 AM", False, True))     # the same, online
+        self.assertFalse(outside(parent, day(2026, 11, 17), "6:00 PM", True, False))      # a weekday evening
+        self.assertFalse(outside(parent, day(2026, 11, 21), "10:00 AM", False, False))    # a Saturday morning
+        # The example profile's phrasing.
+        leader = person("Tuesday and Thursday evenings")
+        self.assertTrue(outside(leader, day(2026, 11, 17), "6:00 PM", True, False))
+        self.assertTrue(outside(leader, day(2026, 11, 19), None, True, False))
+        self.assertFalse(outside(leader, day(2026, 11, 18), "6:00 PM", True, False))
+        self.assertFalse(outside(leader, day(2026, 11, 17), "10:00 AM", False, False))
+        # Other common ways of saying it.
+        designer = person("Weekday mornings before 10", "Sundays")
+        self.assertTrue(outside(designer, day(2026, 11, 18), "7:30 AM", False, False))
+        self.assertFalse(outside(designer, day(2026, 11, 18), "10:30 AM", False, False))
+        self.assertTrue(outside(designer, day(2026, 11, 22), "2:00 PM", False, False))
+        self.assertTrue(outside(person("Weekdays 9 to 5"), day(2026, 11, 18), "3:00 PM", False, False))
+        self.assertTrue(outside(person("weekends"), day(2026, 11, 21), "6:00 PM", True, True))
+        self.assertTrue(outside(person("After 8pm"), day(2026, 11, 18), "8:30 PM", True, False))
+        self.assertFalse(outside(person("After 8pm"), day(2026, 11, 18), "6:00 PM", True, False))
+        # A phrase the engine cannot read is left to research's own flag.
+        self.assertEqual(networking.time_rules(person("When the kids are sick")), [])
+
+    def test_a_daytime_meeting_is_never_a_pick_even_when_research_did_not_flag_it(self):
+        self.raw["networking"]["unavailable"] = ["No weekday daytime unless it's virtual"]
+        self.raw["networking"]["formats"] = ["in-person", "virtual"]
+        self.raw["networking"]["max_events_per_month"] = 2
+        self.write_profile()
+        self.start()
+        self.intake([
+            group("day", "Founders Forum", audience=[FOUNDERS], fit_assessment=30, next_meeting="2026-11-17",
+                  next_time="10:00 AM", evening=False, conflicts=False),             # research missed the clash
+            group("online", "Founders Online Hour", audience=[FOUNDERS], fit_assessment=20, next_meeting="2026-11-18",
+                  next_time="12:00 PM", evening=False, virtual=True),
+            group("eve", "Designers After Work", audience=[DESIGNERS], fit_assessment=15, next_meeting="2026-11-19",
+                  next_time="6:00 PM", evening=True),
+        ])
+        self.finish()
+        section = self.digest().section
+        picks = section.split("## This month's picks")[1].split("##")[0]
+        self.assertNotIn("Founders Forum", picks)                     # the best room, at a time they cannot do
+        self.assertIn("Founders Online Hour", picks)
+        self.assertIn("Designers After Work", picks)
+        also = section.split("## Also coming up")[1].split("##")[0]
+        self.assertIn("Founders Forum", also)
+        self.assertIn("*Daytime, outside your times.*", also)
+
+    def test_a_second_sweep_on_the_same_day_keeps_the_first_digest(self):
+        self.sweep([group("a", "Portland Brand Meetup")])
+        self.sweep([group("b", "Packaging Roundtable")])
+        titles = sorted(row.title for row in self.store().rows("digest"))
+        self.assertEqual(titles, ["2026-11-09 Networking sweep", "2026-11-09 Networking sweep 2"])
 
     def test_settle_date_uses_the_weekday_to_find_the_year(self):
         settle = networking.settle_date
