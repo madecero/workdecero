@@ -4,7 +4,7 @@
 Two layers:
 
 1. A private denylist kept OUTSIDE the repo (one case-insensitive regular
-   expression per line). Hits are reported by rule number only, so the
+   expression per line). Hits are reported by the line number in that file only, so the
    matched term never reaches a terminal log, a CI log or a commit.
 2. Generic patterns that need no private knowledge: home-directory paths,
    email addresses, phone numbers, and long dashes (house style).
@@ -127,7 +127,7 @@ def scan_text(where, text, rules, generic=True):
     for line_no, line in enumerate(text.splitlines(), start=1):
         for number, regex in rules:
             if regex.search(line):
-                findings.append(Finding(where, line_no, "denylist rule %d" % number, ""))
+                findings.append(Finding(where, line_no, "denylist line %d" % number, ""))
         if generic:
             for rule, detail in scan_generic(line):
                 findings.append(Finding(where, line_no, rule, detail))
@@ -139,7 +139,7 @@ def scan_path_name(path, rules):
     for number, regex in rules:
         if regex.search(path):
             # The path itself would reveal the term, so name it by rule only.
-            findings.append(Finding("(a file path)", None, "denylist rule %d" % number, ""))
+            findings.append(Finding("(a file path)", None, "denylist line %d" % number, ""))
     for rule, detail in scan_generic(path):
         if rule != "long-dash":
             findings.append(Finding(path, None, rule + " in file name", detail))
@@ -296,7 +296,7 @@ def main(argv=None):
         print("leak guard: BLOCKED, %d finding(s):" % len(findings), file=sys.stderr)
         for finding in findings:
             print("  " + finding.render(), file=sys.stderr)
-        print("Denylist hits show the rule number only. Look up the line in your private denylist file.\n"
+        print("Denylist hits show only the line number in your private denylist file. Open the file and look at that line.\n"
               "A false positive on a generic pattern can be waived by putting '%s' on that line." % ALLOW_MARKER,
               file=sys.stderr)
         return 1

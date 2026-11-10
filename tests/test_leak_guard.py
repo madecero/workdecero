@@ -60,7 +60,7 @@ class GenericPatterns(unittest.TestCase):
         line = EMAIL + "  # " + leak_guard.ALLOW_MARKER
         self.assertEqual(self.kinds(line), [])
         found = leak_guard.scan_text("f", SECRET + " " + line, rules(SECRET))
-        self.assertEqual([f.rule for f in found], ["denylist rule 1"])
+        self.assertEqual([f.rule for f in found], ["denylist line 1"])
 
 
 class Denylist(unittest.TestCase):
@@ -69,7 +69,7 @@ class Denylist(unittest.TestCase):
         self.assertEqual(len(found), 1)
         rendered = found[0].render()
         self.assertIn("notes.md:2", rendered)
-        self.assertIn("denylist rule 2", rendered)
+        self.assertIn("denylist line 2", rendered)
         self.assertNotIn(SECRET.lower(), rendered.lower())
 
     def test_path_hit_does_not_print_the_path(self):
@@ -139,7 +139,7 @@ class EndToEnd(unittest.TestCase):
         result = self.guard("--staged")
         self.assertEqual(result.returncode, 1)
         self.assertIn("a.md:2", result.stderr)
-        self.assertIn("denylist rule 2", result.stderr)
+        self.assertIn("denylist line 2", result.stderr)
         self.assertNotIn(SECRET.lower(), (result.stdout + result.stderr).lower())
 
     def test_staged_scan_reads_the_index_not_the_work_tree(self):

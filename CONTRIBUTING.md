@@ -12,7 +12,7 @@ This runs `git config core.hooksPath dev/git-hooks`, which turns on three git ho
 
 This repository must never contain a real person's name, a real employer or client, a home-directory path, a personal email address or a phone number. `dev/leak_guard.py` enforces that in two layers:
 
-1. **Your private denylist.** A text file kept outside the repository, one case-insensitive regular expression per line (blank lines and lines starting with `#` are ignored). Default location `~/.config/workdecero-dev/denylist.txt`. Set `WORKDECERO_DENYLIST` to use another file. Put in it the names you must never publish. A hit is reported by rule number only, so the term itself is never printed. If the file is missing the guard warns and runs the generic patterns only.
+1. **Your private denylist.** A text file kept outside the repository, one case-insensitive regular expression per line (blank lines and lines starting with `#` are ignored). Default location `~/.config/workdecero-dev/denylist.txt`. Set `WORKDECERO_DENYLIST` to use another file. Put in it the names you must never publish. A hit is reported by its line number in that file only, so the term itself is never printed. If the file is missing the guard warns and runs the generic patterns only.
 2. **Generic patterns**, which also run in CI: home-directory paths, email addresses (except `example.com`, `example.org`, `example.net` and GitHub noreply addresses), phone numbers (except the fictional 555-01xx range) and long dashes.
 
 | Hook | When | Scans |
