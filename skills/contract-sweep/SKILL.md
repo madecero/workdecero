@@ -115,7 +115,7 @@ A score under 20 means the gig is written as a **near miss**: kept in the tracke
 
 **How the work is engaged.** Copy the listing's own words into `engagement`: "Fractional Contract", "Advisory", "Consulting engagement", "Part-time contract", "1099", "C2C", "Retainer". Do not translate them. The engine maps them to what the person takes, and keeps wording it does not know with a note to confirm the terms.
 
-**Record every gig you read, old or closed included.** Do not decide for the person that a gig is too old or too late. Give its `posted` date and its `closes` date when the page shows them, and set `"closed": true` when the page says it is closed, filled or no longer taking proposals. The engine applies the person's own age limit and drops what is over, and the digest then tells them what was left out and why. A gig you read and did not record is one they never hear about.
+**Record every gig you read, old or closed included.** Do not decide for the person that a gig is too old or too late. Give its `posted` date and its `closes` date when the page shows them (a page that says "closes in 2 days" has a closing date: work it out from today and record it as YEAR-MONTH-DAY, so the deadline leads the digest), and set `"closed": true` when the page says it is closed, filled or no longer taking proposals. The engine applies the person's own age limit and drops what is over, and the digest then tells them what was left out and why. A gig you read and did not record is one they never hear about.
 
 **Write the hand-off file:**
 

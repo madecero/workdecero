@@ -364,6 +364,14 @@ class Intake(ContractCase):
         self.assertIn("**Record every gig you read, old or closed included.**", skill)
         self.assertNotIn("Do not record gigs older", skill)
 
+    def test_one_fit_with_most_searches_unused_still_gets_the_nudge(self):
+        # From a live run: one good gig was found, and the sweep stopped with seven searches and several leads unread.
+        self.start()
+        _, report = self.intake([gig("ok", "Identity for a cafe group", engagement="1099", posted="2026-11-05")], searches=3)
+        self.assertIn("BEFORE YOU FINISH: 7 of 10 searches are unused and only 1 gig that fits has been found.", report)
+        _, again = self.intake([gig("two", "Menu design for a brewery", engagement="1099", posted="2026-11-06")], searches=4)
+        self.assertNotIn("BEFORE YOU FINISH", again)                   # said once
+
     def test_unused_searches_get_one_nudge(self):
         _, report = self.intake([], searches=2)
         self.assertIn("BEFORE YOU FINISH: 8 of 10 searches are unused and nothing that fits has been found yet.", report)

@@ -76,6 +76,7 @@ ASSESSMENT_KEYS = ("closed", "fit_assessment", "why", "client", "engagement", "r
                    "retainer_monthly", "hours_per_week", "length_weeks", "remote", "work_mode", "location",
                    "distance_miles", "posted", "closes", "deal_breaker", "missing_requirements", "industry", "poster")
 NEAR_MISSES_SHOWN = 5
+ENOUGH_FITS = 3                    # fewer than this with half the searches unused: research is asked to keep going
 LEFT_OUT_SHOWN = 25
 _GIG_WORDS = set("fractional freelance freelancer contract contractor consultant interim part time senior lead "
                  "remote independent".split())
@@ -677,11 +678,13 @@ def intake_report(state, profile):
         lines += ["", "BEFORE YOU FINISH: %d gig%s under GIGS TO READ AND JUDGE had no judgement from you: %s."
                   % (len(waiting), "" if len(waiting) == 1 else "s", ", ".join(waiting)),
                   "  Each has its text in the start answer. Judge them and run intake again with only those."]
-    elif not [entry for entry in state["new"] if not entry.get("near")] and left >= limits["searches"] // 2 \
-            and not state.get("nudged"):
+    elif len([entry for entry in state["new"] if not entry.get("near")]) < ENOUGH_FITS \
+            and left >= limits["searches"] // 2 and not state.get("nudged"):
         state["nudged"] = True                  # said once, so a sweep can never loop on it
-        lines += ["", "BEFORE YOU FINISH: %d of %d searches are unused and nothing that fits has been found yet."
-                  % (left, limits["searches"]),
+        fits = len([entry for entry in state["new"] if not entry.get("near")])
+        lines += ["", "BEFORE YOU FINISH: %d of %d searches are unused and %s." % (
+                      left, limits["searches"], "nothing that fits has been found yet" if not fits else
+                      "only %d gig%s that fit%s been found" % (fits, "" if fits == 1 else "s", "s has" if fits == 1 else " have")),
                   "  A search result you have not opened is worth nothing to the person. Open the ones you found.",
                   "  Go back to PLACES TO LOOK, open and read the most promising gigs, and run intake again with",
                   "  them under finds. If you searched and nothing real came up, carry on and say so in not_covered."]
