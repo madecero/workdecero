@@ -92,7 +92,7 @@ class History(unittest.TestCase):
         audit, _, binaries, binaries_dir, text = self.run_audit()
         self.assertIn(("commit author", "Sample Author", "author@example.com"), audit.identities)
         self.assertEqual(audit.identities[("committer", "Sample Committer", "committer@example.com")], 3)
-        self.assertIn("commit author          Sample Author <author@example.com>  (3)", text)
+        self.assertIn(" 1. commit author          Sample Author <author@example.com>  (3)", text)
         self.assertEqual([(path, size) for _, path, size in binaries], [("picture.bin", 7)])
         copied = os.listdir(binaries_dir)
         self.assertEqual(len(copied), 1)
@@ -226,6 +226,31 @@ class Orphans(History):
         release_audit.actions_runs(audit, "o", "r")
         self.assertEqual(audit.counts["Actions runs (logs not read)"], 41)
         self.assertTrue(any("There are 41 Actions runs." in note for note in audit.notes))
+
+
+class Identities(unittest.TestCase):
+    def test_a_name_on_the_private_list_is_flagged_by_its_number_not_its_text(self):
+        rules = [(12, re.compile("real person", re.IGNORECASE))]
+        audit = release_audit.Audit(rules)
+        for _ in range(3):
+            audit.identity("commit author", "handle-only", "1+handle-only@users.noreply.github.com")
+        audit.identity("commit author", "Real Person Name", "1+handle-only@users.noreply.github.com")
+        audit.identity("committer", "Real Person Name", "1+handle-only@users.noreply.github.com")
+        audit.identity("committer", "Someone", "someone@" + "realcompany.io")
+        out = io.StringIO()
+        release_audit.report(audit, [], None, out=out)
+        found = sorted((place, rule) for section, place, rule in audit.findings if section == "identities")
+        self.assertEqual(found, [("identity 1 in the list below (commit author, used 1 time)", "denylist line 12"),
+                                 ("identity 3 in the list below (committer, used 1 time)", "denylist line 12"),
+                                 ("identity 4 in the list below (committer, used 1 time)", "email")])
+        text = out.getvalue()
+        findings = text.split("IDENTITIES")[0]
+        self.assertNotIn("Real Person", findings)                      # the finding never repeats the name
+        self.assertIn("identity 1 in the list below", findings)
+        self.assertIn(" 1. commit author          Real Person Name", text)             # the list itself shows it
+        self.assertIn(" 2. commit author          handle-only", text)
+        release_audit.report(audit, [], None, out=io.StringIO())
+        self.assertEqual(len([one for one in audit.findings if one[0] == "identities"]), 3)   # checked once
 
 
 class Threads(unittest.TestCase):

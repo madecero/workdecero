@@ -18,7 +18,8 @@ What it reads:
      edit history of each.
   4. Branch names, tag names, releases and the repository description.
   5. Every identity: commit authors and committers, and the accounts that
-     opened or commented on pull requests and issues.
+     opened or commented on pull requests and issues. Each is checked
+     against the private list as well as listed.
   6. Every binary file in history, copied to a folder for a check by eye.
 
 What it prints: counts and places only ("commit 1a2b3c4 message, line 3:
@@ -448,8 +449,27 @@ CANNOT_SEE = (
 )
 
 
+def scan_identities(audit):
+    """Run the private list, and the address rule, over every identity. A second name is flagged, not only shown.
+
+    The finding names the identity by its number in the list the report prints, never by its text.
+    """
+    for number, (kind, name, contact) in enumerate(sorted(audit.identities), start=1):
+        place = "identity %d in the list below (%s, used %d time%s)" % (
+            number, kind, audit.identities[(kind, name, contact)], "" if audit.identities[(kind, name, contact)] == 1 else "s")
+        for rule_number, regex in audit.rules:
+            if regex.search(name or "") or regex.search(contact or ""):
+                audit.findings.append(("identities", place, "denylist line %d" % rule_number))
+        for rule, _ in leak_guard.scan_generic("%s %s" % (name or "", contact or "")):
+            if rule != "long-dash":
+                audit.findings.append(("identities", place, rule))
+
+
 def report(audit, binaries, binaries_dir, out=None):
     out = out or sys.stdout
+    if not getattr(audit, "identities_scanned", False):
+        scan_identities(audit)
+        audit.identities_scanned = True
     print("RELEASE AUDIT. Read only. Matched text is never shown.", file=out)
     print("", file=out)
     print("WHAT WAS READ", file=out)
@@ -466,8 +486,9 @@ def report(audit, binaries, binaries_dir, out=None):
             print("    %s: %s" % (place, rule), file=out)
     print("", file=out)
     print("IDENTITIES (check each one is meant to be public)", file=out)
-    for (kind, name, contact), number in sorted(audit.identities.items()):
-        print("  %-22s %s%s  (%d)" % (kind, name or "(no name)", " <%s>" % contact if contact else "", number), file=out)
+    for index, ((kind, name, contact), number) in enumerate(sorted(audit.identities.items()), start=1):
+        print("  %2d. %-22s %s%s  (%d)" % (index, kind, name or "(no name)", " <%s>" % contact if contact else "", number),
+              file=out)
     print("", file=out)
     print("BINARY FILES IN HISTORY: %d%s" % (len(binaries), ", copied to %s for a check by eye" % binaries_dir
                                               if binaries and binaries_dir else ""), file=out)
@@ -529,7 +550,7 @@ def main(argv=None):
         print("release audit: could not finish: %s" % exc, file=sys.stderr)
         return 2
     print("%d denylist rules, generic patterns on%s." % (len(rules), "" if args.style else ", long dashes not reported"))
-    report(audit, binaries, binaries_dir)
+    report(audit, binaries, binaries_dir)                      # also checks the identities, so do it before the verdict
     return 1 if audit.findings else 0
 
 
