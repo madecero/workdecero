@@ -372,7 +372,7 @@ def intake(state, handoff, profile, store, source_map, fetcher=None, today=None)
             learned += 1
 
     # Every new note says who to contact first. The warm-path step replaces this for the best few.
-    store.apply([{"op": "update", "type": "job", "id": operation["id"], "values": {"contact_first": NO_CONTACT_YET}, "force": []}
+    store.apply([{"op": "update", "type": "job", "id": operation["id"], "values": {"approach": NO_CONTACT_YET}, "force": []}
                  for operation, _ in result.new])
     rows = dict((row.id, row) for row in store.rows("job"))
     for operation, score in result.new:

@@ -282,7 +282,7 @@ class TesterFindings(SweepCase):
         self.assertIn("**Near miss:** Requires an active CPA licence.", cpa)
         # Every new note says who to contact first, also the ones no contact was looked up for.
         for row in jobs.values():
-            self.assertEqual(row.values["contact_first"], sweep.NO_CONTACT_YET)
+            self.assertEqual(row.values["approach"], sweep.NO_CONTACT_YET)
         # The person's digest lists each left-out role with a plain reason.
         section = self.digest().section
         why = section.split("## Left out, and why")[1].split("##")[0]
