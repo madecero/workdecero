@@ -346,6 +346,24 @@ class Intake(ContractCase):
         self.assertIn("New notes written: 0. Already in the tracker and refreshed: 1.", report)
         self.assertEqual(len(self.gigs()), 1)
 
+    def test_the_engine_decides_what_is_too_late_and_says_why(self):
+        # From a live run: research left an older gig out on its own, so the person never heard of it.
+        self.start()
+        self.intake([gig("old", "Brand refresh for a bakery", engagement="1099", posted="2026-09-25"),
+                     gig("shut", "Packaging for a tea company", engagement="1099", closed=True),
+                     gig("late", "Logo for a city bid", engagement="1099", closes="2026-11-02"),
+                     gig("ok", "Identity for a cafe group", engagement="1099", posted="2026-11-05")])
+        self.finish()
+        self.assertEqual([row.title.split(",")[0] for row in self.store().rows("contract")], ["Identity for a cafe group"])
+        why = self.digest().section.split("## Left out, and why")[1].split("##")[0]
+        self.assertIn("- Brand refresh for a bakery: posted 45 days ago, older than the", why)
+        self.assertIn("- Packaging for a tea company: the listing says it is closed or filled.", why)
+        self.assertIn("- Logo for a city bid: its deadline passed on 2026-11-02.", why)
+        with open(os.path.join(_paths.REPO_ROOT, "skills", "contract-sweep", "SKILL.md"), encoding="utf-8") as handle:
+            skill = handle.read()
+        self.assertIn("**Record every gig you read, old or closed included.**", skill)
+        self.assertNotIn("Do not record gigs older", skill)
+
     def test_unused_searches_get_one_nudge(self):
         _, report = self.intake([], searches=2)
         self.assertIn("BEFORE YOU FINISH: 8 of 10 searches are unused and nothing that fits has been found yet.", report)

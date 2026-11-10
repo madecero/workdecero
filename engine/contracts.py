@@ -72,7 +72,7 @@ CHANNEL_DONE = ("Live", "Skip")
 
 # Platforms and agencies whose own listing page the engine reads every sweep, with no search spent.
 READ_KINDS = ("marketplace", "talent-network", "agency", "expert-network")
-ASSESSMENT_KEYS = ("fit_assessment", "why", "client", "engagement", "rate_min", "rate_max", "rate_text", "fixed_price",
+ASSESSMENT_KEYS = ("closed", "fit_assessment", "why", "client", "engagement", "rate_min", "rate_max", "rate_text", "fixed_price",
                    "retainer_monthly", "hours_per_week", "length_weeks", "remote", "work_mode", "location",
                    "distance_miles", "posted", "closes", "deal_breaker", "missing_requirements", "industry", "poster")
 NEAR_MISSES_SHOWN = 5
@@ -178,7 +178,7 @@ def read_platforms(profile, store, source_map, fetcher, limit):
     return candidates, read, failed
 
 
-FIND_KEYS = ("title", "client", "via", "url", "source", "job_id", "engagement", "rate_min", "rate_max",
+FIND_KEYS = ("closed", "title", "client", "via", "url", "source", "job_id", "engagement", "rate_min", "rate_max",
              "fixed_price", "retainer_monthly", "hours_per_week", "length_weeks", "remote", "work_mode",
              "location", "distance_miles", "posted", "closes", "fit_assessment", "why", "deal_breaker",
              "link_verified", "industry", "poster", "missing_requirements", "rate_text")

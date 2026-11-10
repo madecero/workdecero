@@ -433,6 +433,14 @@ def score_contract(item, profile, today=None):
     _common_checks(item, item.get("client"), profile, today, result)
     if result.dropped:
         return result
+    # Research reports every gig it read. Whether one is too late is decided here, so the person sees why.
+    if item.get("closed") is True:
+        result.dropped = "the listing says it is closed or filled"
+        return result
+    deadline = _date(item.get("closes"))
+    if deadline is not None and deadline < today:
+        result.dropped = "its deadline passed on %s" % deadline.isoformat()
+        return result
 
     accepted = contracts.get("engagement_types") or []
     kinds = engagement_type(item)
