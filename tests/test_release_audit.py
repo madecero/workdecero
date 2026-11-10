@@ -113,6 +113,121 @@ class History(unittest.TestCase):
         self.assertEqual([rule for _, _, rule in styled.findings], ["long-dash"])
 
 
+class Orphans(History):
+    """From a real check: a pull request's merge commit, left on no branch by a later history rewrite, was still
+    served by GitHub with a different author name. The first version of this audit never read it."""
+
+    def setUp(self):
+        super(Orphans, self).setUp()
+        # A commit by someone else, on a branch that is then deleted: in the object store, on no branch.
+        self.git("checkout", "-q", "-b", "side")
+        self.write("extra.txt", "merged work, with a note about %s\n" % SECRET)
+        subprocess.run(["git", "add", "-A"], cwd=self.repo, check=True, env=ENV)
+        other = dict(ENV, GIT_AUTHOR_NAME="Real Person Name", GIT_AUTHOR_EMAIL="real.person@example.com")
+        subprocess.run(["git", "commit", "-q", "-m", "Earlier work"], cwd=self.repo, check=True, env=other,
+                       stdout=subprocess.PIPE)
+        self.write("extra2.txt", "more\n")
+        subprocess.run(["git", "add", "-A"], cwd=self.repo, check=True, env=ENV)
+        subprocess.run(["git", "commit", "-q", "-m", "Merge commit left behind"], cwd=self.repo, check=True,
+                       env=dict(ENV, GIT_COMMITTER_NAME="Real Person Name", GIT_COMMITTER_EMAIL="real.person@example.com"),
+                       stdout=subprocess.PIPE)
+        self.orphan = subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.repo, check=True, env=ENV,
+                                     stdout=subprocess.PIPE).stdout.decode().strip()
+        self.git("checkout", "-q", "main")
+        self.git("branch", "-q", "-D", "side")
+        self.git("config", "uploadpack.allowAnySHA1InWant", "true")
+        self.mirror = os.path.join(self.tmp.name, "mirror.git")
+        subprocess.run(["git", "clone", "--mirror", "--quiet", self.repo, self.mirror], check=True, env=ENV,
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self._env = dict((key, os.environ.get(key)) for key in ("GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"))
+        os.environ.update({"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull})
+        self.addCleanup(self.restore)
+        self._gh = release_audit.gh_json
+        self.addCleanup(setattr, release_audit, "gh_json", self._gh)
+
+    def restore(self):
+        for key, value in self._env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+    def test_the_mirror_alone_does_not_hold_it(self):
+        audit = release_audit.Audit(RULES)
+        release_audit.audit_history(audit, self.mirror, ["--all"], None)
+        self.assertNotIn(("commit author", "Real Person Name", "real.person@example.com"), audit.identities)
+
+    def test_a_merge_commit_on_no_branch_is_fetched_and_read_with_its_parents(self):
+        audit = release_audit.Audit(RULES)
+        release_audit.audit_history(audit, self.mirror, ["--all"], None)
+        before = len(audit.findings)
+        release_audit.audit_orphans(audit, self.mirror, "o", "r", [("the merge of pull request #1", self.orphan),
+                                                                   ("a push to main", "0" * 40)], None)
+        self.assertIn(("commit author", "Real Person Name", "real.person@example.com"), audit.identities)   # the parent
+        self.assertIn(("committer", "Real Person Name", "real.person@example.com"), audit.identities)       # the merge
+        self.assertEqual(audit.counts["commits on no branch"], 2)      # the orphan and its parent, not main's commits
+        new = [place for section, place, _ in audit.findings[before:] if section == "commits on no branch"]
+        self.assertTrue(any(place.startswith("file extra.txt (blob ") for place in new), new)
+        out = io.StringIO()
+        release_audit.report(audit, [], None, out=out)
+        self.assertIn("Real Person Name <real.person@example.com>", out.getvalue())   # identities are shown in full
+        self.assertNotIn(SECRET, out.getvalue())
+        # Asked for again, it is not read twice.
+        release_audit.audit_orphans(audit, self.mirror, "o", "r", [("again", self.orphan)], None)
+        self.assertEqual(audit.counts["commits on no branch"], 2)
+
+    def test_when_git_cannot_fetch_it_the_api_is_walked_parent_by_parent(self):
+        asked = []
+
+        def fake(args):
+            sha = args[1].rsplit("/", 1)[1]
+            asked.append(sha)
+            if sha == "e" * 40:
+                return {"commit": {"message": "Merge, thanks to %s" % SECRET,
+                                   "author": {"name": "Real Person Name", "email": "real.person@example.com"},
+                                   "committer": {"name": "Sample Committer", "email": "committer@example.com"}},
+                        "files": [{"filename": "a.txt", "patch": "+clean"}, {"filename": "big.bin"}],
+                        "parents": [{"sha": "f" * 40}, {"sha": self.main_head()}]}
+            if sha == "f" * 40:
+                return {"commit": {"message": "Parent", "author": {"name": "Second Hidden Name", "email": "x@example.com"},
+                                   "committer": {"name": "Sample Committer", "email": "committer@example.com"}},
+                        "files": [], "parents": [{"sha": self.main_head()}]}
+            raise RuntimeError("not found")
+        release_audit.gh_json = fake
+        audit = release_audit.Audit(RULES)
+        release_audit.audit_orphans(audit, self.mirror, "o", "r", [("the merge of pull request #2", "e" * 40),
+                                                                   ("a push to main", "9" * 40)], None)
+        self.assertEqual(asked, ["e" * 40, "9" * 40, "f" * 40])        # main's own commit is known, and never asked for
+        self.assertIn(("commit author", "Real Person Name", "real.person@example.com"), audit.identities)
+        self.assertIn(("commit author", "Second Hidden Name", "x@example.com"), audit.identities)
+        self.assertIn(("commits on no branch", "commit eeeeeeeeee message (the merge of pull request #2), line 1",
+                       "denylist line 7"), audit.findings)
+        self.assertTrue(any("9999999999" in note and "could not be fetched or read" in note for note in audit.notes))
+        self.assertTrue(any("was read through the API" in note for note in audit.notes))
+
+    def main_head(self):
+        return subprocess.run(["git", "rev-parse", "main"], cwd=self.repo, check=True, env=ENV,
+                              stdout=subprocess.PIPE).stdout.decode().strip()
+
+    def test_push_events_name_what_a_force_push_replaced(self):
+        release_audit.gh_json = lambda args: [
+            {"type": "PushEvent", "actor": {"login": "sample-user"},
+             "payload": {"ref": "refs/heads/main", "before": "1" * 40, "head": "2" * 40, "commits": [{"sha": "3" * 40}]}},
+            {"type": "CreateEvent", "actor": {"login": "other-user"}, "payload": {"ref": "x"}}]
+        audit = release_audit.Audit(RULES)
+        found = release_audit.events_orphans(audit, "o", "r")
+        self.assertEqual(found, [("a push to main", "1" * 40), ("a push to main", "2" * 40), ("a push to main", "3" * 40)])
+        self.assertEqual((audit.counts["repository events"], audit.counts["push events"]), (2, 1))
+        self.assertIn(("event actor", "other-user", ""), audit.identities)
+
+    def test_actions_runs_are_counted_and_flagged_never_read(self):
+        release_audit.gh_json = lambda args: {"total_count": 41, "workflow_runs": [{}]}
+        audit = release_audit.Audit(RULES)
+        release_audit.actions_runs(audit, "o", "r")
+        self.assertEqual(audit.counts["Actions runs (logs not read)"], 41)
+        self.assertTrue(any("There are 41 Actions runs." in note for note in audit.notes))
+
+
 class Threads(unittest.TestCase):
     def test_a_pull_request_is_read_with_its_history_and_nothing_matched_is_kept(self):
         audit = release_audit.Audit(RULES)
@@ -122,6 +237,7 @@ class Threads(unittest.TestCase):
                 "comments": {"pageInfo": {"hasNextPage": True},
                              "nodes": [{"body": "fine", "author": {"login": "other-user"},
                                         "userContentEdits": {"nodes": [{"diff": "about %s" % SECRET}]}}]},
+                "mergeCommit": {"oid": "d" * 40},
                 "reviews": {"pageInfo": {"hasNextPage": False}, "nodes": [
                     {"body": "ok", "author": {"login": "reviewer-one"}, "userContentEdits": {"nodes": []},
                      "comments": {"pageInfo": {"hasNextPage": False}, "nodes": [{"body": SECRET, "userContentEdits": {"nodes": []}}]}}]},
@@ -130,7 +246,8 @@ class Threads(unittest.TestCase):
                     {"__typename": "HeadRefForcePushedEvent", "beforeCommit": {"oid": "a" * 40}, "afterCommit": {"oid": "b" * 40}},
                     {"__typename": "HeadRefForcePushedEvent", "beforeCommit": None, "afterCommit": {"oid": "c" * 40}}]}}
         pushed = release_audit.audit_thread(audit, node, "pull request")
-        self.assertEqual(pushed, [(8, "a" * 40)])
+        self.assertEqual(pushed, [("the merge of pull request #8", "d" * 40),
+                                  ("a force-push to pull request #8", "a" * 40)])
         places = sorted(place for _, place, _ in audit.findings)
         self.assertEqual(places, ["pull request #8 body, earlier version 1, line 1",
                                   "pull request #8 comment 1, earlier version 1, line 1",

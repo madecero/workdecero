@@ -9,8 +9,10 @@ What it reads:
   1. Every commit reachable from any branch, tag or pull request on GitHub:
      the message, the author and committer, every version of every file,
      and every file path.
-  2. Commits that were force-pushed away from a pull request, where GitHub
-     still serves them.
+  2. Commits that sit on no branch but that GitHub may still serve: the
+     merge commit of every pull request and its ancestors, commits replaced
+     by a force-push to a pull request, and every commit named by the
+     repository's push events of the last 90 days or so.
   3. Every pull request and issue: title, earlier titles, body, earlier
      versions of the body, comments, reviews and review comments, with the
      edit history of each.
@@ -177,6 +179,7 @@ THREAD_FIELDS = """
 """
 PUSHED = "... on HeadRefForcePushedEvent { beforeCommit { oid } afterCommit { oid } }"
 REVIEWS = """
+        mergeCommit { oid }
         reviews(first: %(reviews)d) { pageInfo { hasNextPage } nodes {
           body author { login } userContentEdits(first: %(edits)d) { pageInfo { hasNextPage } nodes { diff } }
           comments(first: %(review_comments)d) { pageInfo { hasNextPage } nodes {
@@ -260,6 +263,10 @@ def audit_thread(audit, node, kind):
                 audit.scan(section, "%s review %d, comment %d, earlier version %d" % (place, index, number, version),
                            edit.get("diff"))
     pushed_away = []
+    merged = (node.get("mergeCommit") or {}).get("oid")
+    if merged:
+        # The commit a merge made. After a later history rewrite it can sit on no branch at all and still be served.
+        pushed_away.append(("the merge of pull request #%s" % node["number"], merged))
     timeline = node.get("timelineItems") or {}
     more.append(("the timeline", timeline))
     for event in timeline.get("nodes") or []:
@@ -269,7 +276,7 @@ def audit_thread(audit, node, kind):
         elif event.get("__typename") == "HeadRefForcePushedEvent":
             before = (event.get("beforeCommit") or {}).get("oid")
             if before:
-                pushed_away.append((node["number"], before))
+                pushed_away.append(("a force-push to pull request #%s" % node["number"], before))
             else:
                 audit.notes.append("%s was force-pushed and GitHub no longer names the commit that was replaced." % place)
     for what, block in more:
@@ -280,40 +287,94 @@ def audit_thread(audit, node, kind):
     return pushed_away
 
 
-def audit_pushed_away(audit, mirror, owner, name, pushed_away, binaries_dir):
-    """Commits replaced by a force-push. Fetch each by its id if GitHub still serves it, then read it like any other."""
-    section = "commits force-pushed away"
+def audit_orphans(audit, mirror, owner, name, orphans, binaries_dir):
+    """Commits GitHub may still serve that sit on no branch, tag or pull request: a merge commit left behind by
+    a history rewrite, a commit replaced by a force-push. `orphans` is [(why it is known, commit id)].
+
+    Each is fetched by its id and read like any other commit, together with every ancestor that is not already
+    reachable. If git cannot fetch it, it is read through the API, parent by parent, until a known commit is met.
+    """
+    section = "commits on no branch"
     known = set(git(["rev-list", "--all"], mirror).decode("utf-8").split())
-    for number, sha in pushed_away:
+    queue = [(why, sha) for why, sha in orphans if sha and set(sha) != {"0"}]
+    while queue:
+        why, sha = queue.pop(0)
         if sha in known:
             continue
-        audit.count(section)
+        known.add(sha)
         fetched = subprocess.run(["git", "fetch", "--quiet", "origin", sha], cwd=mirror, stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE).returncode == 0
         if fetched:
             commits, _ = audit_history(audit, mirror, [sha, "--not", "--all"], binaries_dir, label=section)
+            audit.count(section, len(commits))
             known.update(commits)
-            known.add(sha)
+            # Keep it reachable inside the throwaway mirror, so a later orphan built on it is not read twice.
+            git(["update-ref", "refs/audit/%s" % sha, sha], mirror, check=False)
             continue
         try:
             data = gh_json(["api", "repos/%s/%s/commits/%s" % (owner, name, sha)])
         except RuntimeError:
-            audit.notes.append("Commit %s, force-pushed away from pull request #%s, could not be fetched or read. "
-                               "GitHub may still hold it." % (sha[:10], number))
+            audit.notes.append("Commit %s (%s) could not be fetched or read. GitHub may still hold it." % (sha[:10], why))
             continue
         commit = data.get("commit") or {}
-        audit.scan(section, "commit %s message (pull request #%s)" % (sha[:10], number), commit.get("message"))
+        audit.scan(section, "commit %s message (%s)" % (sha[:10], why), commit.get("message"))
         audit.identity("commit author", (commit.get("author") or {}).get("name"), (commit.get("author") or {}).get("email"))
         audit.identity("committer", (commit.get("committer") or {}).get("name"), (commit.get("committer") or {}).get("email"))
+        audit.count("commits")
+        audit.count(section)
         for item in data.get("files") or []:
             audit.scan_name(section, "a file path in commit %s" % sha[:10], item.get("filename"))
             if item.get("patch"):
-                audit.scan(section, "commit %s, changes to %s" % (sha[:10], item.get("filename")), item["patch"])
+                audit.scan(section, "commit %s, changes to a file" % sha[:10], item["patch"])
             else:
                 audit.notes.append("Commit %s: the changes to one file were not returned by GitHub (binary or too large)."
                                    % sha[:10])
-        audit.notes.append("Commit %s was read through the API only (its parents were not), because git could not fetch it."
-                           % sha[:10])
+        audit.notes.append("Commit %s (%s) was read through the API, because git could not fetch it. Only its message, "
+                           "identities and changes were read, not every file it held." % (sha[:10], why))
+        for parent in data.get("parents") or []:
+            if parent.get("sha") and parent["sha"] not in known:
+                queue.append(("a parent of %s, from %s" % (sha[:10], why), parent["sha"]))
+
+
+def events_orphans(audit, owner, name):
+    """Commit ids named by the repository's recent events (GitHub keeps about 90 days): what each push replaced
+    and what it added. A branch that was reset or force-pushed shows here even with no pull request."""
+    found = []
+    try:
+        events = gh_json(["api", "repos/%s/%s/events" % (owner, name), "--paginate"]) or []
+    except RuntimeError as exc:
+        audit.notes.append("The repository's event list could not be read (%s). Force-pushes to a branch with no pull "
+                           "request were not checked." % str(exc)[:120])
+        return found
+    for event in events:
+        audit.count("repository events")
+        payload = event.get("payload") or {}
+        audit.identity("event actor", (event.get("actor") or {}).get("login"), "")
+        if event.get("type") != "PushEvent":
+            continue
+        audit.count("push events")
+        where = "a push to %s" % str(payload.get("ref") or "a branch").replace("refs/heads/", "")
+        for key in ("before", "head"):
+            if payload.get(key):
+                found.append((where, payload[key]))
+        for commit in payload.get("commits") or []:
+            if commit.get("sha"):
+                found.append((where, commit["sha"]))
+    return found
+
+
+def actions_runs(audit, owner, name):
+    try:
+        runs = gh_json(["api", "repos/%s/%s/actions/runs?per_page=1" % (owner, name)]) or {}
+    except RuntimeError:
+        audit.notes.append("The list of Actions runs could not be read.")
+        return
+    total = runs.get("total_count") or 0
+    audit.count("Actions runs (logs not read)", total)
+    if total:
+        audit.notes.append("There are %d Actions runs. Their logs, summaries and artifacts become readable by anyone "
+                           "when the repository is public. This audit does not read them. Delete the runs, or read "
+                           "every log, before release." % total)
 
 
 def audit_github(audit, owner, name, binaries_dir):
@@ -337,7 +398,9 @@ def audit_github(audit, owner, name, binaries_dir):
     for kind in ("pull request", "issue"):
         for node in threads(owner, name, kind):
             pushed_away += audit_thread(audit, node, kind)
-    audit_pushed_away(audit, mirror, owner, name, pushed_away, binaries_dir)
+    pushed_away += events_orphans(audit, owner, name)
+    audit_orphans(audit, mirror, owner, name, pushed_away, binaries_dir)
+    actions_runs(audit, owner, name)
 
     repo = gh_json(["api", "repos/%s/%s" % (owner, name)])
     audit.scan("names", "the repository description", repo.get("description"))
@@ -365,11 +428,13 @@ def audit_github(audit, owner, name, binaries_dir):
 # --------------------------------------------------------------------------
 
 CANNOT_SEE = (
-    "Commits that were force-pushed away and that GitHub no longer names in a pull request's timeline, or that were "
-    "pushed to a branch with no pull request and then replaced. GitHub can keep serving such a commit to anyone who "
-    "has its id, until it is garbage-collected. Only GitHub Support can remove one for certain.",
-    "Actions: workflow run logs, job summaries, artifacts and caches. They become readable when the repository is "
-    "public. Delete old runs, or read them, before release.",
+    "Commits on no branch that nothing names any more: replaced by a force-push more than about 90 days ago on a "
+    "branch with no pull request, or dropped from a pull request's timeline. GitHub can keep serving such a commit "
+    "to anyone who has its id, until it is garbage-collected. Only GitHub Support can remove one for certain. A "
+    "fresh repository pushed from clean history carries none of them.",
+    "Events older than GitHub keeps (about 90 days, at most 300 events).",
+    "Actions: workflow run logs, job summaries, artifacts and caches. They are counted, not read. They become "
+    "readable when the repository is public.",
     "Forks and clones made while the repository was private, and anything already copied out of it.",
     "Wiki pages, Discussions, Projects, and security advisories.",
     "Pictures and other binary files: they are copied out for a check by eye, not read. That includes text inside "
