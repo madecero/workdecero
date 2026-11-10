@@ -6,6 +6,7 @@ Your trackers live in your Obsidian vault as plain Markdown notes. This folder h
 | --- | --- |
 | `vault.py` | The only code that touches the vault. Creates, reads and updates notes. `python3 trackers/vault.py init --vault PATH` sets up the folder. |
 | `bases.py` | Builds the Obsidian Bases views (`.base` files) and the Start here note. |
+| `snapshot.py` | The optional read-only spreadsheet of the trackers, rebuilt at the end of every sweep when the profile asks for it. Plain Office Open XML written with the standard library. |
 | `../engine/model.py` | The note types, their properties and their status lists, defined once and shared with the sweeps. |
 
 ## What ends up in your vault

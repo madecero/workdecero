@@ -46,6 +46,7 @@ sys.path.insert(0, os.path.join(_ROOT, "trackers"))
 import handoff  # noqa: E402
 import networking  # noqa: E402
 import sources  # noqa: E402
+import snapshot  # noqa: E402
 import vault  # noqa: E402
 import wdprofile  # noqa: E402
 
@@ -156,6 +157,9 @@ def finish(out=None, today=None):
     state = _state()
     title, events, groups, overdue, due = networking.write_digest(state, profile, store, today)
     print(networking.finish_report(state, profile, title, events, groups, overdue, due), file=out)
+    line = snapshot.refresh(store, profile, today)          # only when the profile asks for it
+    if line:
+        print(line, file=out)
     networking.clear_state(work_dir())
     _tidy()
     return 0

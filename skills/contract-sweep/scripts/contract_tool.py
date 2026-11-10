@@ -46,6 +46,7 @@ import contracts  # noqa: E402
 import handoff  # noqa: E402
 import liveness  # noqa: E402
 import sources  # noqa: E402
+import snapshot  # noqa: E402
 import vault  # noqa: E402
 import wdprofile  # noqa: E402
 
@@ -162,6 +163,9 @@ def finish(out=None, today=None):
     import datetime
     due = contracts.deadlines(store, today or datetime.date.today())
     print(contracts.finish_report(state, profile, title, featured, more, pending, due, problems), file=out)
+    line = snapshot.refresh(store, profile, today)          # only when the profile asks for it
+    if line:
+        print(line, file=out)
     contracts.clear_state(work_dir())
     _tidy()
     return 0

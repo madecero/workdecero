@@ -47,6 +47,7 @@ Nothing personal is stored in this repository or in the plugin folder.
 | --- | --- | --- |
 | Profile (`profile.yaml`), local map (`sources.yaml`) and backups | `~/.config/workdecero/` | Readable by you alone. Location can be overridden. Untouched by updates and by uninstall. |
 | Trackers (postings, contracts, groups, events, people, companies) | Your Obsidian vault | Plain Markdown notes that you own. |
+| Spreadsheet snapshot (only if you turn it on) | `workdecero snapshot.xlsx` in your tracker folder | Read-only picture of the trackers, rebuilt every sweep. Readable by you alone. |
 | Setup draft | `~/.cache/workdecero/` (`setup-answers.json`, `setup-state.json`) | Temporary files in a private folder. They hold your answers only while setup is running, in a folder only you can open, and are deleted when setup is saved or cancelled. `setup-answers.json` is written by Claude Code a few lines at a time and is taken in and deleted at the next step. |
 | Source hand-off | `~/.cache/workdecero/` (`sources-entries.json`, `sources-run.json`) | Temporary. Holds public names and links found while your local map is being built. Each batch is deleted as soon as it is checked, and the folder goes when the run ends. |
 | Sweep hand-off and state | `~/.cache/workdecero/` (`sweep-handoff.json`, `sweep-state.json`, `contract-handoff.json`, `contract-state.json`, `networking-handoff.json`, `networking-state.json`) | Temporary. Hold public postings found during a sweep, and are deleted when the sweep finishes. |
@@ -108,6 +109,12 @@ python3 engine/wdprofile.py validate path/to/profile.yaml
 Trackers are plain notes in your Obsidian vault, with table views that update as you work. Everything stays in one folder, and your own writing in a note is never touched. See [trackers/README.md](trackers/README.md) for the layout, the promises the plugin keeps, and how to build a demo vault to look around.
 
 ![The Start here note](docs/screenshots/start-here.png)
+
+## A spreadsheet to glance at (optional)
+
+Off by default. Turn it on with `/workdecero:setup` ("turn on the spreadsheet copy"). After each sweep, a file called `workdecero snapshot.xlsx` is rebuilt in your tracker folder: a Summary sheet with counts by status, then Jobs, Contracts, Channels, Groups, Events and People. Rows are in the same order as the main views and shaded by stage, and the first cell of each row opens its note in Obsidian.
+
+It is a picture of your notes, never a second copy to keep up. It is written fresh every sweep and never read back, so anything typed into it is lost. The first row of every sheet says so. Names you keep confidential do not appear in it, and only you can read the file.
 
 ## What workdecero is allowed to do without asking
 

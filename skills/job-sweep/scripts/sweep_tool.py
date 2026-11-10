@@ -42,6 +42,7 @@ import handoff  # noqa: E402
 import liveness  # noqa: E402
 import sources  # noqa: E402
 import sweep  # noqa: E402
+import snapshot  # noqa: E402
 import vault  # noqa: E402
 import wdprofile  # noqa: E402
 
@@ -159,6 +160,9 @@ def finish(out=None, today=None):
     problems = sweep.verify(state, store)
     title, featured, more = sweep.write_digest(state, profile, store, problems, today)
     print(sweep.finish_report(state, profile, store, title, featured, more, problems), file=out)
+    line = snapshot.refresh(store, profile, today)          # only when the profile asks for it
+    if line:
+        print(line, file=out)
     sweep.clear_state(work_dir())
     if os.path.isfile(handoff_path()):
         os.remove(handoff_path())
