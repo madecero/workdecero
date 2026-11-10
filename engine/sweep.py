@@ -439,6 +439,39 @@ def intake_report(state, profile):
 # Step 3: warm paths
 # --------------------------------------------------------------------------
 
+def add_connections(state, handoff, profile, store):
+    """People research found on signed-in LinkedIn become People notes, so the warm-path step can use them.
+
+    The caller has already taken these out when LinkedIn is off. Returns how many notes were added or updated.
+    """
+    import integrations
+    names = scoring.confidential_names(profile)
+    allowed = dict((entry["id"], entry) for entry in state["new"])
+    people = store.rows("person")
+    taken, count = [], 0
+    for job_id, facts in (handoff.get("warm") or {}).items():
+        entry = allowed.get(job_id)
+        if entry is None:
+            continue
+        for person in integrations.connections(facts):
+            company = person["company"] or entry["company"]
+            if any(scoring._contains_phrase(scoring._text(person["name"]), scoring._text(secret)) for secret in names):
+                continue
+            existing = [row for row in people if scoring._text(row.title) == scoring._text(person["name"])]
+            values = {"company": store.link("company", company), "relationship": person["degree"],
+                      "why": "Found on LinkedIn at %s" % company}
+            if person["title"]:
+                values["role"] = person["title"]
+            if existing:
+                store.upsert("person", existing[0].id, existing[0].title, values)
+            else:
+                note_id = merge.next_id(model.PERSON, people, taken)
+                taken.append(note_id)
+                store.upsert("person", note_id, person["name"], values)
+            count += 1
+    return count
+
+
 def warm_targets(state, profile):
     limit = budget(profile)["warm"]
     return [entry for entry in state["new"] if entry["id"] not in state["warm_done"] and not entry.get("near")][:limit]
@@ -638,6 +671,9 @@ def write_digest(state, profile, store, problems, today=None):
             lines.append("- %s: %s." % (label, reason[:1].lower() + reason[1:].rstrip(".")))
         if len(reasons) > LEFT_OUT_SHOWN:
             lines.append("- And %d more." % (len(reasons) - LEFT_OUT_SHOWN))
+    if state.get("integration_lines"):
+        lines += ["", "## Connections"]
+        lines += ["- %s" % text for text in state["integration_lines"]]
     lines += ["", "## Not covered"]
     lines += ["- %s" % name for name in state["not_covered"]] or ["Every source in your local map was covered."]
     for title_, link in unread_leads(state):

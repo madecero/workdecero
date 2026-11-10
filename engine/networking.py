@@ -1076,6 +1076,9 @@ def write_digest(state, profile, store, today=None):
         lines += ["", "## Tidied"]
         lines += ["- %s: the date passed, marked Did not go." % store.link("event", title) for title in state["did_not_go"]]
 
+    if state.get("integration_lines"):
+        lines += ["", "## Connections"]
+        lines += ["- %s" % text for text in state["integration_lines"]]
     lines += ["", "## What was searched"]
     lines.append("%d %s in your local map, %d of %d web searches (%s mode), %d of %d known groups looked at again." % (
         len(state["places"]), "place" if len(state["places"]) == 1 else "places", state["searches"],
@@ -1207,7 +1210,7 @@ def apply_updates(updates, store, profile, today=None):
         met = [name for name in met if not any(scoring._contains_phrase(scoring._text(name), scoring._text(secret))
                                                for secret in names)]
         going = entry.get("going") is True
-        extra = []
+        extra, calendar = [], False
 
         # "I am going to (a group)" or "I met someone at (a group)" is about one meeting of it.
         if kind == "group" and (going or met):
@@ -1246,7 +1249,7 @@ def apply_updates(updates, store, profile, today=None):
                 if _event_status(row) == "New":
                     values["status"] = "Want to go"
                     force.append("status")
-                extra.append("Calendar is off, so add it to your calendar yourself")
+                calendar = True
             if entry.get("going") is False and not status:
                 values["going"] = False
                 force.append("going")
@@ -1262,7 +1265,7 @@ def apply_updates(updates, store, profile, today=None):
             if status in ("Registered", "Speaking"):
                 values["going"] = True
                 force.append("going")
-                extra.append("Calendar is off, so add it to your calendar yourself")
+                calendar = True
             if status == "Went":
                 values.update({"going": True, "attended": True})
                 force += ["going", "attended"]
@@ -1309,6 +1312,12 @@ def apply_updates(updates, store, profile, today=None):
                       "append": "%s: %s%s" % (day, what, ". " + note.rstrip(".") + "." if note else ".")}])
         done.append("%s: %s.%s" % (row.title, "now %s" % values["status"] if "status" in values else "updated",
                                    " " + ". ".join(extra) + "." if extra else ""))
+        if calendar:
+            # The engine writes the calendar entry's text, so nothing private is left to the assistant to compose.
+            import integrations
+            done += integrations.calendar_lines(profile, row.title, row.values.get("date"), row.values.get("time"),
+                                                "Online" if row.values.get("virtual") is True else row.values.get("where"),
+                                                row.values.get("link"), _why(row))
     return done, problems
 
 

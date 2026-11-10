@@ -116,6 +116,19 @@ Off by default. Turn it on with `/workdecero:setup` ("turn on the spreadsheet co
 
 It is a picture of your notes, never a second copy to keep up. It is written fresh every sweep and never read back, so anything typed into it is lost. The first row of every sheet says so. Names you keep confidential do not appear in it, and only you can read the file.
 
+## Optional connections
+
+All off until you turn them on with `/workdecero:setup`. Each one is skipped cleanly, with a line in the digest, when its tool is not available in a session.
+
+| Connection | What it does | Rules it keeps |
+| --- | --- | --- |
+| Browser pass (Claude in Chrome) | Reads job boards and sites that a script cannot | Its own tab, closed at the end. Paced like a person reading. Read only: never a form, never apply, save or follow. A CAPTCHA is never attempted: the site is named under "Not covered" |
+| Signed-in LinkedIn | Finds who you already know at an employer, and the hiring team on a posting | Needs two switches: the connection, and your acknowledgement of the risk. **Automated activity can get a LinkedIn account restricted or closed.** workdecero paces itself and keeps to a small daily number of pages, and cannot remove that risk. Read only. In a quiet search it never opens a profile, because a profile view can be shown to its owner |
+| Calendar (Outlook or Google) | Adds a networking event when you say you are going | Checks for a clash first and tells you. One event, no attendees. The entry holds the link and why to go |
+| Task tracker (Linear) | Posts a short comment after each sweep on an issue you name | Counts only. Never a title, an employer or a name |
+
+**No standing permission for these.** The hook described below covers only workdecero's own helper commands. Browser, calendar and tracker tools are asked for by Claude Code each time, like any other tool. If you want fewer prompts, allow them yourself in your own Claude Code settings.
+
 ## What workdecero is allowed to do without asking
 
 Claude Code normally asks before it runs a command or writes a file. Setup and the sweeps are conversations with many steps, and being asked a dozen times would make them unusable. So while this plugin is enabled, a small hook (`hooks/allow_helper.py`) approves exactly the following, and nothing else:

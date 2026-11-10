@@ -44,6 +44,7 @@ sys.path.insert(0, os.path.join(_ROOT, "trackers"))
 
 import contracts  # noqa: E402
 import handoff  # noqa: E402
+import integrations  # noqa: E402
 import liveness  # noqa: E402
 import sources  # noqa: E402
 import snapshot  # noqa: E402
@@ -137,6 +138,7 @@ def start(out=None, fetcher=None, today=None, force=False):
     state = contracts.start(profile, store, source_map, fetcher or liveness.HttpFetcher(), today)
     contracts.save_state(work_dir(), state)
     print(contracts.start_report(state, profile), file=out)
+    print("\n".join(integrations.start_lines(profile, "contracts", wdprofile.config_home(), today)), file=out)
     if not source_map.get("contracts"):
         print("\nNOTE: the local map has no contract sources yet. Tell the person they can run /workdecero:sources "
               "(or say \"build my local map\") to make later sweeps much more thorough.", file=out)
@@ -147,7 +149,9 @@ def intake(out=None, today=None):
     out = out or sys.stdout
     profile, store = _context()
     state = _state()
-    state = contracts.intake(state, read_handoff(), profile, store, today)
+    data, notes = integrations.screen(read_handoff(), profile, wdprofile.config_home(), today)
+    state.setdefault("integration_lines", []).extend(line for line in notes if line not in state["integration_lines"])
+    state = contracts.intake(state, data, profile, store, today)
     report = contracts.intake_report(state, profile)       # may note that it has nudged, so save after
     contracts.save_state(work_dir(), state)
     print(report, file=out)
@@ -163,6 +167,10 @@ def finish(out=None, today=None):
     import datetime
     due = contracts.deadlines(store, today or datetime.date.today())
     print(contracts.finish_report(state, profile, title, featured, more, pending, due, problems), file=out)
+    for text in integrations.tracker_lines(profile, "contracts", today or datetime.date.today(), [
+            ("new gigs", len(state["new"])), ("closed", len(state["closed"])), ("left out", state["left_out"]),
+            ("due within 7 days", len(due)), ("channels to set up", len(pending))], len(state["not_covered"])):
+        print(text, file=out)
     line = snapshot.refresh(store, profile, today)          # only when the profile asks for it
     if line:
         print(line, file=out)

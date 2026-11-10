@@ -44,6 +44,7 @@ sys.path.insert(0, os.path.join(_ROOT, "engine"))
 sys.path.insert(0, os.path.join(_ROOT, "trackers"))
 
 import handoff  # noqa: E402
+import integrations  # noqa: E402
 import networking  # noqa: E402
 import sources  # noqa: E402
 import snapshot  # noqa: E402
@@ -134,6 +135,7 @@ def start(out=None, today=None, force=False):
     state = networking.start(profile, store, source_map, today)
     networking.save_state(work_dir(), state)
     print(networking.start_report(state, profile), file=out)
+    print("\n".join(integrations.start_lines(profile, "networking", wdprofile.config_home(), today)), file=out)
     if not source_map.get("networking"):
         print("\nNOTE: the local map has no groups yet. Tell the person they can run /workdecero:sources "
               "(or say \"build my local map\") to make later sweeps much more thorough.", file=out)
@@ -144,7 +146,9 @@ def intake(out=None, today=None):
     out = out or sys.stdout
     profile, store = _context()
     state = _state()
-    state = networking.intake(state, read_handoff(), profile, store, today)
+    data, notes = integrations.screen(read_handoff(), profile, wdprofile.config_home(), today)
+    state.setdefault("integration_lines", []).extend(line for line in notes if line not in state["integration_lines"])
+    state = networking.intake(state, data, profile, store, today)
     report = networking.intake_report(state, profile)      # may note that it has nudged, so save after
     networking.save_state(work_dir(), state)
     print(report, file=out)
@@ -157,6 +161,12 @@ def finish(out=None, today=None):
     state = _state()
     title, events, groups, overdue, due = networking.write_digest(state, profile, store, today)
     print(networking.finish_report(state, profile, title, events, groups, overdue, due), file=out)
+    import datetime as _datetime
+    for text in integrations.tracker_lines(profile, "networking", today or _datetime.date.today(), [
+            ("follow-ups overdue", overdue), ("follow-ups due", due), ("picks this month", len(events)),
+            ("new groups", len(state["new_groups"])), ("moved to inactive", len(state["inactive"]))],
+            len(state["not_covered"])):
+        print(text, file=out)
     line = snapshot.refresh(store, profile, today)          # only when the profile asks for it
     if line:
         print(line, file=out)
@@ -203,7 +213,9 @@ def update(out=None, today=None):
     data = read_handoff()
     done, problems = networking.apply_updates(data.get("updates"), store, profile, today)
     for line in done:
-        print("DONE  " + line, file=out)
+        # Calendar instructions follow the change they belong to, as they are.
+        plain = line.startswith(("CALENDAR", "  ", "Calendar is off", "The event has no date"))
+        print(line if plain else "DONE  " + line, file=out)
     for line in problems:
         print("NOT DONE  " + line, file=out)
     if not done and not problems:

@@ -506,7 +506,13 @@ class Updates(NetCase):
                                    {"id": self.ids["Design Awards Gala"].replace("-", ""), "status": "Registered"})
         self.assertEqual(code, 0, out)
         self.assertIn("DONE  Portland Brand Meetup: now Joined.", out)
-        self.assertIn("DONE  Design Awards Gala: now Registered. Calendar is off, so add it to your calendar yourself.", out)
+        self.assertIn("DONE  Design Awards Gala: now Registered.", out)
+        # This example profile has a Google calendar set, so the engine writes the entry for the assistant to add.
+        self.assertIn("CALENDAR (google). Do this now, in this order:", out)
+        self.assertIn("  1. Look at their calendar for 2026-12-05T18:00 to 2026-12-05T20:00.", out)
+        self.assertIn("with no attendees and no invitations", out)
+        self.assertIn("       title:    Design Awards Gala", out)
+        self.assertIn("       body:     %sevents/gala Founders pitching new drinks brands." % SITE, out)
         self.assertEqual(self.groups()["Portland Brand Meetup"].values["status"], "Joined")
         gala = self.events()["Design Awards Gala"]
         self.assertEqual((gala.values["status"], gala.values["going"]), ("Registered", True))
@@ -722,7 +728,7 @@ class WeekOne(NetCase):
         code, out, _ = self.update({"id": row.id, "going": True})      # "I'm going to the freelancers coffee"
         self.assertEqual(code, 0, out)
         self.assertIn("Freelance Designers Coffee, Tue Nov 24: now Want to go.", out)
-        self.assertIn("Calendar is off", out)
+        self.assertIn("CALENDAR (google)", out)
         meeting = self.events()["Freelance Designers Coffee, Tue Nov 24"]
         self.assertEqual((meeting.values["going"], meeting.values["status"], meeting.values["time"]),
                          (True, "Want to go", "5:30 PM"))

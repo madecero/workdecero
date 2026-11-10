@@ -185,6 +185,19 @@ When the person says "prep me for" an event:
 3. Run `TOOL open`, write `{"prep": "E-4", "there": ["Organiser: Jane Doe"]}` to the hand-off file (a group id works too, for its next meeting; leave `there` out if you have none), run `TOOL prep`, then `TOOL close`.
 4. The helper writes a brief of ten lines at most into the event's note: who they know that may be there, the names from the public page, two openers tied to their interests, and what to bring. It tells you only that it did, because the brief names people from their own notes. Tell the person to open the note. Do not ask for the names and do not try to read the note.
 
+## Integrations
+
+The helper's start answer has a section **INTEGRATIONS THIS RUN**. It says which optional connections this person has turned on and the rules for each. Follow it to the letter.
+
+* **Off means off.** If it says the browser pass or signed-in LinkedIn is off, do not use that tool at all, even if it is available in this session. The engine also throws away anything reported as read that way.
+* **Browser pass.** One tab of your own, closed at the end. Wait between pages as the helper says. Read only: never type into a form, and never click apply, save, follow, connect or message. If a site shows a CAPTCHA or any "prove you are human" step, stop on that site and name it in `not_covered`. Never try to solve one. Mark what you read this way with `"read_with": "browser"`.
+* **Signed-in LinkedIn.** Read-only, inside the day's limits the helper prints, and only the passes it lists. In a quiet search never open anyone's profile. Report people as `connections` and the true `linkedin_pages` and `linkedin_searches`.
+* **These tools are not pre-approved.** Claude Code asks the person before each is used, unless they have allowed it in their own settings. That is intended. If they say no, carry on without it.
+* **A tool that is not there.** If an integration is on and its tool is not in this session, do not look for another way to do the same thing. Add a line to `integrations_skipped` in the hand-off file, such as `"browser: Claude in Chrome is not connected"`, and the digest will say so.
+* **DRY RUN.** If the helper says DRY RUN, call none of these tools. Say what you would have done.
+* **Task tracker.** If `TOOL finish` prints a section **TASK TRACKER**, post the comment it gives, exactly as written, as one comment on the issue it names, and change nothing else there. The comment holds counts only. Never add titles, employers or names to it.
+* **Calendar.** When `TOOL update` prints a section **CALENDAR**, do what it says in order: look for a clash first and tell the person about any, then add the one event exactly as given, with no attendees. If it says the calendar is off, tell the person to add the event themselves.
+
 ## If something goes wrong
 
 * The helper says a command could not run: read its message. The usual causes are a missing or malformed hand-off file, an argument added to the command, or nothing in progress (start with `TOOL start`, or `TOOL open` for a change). Write the file again and run the same fixed line.

@@ -39,6 +39,7 @@ sys.path.insert(0, os.path.join(_ROOT, "engine"))
 sys.path.insert(0, os.path.join(_ROOT, "trackers"))
 
 import handoff  # noqa: E402
+import integrations  # noqa: E402
 import liveness  # noqa: E402
 import sources  # noqa: E402
 import sweep  # noqa: E402
@@ -113,20 +114,30 @@ def start(out=None, fetcher=None, today=None, force=False):
     state = sweep.start(profile, store, source_map, fetcher or liveness.HttpFetcher(), today)
     sweep.save_state(work_dir(), state)
     print(sweep.start_report(state, profile), file=out)
+    print("\n".join(integrations.start_lines(profile, "jobs", wdprofile.config_home(), today)), file=out)
     if not any(source_map.get(track) for track in sources.TRACKS):
         print("\nNOTE: there is no local map yet, so only web searches were available. Tell the person they can run "
               "/workdecero:sources (or say \"build my local map\") to make later sweeps much more thorough.", file=out)
     return 0
 
 
+def _screen(state, data, profile, today):
+    """Refuse what came from a connection that is off, count LinkedIn use, and keep the lines for the digest."""
+    data, lines = integrations.screen(data, profile, wdprofile.config_home(), today)
+    for line in lines:
+        if line not in state.setdefault("integration_lines", []):
+            state["integration_lines"].append(line)
+    return data
+
+
 def intake(out=None, fetcher=None, today=None):
     out = out or sys.stdout
     profile, store = _context()
     state = _state()
-    handoff = read_handoff()
+    data = _screen(state, read_handoff(), profile, today)
     source_map = sources.load()
     before = json.dumps(source_map, sort_keys=True)
-    state = sweep.intake(state, handoff, profile, store, source_map, fetcher or liveness.HttpFetcher(), today)
+    state = sweep.intake(state, data, profile, store, source_map, fetcher or liveness.HttpFetcher(), today)
     if json.dumps(source_map, sort_keys=True) != before:
         sources.save(source_map)
     report = sweep.intake_report(state, profile)          # may note that it has nudged, so save after
@@ -139,11 +150,13 @@ def warm(out=None, today=None):
     out = out or sys.stdout
     profile, store = _context()
     state = _state()
-    handoff = read_handoff()
+    data = _screen(state, read_handoff(), profile, today)
+    added = sweep.add_connections(state, data, profile, store)       # people found on LinkedIn, when that is on
     before = len(state["warm_done"])
-    state = sweep.warm(state, handoff, profile, store, today)
+    state = sweep.warm(state, data, profile, store, today)
     sweep.save_state(work_dir(), state)
-    print("WARM PATHS WRITTEN: %d." % (len(state["warm_done"]) - before), file=out)
+    print("WARM PATHS WRITTEN: %d.%s" % (len(state["warm_done"]) - before,
+                                         " People added from LinkedIn: %d." % added if added else ""), file=out)
     return 0
 
 
@@ -160,6 +173,12 @@ def finish(out=None, today=None):
     problems = sweep.verify(state, store)
     title, featured, more = sweep.write_digest(state, profile, store, problems, today)
     print(sweep.finish_report(state, profile, store, title, featured, more, problems), file=out)
+    import datetime as _datetime
+    near = len([entry for entry in state["new"] if entry.get("near")])
+    for text in integrations.tracker_lines(profile, "jobs", today or _datetime.date.today(), [
+            ("new fits", len(state["new"]) - near), ("near misses", near), ("closed", len(state["closed"])),
+            ("left out", state["left_out"])], len(state["not_covered"])):
+        print(text, file=out)
     line = snapshot.refresh(store, profile, today)          # only when the profile asks for it
     if line:
         print(line, file=out)

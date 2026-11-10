@@ -158,6 +158,18 @@ Run `TOOL finish`. It checks the tracker, writes the digest note, and prints a s
 
 Do not add pay figures, reasons something was left out, or names of people. Those are in the notes, where they belong.
 
+## Integrations
+
+The helper's start answer has a section **INTEGRATIONS THIS RUN**. It says which optional connections this person has turned on and the rules for each. Follow it to the letter.
+
+* **Off means off.** If it says the browser pass or signed-in LinkedIn is off, do not use that tool at all, even if it is available in this session. The engine also throws away anything reported as read that way.
+* **Browser pass.** One tab of your own, closed at the end. Wait between pages as the helper says. Read only: never type into a form, and never click apply, save, follow, connect or message. If a site shows a CAPTCHA or any "prove you are human" step, stop on that site and name it in `not_covered`. Never try to solve one. Mark what you read this way with `"read_with": "browser"`.
+* **Signed-in LinkedIn.** Read-only, inside the day's limits the helper prints, and only the passes it lists. In a quiet search never open anyone's profile. Report people as `connections` and the true `linkedin_pages` and `linkedin_searches`.
+* **These tools are not pre-approved.** Claude Code asks the person before each is used, unless they have allowed it in their own settings. That is intended. If they say no, carry on without it.
+* **A tool that is not there.** If an integration is on and its tool is not in this session, do not look for another way to do the same thing. Add a line to `integrations_skipped` in the hand-off file, such as `"browser: Claude in Chrome is not connected"`, and the digest will say so.
+* **DRY RUN.** If the helper says DRY RUN, call none of these tools. Say what you would have done.
+* **Task tracker.** If `TOOL finish` prints a section **TASK TRACKER**, post the comment it gives, exactly as written, as one comment on the issue it names, and change nothing else there. The comment holds counts only. Never add titles, employers or names to it.
+
 ## If something goes wrong
 
 * The helper says a command could not run: read its message. The usual causes are a missing or malformed hand-off file, or an argument added to the command. Write the file again and run the same fixed line.

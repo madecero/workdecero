@@ -828,6 +828,9 @@ def write_digest(state, profile, store, problems, today=None):
         lines.append("- Left out by your profile: %d. Each one is listed below with the reason." % state["left_out"])
     if state.get("merged"):
         lines.append("- Copies of the same gig from different agencies folded together: %d." % state["merged"])
+    if state.get("integration_lines"):
+        lines += ["", "## Connections"]
+        lines += ["- %s" % text for text in state["integration_lines"]]
     reasons = state.get("left_out_why") or []
     if reasons:
         lines += ["", "## Left out, and why"]
