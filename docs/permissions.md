@@ -26,5 +26,7 @@ Claude Code normally asks you before it runs a command or writes a file. Setup a
 
 * **Reading a PDF resume** that sits outside the folder you started Claude Code in. It is your file, so you get to say yes.
 * **Starting by plain words.** "Run the job sweep" asks once. The slash command does not.
-* **Web search later in a conversation.** If you ask for a refresh or a second sweep later in the same conversation, Claude Code may ask once to allow web search. Say yes, or start it with the slash command.
+* **Web search and page reads later in a conversation.** A sweep started with its slash command searches and reads pages without asking, for that one request. If you ask for a refresh or a second sweep later in the same conversation, Claude Code asks for each web search and each page it reads, one at a time. Say yes to each, or start again with the slash command, which asks nothing.
+* **Adding a source by its address.** "Add example.org to my sources" in a later message can ask before that one page is read, for the same reason.
+* **Installing python3 on a new Mac.** That prompt comes from macOS, the first time python3 is needed. See "Before you start" in the README.
 * **Every optional connection** below: your browser, your calendar, your task tracker.

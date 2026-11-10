@@ -150,7 +150,9 @@ class DraftFile(SetupCase):
         self.assertEqual(mode_of(setup_tool.answers_path()), 0o644)    # as the Write tool leaves it, inside a 700 folder
         code, out, _ = self.call("save")
         self.assertEqual(code, 0)
-        self.assertIn("Saved: schema_version, person, location, tracks", out)
+        self.assertTrue(out.startswith("Noted: about you, where you work, which sweeps"), out)
+        self.assertNotIn("schema_version", out)                        # plain words, never a setting's name
+        self.assertNotIn("Saved", out)
         self.assertNotIn("Theo", out)                                  # names of settings, never their values
         self.assertFalse(os.path.exists(setup_tool.answers_path()))    # gone, so the next Write is a new file again
         self.assertEqual(mode_of(setup_tool.draft_path()), 0o600)
@@ -160,7 +162,7 @@ class DraftFile(SetupCase):
         self.assertEqual(self.state()["digest"]["max_new_items"], 5)
         self.assertEqual(self.state()["person"]["name"], "Theo Lindqvist")   # nothing else was touched
         self.assertEqual(mode_of(os.path.join(self.cache, setup_tool.SHOWN_NAME)), 0o600)
-        self.assertEqual(self.call("save")[1].strip(), "Nothing new to save.")
+        self.assertEqual(self.call("save")[1].strip(), "Nothing new to note.")
 
     def test_small_answers_set_append_and_remove(self):
         self.put(self.example())
@@ -620,6 +622,36 @@ class Write(SetupCase):
         self.assertIn("Start%20here.md", out)
         self.assertIn("Change anything later:   /workdecero:setup", out)
         self.assertIn(setup_tool.PRIVACY, out)
+
+    def test_the_helper_speaks_in_plain_labels(self):
+        self.assertEqual(setup_tool.plain_label("jobs.salary_floor"), "pay floor")
+        self.assertEqual(setup_tool.plain_label("jobs.titles"), "titles")
+        self.assertEqual(setup_tool.plain_label("networking.max_events_per_month"), "max events per month")
+        self.open_run()
+        self.send({"set": {"jobs.titles": ["VP of Product"], "jobs.salary_floor": 210000, "location.radius_miles": 40}})
+        _, out, _ = self.call("save")
+        self.assertEqual(out.strip(), "Noted: titles, pay floor, travel distance.")
+
+    def test_picker_options_are_given_in_order_with_the_recommended_one_first(self):
+        _, out, _ = self.call("fields")
+        self.assertTrue(out.startswith("PICKER OPTIONS."))
+        self.assertIn("  How far they will travel: 25 miles (Recommended) / 15 miles / 40 miles / 60 miles", out)
+        for question, options in setup_tool.PICKERS:
+            self.assertTrue(options[0].endswith("(Recommended)"), question)
+            self.assertEqual(len([option for option in options if "(Recommended)" in option]), 1, question)
+
+    def test_the_summary_says_when_a_sweep_is_not_in_this_version_yet(self):
+        with tempfile.TemporaryDirectory() as skills:
+            os.makedirs(os.path.join(skills, "job-sweep"))
+            with open(os.path.join(skills, "job-sweep", "SKILL.md"), "w") as handle:
+                handle.write("x")
+            everything = {"jobs": True, "contracts": True, "networking": True}
+            self.assertEqual(setup_tool.later_line(everything, skills),
+                             "The contract and networking sweeps arrive in an update. Your settings are saved for them.")
+            self.assertEqual(setup_tool.later_line({"jobs": True, "networking": True}, skills),
+                             "The networking sweep arrives in an update. Your settings are saved for it.")
+            self.assertIsNone(setup_tool.later_line({"jobs": True}, skills))
+        self.assertIsNone(setup_tool.later_line(everything))            # this version has all three
 
     def test_the_done_screen_names_only_sweeps_this_version_has(self):
         draft = self.example()

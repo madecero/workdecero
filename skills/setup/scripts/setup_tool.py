@@ -642,6 +642,8 @@ def short_card(profile, inferred=()):
         row("", "Strongest in: %s%s" % (_join(skills[:5]), mark("skills.core")))
     names = {"jobs": "salaried jobs", "contracts": "contract work", "networking": "networking"}
     row("Sweeps", _join([names[key] for key in wdprofile.TRACKS if tracks.get(key)]) or "none")
+    if later_line(tracks):
+        row("", later_line(tracks))
     if tracks.get("jobs") and jobs:
         row("Jobs", "%s%s" % (_join((jobs.get("titles") or [])[:6]), mark("jobs.titles")))
         bits = []
@@ -1075,9 +1077,71 @@ def cancel(out=None):
     return 0
 
 
+# What a setting is called when the helper speaks. Never the dotted name.
+PLAIN_LABELS = {
+    "schema_version": "", "person": "about you", "person.name": "name", "person.headline": "headline",
+    "person.summary": "summary", "person.years_experience": "years of experience", "person.resume_path": "resume",
+    "person.current_employer": "current employer", "person.business_name": "business name",
+    "person.website": "website", "person.linkedin_url": "LinkedIn address", "skills": "skills",
+    "skills.core": "strongest skills", "skills.secondary": "other skills", "skills.certifications": "certifications",
+    "tracks": "which sweeps", "jobs": "job settings", "jobs.titles": "titles", "jobs.levels": "levels",
+    "jobs.salary_floor": "pay floor", "jobs.salary_target": "pay you are aiming for",
+    "jobs.search_visibility": "quiet search", "jobs.preferred_industries": "industries",
+    "contracts": "contract settings", "contracts.services": "services", "contracts.titles": "contract titles",
+    "contracts.rate_floor_hourly": "hourly floor", "contracts.rate_target_hourly": "hourly rate you are aiming for",
+    "contracts.engagement_types": "ways you take work", "contracts.has_business_entity": "your own company",
+    "location": "where you work", "location.home_base": "home base", "location.metro": "metro area",
+    "location.work_modes": "remote or in person", "location.radius_miles": "travel distance",
+    "location.open_to_relocation": "relocation", "exclusions": "leave-outs", "confidential": "confidential names",
+    "confidential.names": "confidential names", "networking": "networking settings",
+    "networking.who_to_meet": "who to meet", "networking.unavailable": "times you cannot do",
+    "digest": "digest", "digest.max_new_items": "digest size", "mode": "Lite or Full", "storage": "vault",
+    "storage.vault_path": "vault", "storage.vault_folder": "folder in the vault",
+    "storage.spreadsheet_snapshot": "spreadsheet copy", "integrations": "connections",
+}
+
+# Every multiple-choice question, with its options in the order to show them: the recommended one first.
+PICKERS = (
+    ("How far they will travel", ("25 miles (Recommended)", "15 miles", "40 miles", "60 miles")),
+    ("Open to relocating", ("No (Recommended)", "Yes")),
+    ("Digest size", ("10 new items each sweep (Recommended)", "5", "20")),
+    ("Mode", ("Lite, for a Pro plan (Recommended)", "Full, for a Max plan")),
+    ("Another setup is open", ("Leave it and stop here (Recommended)", "Pick it up here", "Discard it and start fresh")),
+)
+SWEEP_SKILLS = (("jobs", "job-sweep", "job"), ("contracts", "contract-sweep", "contract"),
+                ("networking", "networking-sweep", "networking"))
+
+
+def plain_label(dotted):
+    """A setting's name in plain words. An unknown one is its last part with the underscores taken out."""
+    dotted = str(dotted)
+    if dotted in PLAIN_LABELS:
+        return PLAIN_LABELS[dotted]
+    return dotted.split(".")[-1].replace("_", " ")
+
+
+def sweeps_not_in_this_version(tracks, skills_dir=None):
+    """Sweeps the person turned on that this version of the plugin does not have yet, in plain words."""
+    skills_dir = skills_dir or os.path.join(_ROOT, "skills")
+    return [word for key, skill, word in SWEEP_SKILLS
+            if (tracks or {}).get(key) and not os.path.isfile(os.path.join(skills_dir, skill, "SKILL.md"))]
+
+
+def later_line(tracks, skills_dir=None):
+    missing = sweeps_not_in_this_version(tracks, skills_dir)
+    if not missing:
+        return None
+    return "The %s sweep%s in an update. Your settings are saved for %s." % (
+        " and ".join(missing), " arrives" if len(missing) == 1 else "s arrive", "it" if len(missing) == 1 else "them")
+
+
 def fields(out=None):
     """Every setting, its description and its choices, so a draft uses the right names."""
     out = out or sys.stdout
+    print("PICKER OPTIONS. Show each question's options with these labels, in exactly this order:", file=out)
+    for question, options in PICKERS:
+        print("  %s: %s" % (question, " / ".join(options)), file=out)
+    print("", file=out)
     def walk(node, path, depth):
         for name, child in node.get("properties", {}).items():
             here = "%s.%s" % (path, name) if path else name
@@ -1150,8 +1214,10 @@ def main(argv=None):
             return cancel()
         if command == "save":
             read_draft()
-            names = read_draft.changed
-            print("Saved: %s." % ", ".join(names) if names else "Nothing new to save.")
+            names = [label for label in (plain_label(name) for name in read_draft.changed) if label]
+            names = [name for index, name in enumerate(names) if name not in names[:index]]
+            # "Noted", never "saved": nothing is saved until the person confirms the summary.
+            print("Noted: %s." % ", ".join(names) if names else "Nothing new to note.")
             return 0
         if command == "read-resume":
             path = str(read_draft().get("_resume_path") or "").strip()

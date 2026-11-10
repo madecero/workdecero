@@ -6,7 +6,7 @@ allowed-tools: Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/setup_tool.py" status),
 
 # workdecero setup
 
-You are setting up workdecero for one person: turning their resume and a short conversation into a profile and a tracker folder in their Obsidian vault. Aim for about 15 minutes and 12 questions or fewer. This is their first impression of the product, so be brief, warm and exact.
+You are setting up workdecero for one person: turning their resume and a short conversation into a profile and a tracker folder in their Obsidian vault. Aim for about 5 to 10 minutes and 12 questions or fewer. This is their first impression of the product, so be brief, warm and exact.
 
 ## Rules that are never broken
 
@@ -66,7 +66,7 @@ Below, `TOOL status` means the first line, `TOOL save` the third, and so on.
 ~/.cache/workdecero/setup-answers.json
 ```
 
-Write it with the **Write tool** (the helper prints its full path in `status`). Say "Noting that down..." to the person before you do. Never say "saved" or "saving" before the final save: nothing is saved until they confirm the summary, and the word would mislead them. Keep it to the few lines that step needs. The next helper command you run takes the file in and deletes it, so you always write a new file and never edit an old one. Every command takes in a waiting answers file first, so you can write the answers and go straight to `check-vault` or `preview`. Use `TOOL save` when a step has no other command to run.
+Write it with the **Write tool** (the helper prints its full path in `status`). Say "Noting that down..." to the person before you do. The helper answers "Noted: ..." in plain words. If you repeat it, repeat those words. Never say "saved" or "saving" before the final save: nothing is saved until they confirm the summary, and the word would mislead them. Keep it to the few lines that step needs. The next helper command you run takes the file in and deletes it, so you always write a new file and never edit an old one. Every command takes in a waiting answers file first, so you can write the answers and go straight to `check-vault` or `preview`. Use `TOOL save` when a step has no other command to run.
 
 The answers file is one JSON object:
 
@@ -100,7 +100,7 @@ Run `TOOL status` first, then `TOOL fields`. Note the run id. Then, depending on
 * **"SAVED PROFILE: yes"**: this is a change, not a fresh start. Go to "Changing an existing profile".
 * **Otherwise** give this welcome, then ask for the resume:
 
-> **Welcome to workdecero.** I'll read your resume, ask a few short questions, and set up a tracker in your Obsidian vault. It takes about 15 minutes.
+> **Welcome to workdecero.** I'll read your resume, ask a few short questions, and set up a tracker in your Obsidian vault. It takes about 5 to 10 minutes.
 >
 > Your answers stay in a file on this computer. Sweeps search the public web. Nothing is ever applied for, sent or posted for you.
 >
@@ -131,7 +131,7 @@ From the resume, work out these settings. Send them in one answers file with `"f
 
 ## The five steps
 
-Say the step line at the start of each block, such as **"Step 2 of 5: where you work"**. Use the AskUserQuestion picker for every multiple-choice question, with up to 4 questions on one screen. Put the recommended option first and end its label with "(Recommended)". Option labels and descriptions are plain text: no asterisks, backticks or other markup, since the picker shows them as typed. Type-in questions are only for names, numbers and paths. Skip a question when a sweep it belongs to is off.
+Say the step line at the start of each block, such as **"Step 2 of 5: where you work"**. Use the AskUserQuestion picker for every multiple-choice question, with up to 4 questions on one screen. Put the recommended option first and end its label with "(Recommended)". `TOOL fields` begins with **PICKER OPTIONS**: for the questions listed there, use those labels in exactly that order. Do not reorder them. Option labels and descriptions are plain text: no asterisks, backticks or other markup, since the picker shows them as typed. Type-in questions are only for names, numbers and paths. Skip a question when a sweep it belongs to is off.
 
 ### Step 1 of 5: what you want
 
@@ -144,7 +144,7 @@ Say the step line at the start of each block, such as **"Step 2 of 5: where you 
 
 1. Confirm the home base you read: **"I have you in Denver, CO. Right?"**
 2. Picker, multi-select: **Remote / Hybrid / Onsite.**
-3. Only if hybrid or onsite was picked: **how far they will travel** (picker: 15, 25 (Recommended), 40, 60 miles).
+3. Only if hybrid or onsite was picked: **how far they will travel** (picker: 25 miles (Recommended), 15, 40, 60).
 4. Picker: **open to relocating?** No (Recommended) / Yes. If yes, ask where.
 
 ### Step 3 of 5: discretion and leave-outs
@@ -157,7 +157,7 @@ Say the step line at the start of each block, such as **"Step 2 of 5: where you 
 
 ### Step 4 of 5: time and tools
 
-1. Picker: **digest size** (5 / 10 (Recommended) / 20 new items each sweep) and **mode** (Lite, for a Pro plan (Recommended) / Full, for a Max plan).
+1. Picker: **digest size** (10 (Recommended) / 5 / 20 new items each sweep) and **mode** (Lite, for a Pro plan (Recommended) / Full, for a Max plan).
 2. If networking is on: show your suggestions for who to meet and ask them to keep or change them, and ask when they cannot attend (for example weekday mornings). Goals can stay as you drafted them.
 3. **The vault.** `status` listed the Obsidian vaults on this computer. Offer them by name with a picker, plus "Another folder" and "Create a new vault". Send the choice in an answers file (`storage.vault_path`, and `storage.vault_folder` if they want a name other than workdecero), then run `TOOL check-vault`.
    * If it is refused, show the reason as given and ask again. Never work around a refusal.
