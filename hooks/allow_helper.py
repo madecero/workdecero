@@ -20,10 +20,13 @@ What it approves, exactly:
 
 What it refuses, exactly one thing:
   * A browser tool (Claude in Chrome, or any connected tool whose name says
-    it drives a browser), while a workdecero sweep is running for a person
-    who has not turned the browser pass on. A sweep must not
-    open someone's browser unless they asked for that. When no sweep is
-    running, nothing is refused.
+    it drives a browser), in a conversation that has started a workdecero
+    skill, for a person who has not turned browser use on. workdecero must
+    not open someone's browser unless they asked for that. Other
+    conversations are never affected.
+
+It also notes, in a private folder, which conversations have started a
+workdecero skill. That note is an empty file named by the session id.
 
 Everything else is left alone: this hook prints nothing, and the normal
 permission prompt decides. It never approves a command it does not
@@ -39,6 +42,7 @@ it starts fast: it runs before every Bash and Write call.
 
 import json
 import os
+import re
 import stat
 import sys
 import time
@@ -122,16 +126,23 @@ def write_allowed(path):
     return stat.S_ISREG(info.st_mode)              # exists: only a plain file, never a link or a folder
 
 
-# Files a sweep keeps in the hand-off folder while it runs. Each records whether the person has turned
-# the browser pass on.
-RUN_FILES = ("sweep-state.json", "contract-state.json", "networking-state.json", "sources-run.json")
+# --------------------------------------------------------------------------
+# The one refusal: a browser tool, in a workdecero session, with browser use off
+# --------------------------------------------------------------------------
+
 # Tools that drive a browser. Claude in Chrome by name, and any other connected tool whose name says it
 # drives one. A name is all the hook has to go on, so the words are chosen to be unmistakable.
-# A sweep counts as running while its file was written in the last half hour. Every helper step rewrites it,
-# and finishing or cancelling deletes it, so an abandoned sweep stops mattering after 30 minutes.
-RUN_ACTIVE_SECONDS = 30 * 60
 BROWSER_PREFIX = "mcp__claude-in-chrome__"
 BROWSER_WORDS = ("browser", "playwright", "puppeteer", "selenium", "chrome", "chromium", "webdriver")
+SKILL_PREFIX = "workdecero:"
+# One empty file per conversation that has started a workdecero skill, named by its session id.
+SESSIONS_DIR = os.path.join("~", ".cache", "workdecero-sessions")
+SESSION_ID = re.compile(r"[A-Za-z0-9_-]{8,80}\Z")
+MARK_KEPT_SECONDS = 24 * 60 * 60
+# Where the settings live, and the one small file in it this hook reads: {"browser_enabled": true or false}.
+HOME_ENV = "WORKDECERO_HOME"
+DEFAULT_HOME = os.path.join("~", ".config", "workdecero")
+FLAGS_NAME = "flags.json"
 
 
 def is_browser_tool(tool):
@@ -141,42 +152,111 @@ def is_browser_tool(tool):
     return name.startswith(BROWSER_PREFIX) or any(word in name for word in BROWSER_WORDS)
 
 
-def browser_is_off_for_a_running_sweep(now=None):
-    """True while a workdecero sweep is in progress for a person who has not turned the browser pass on.
+def sessions_dir():
+    return os.path.expanduser(SESSIONS_DIR)
 
-    A sweep must never open the person's browser unless they asked for that.
-    The skills say so, and this makes it hold: while a sweep is running with
-    the browser pass off, browser tools are refused outright. Nothing is
-    refused when no sweep is running, so the person's own use of their
-    browser in other work is left alone.
-    """
-    now = now if now is not None else time.time()
-    folder = handoff_dir()
-    if not folder_is_private(folder):
+
+def _mark_path(session_id):
+    if not isinstance(session_id, str) or not SESSION_ID.match(session_id):
+        return None                                # anything that is not a plain id never becomes a file name
+    return os.path.join(sessions_dir(), session_id)
+
+
+def mark_session(session_id, now=None):
+    """Remember that this conversation has started a workdecero skill. Never raises."""
+    path = _mark_path(session_id)
+    if path is None:
         return False
-    for name in RUN_FILES:
-        path = os.path.join(folder, name)
-        try:
-            info = os.lstat(path)
-            if not stat.S_ISREG(info.st_mode) or now - info.st_mtime > RUN_ACTIVE_SECONDS:
-                continue
-            with open(path, "r", encoding="utf-8") as handle:
-                data = json.load(handle)
-        except (OSError, ValueError):
-            continue
-        if isinstance(data, dict) and data.get("browser_pass") is False:
-            return True
+    folder = sessions_dir()
+    now = now if now is not None else time.time()
+    try:
+        if not os.path.lexists(folder):
+            os.makedirs(os.path.dirname(folder), exist_ok=True)
+            os.mkdir(folder, 0o700)
+            os.chmod(folder, 0o700)
+        if not folder_is_private(folder):
+            return False                           # not ours, or a link: write nothing into it
+        handle = os.open(path, os.O_WRONLY | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        os.close(handle)
+        info = os.lstat(path)
+        if not stat.S_ISREG(info.st_mode):
+            return False
+        os.utime(path, (now, now))
+        for name in os.listdir(folder)[:500]:      # keep the folder tidy: a mark lasts a day
+            other = os.path.join(folder, name)
+            old = os.lstat(other)
+            if stat.S_ISREG(old.st_mode) and now - old.st_mtime > MARK_KEPT_SECONDS:
+                os.remove(other)
+    except OSError:
+        return False
+    return True
+
+
+def session_marked(session_id, now=None):
+    """True when this conversation started a workdecero skill in the last day."""
+    path = _mark_path(session_id)
+    if path is None or not folder_is_private(sessions_dir()):
+        return False
+    try:
+        info = os.lstat(path)
+    except OSError:
+        return False
+    if not stat.S_ISREG(info.st_mode) or (hasattr(os, "getuid") and info.st_uid != os.getuid()):
+        return False
+    now = now if now is not None else time.time()
+    return now - info.st_mtime <= MARK_KEPT_SECONDS
+
+
+def flags_path():
+    return os.path.join(os.path.expanduser(os.environ.get(HOME_ENV) or DEFAULT_HOME), FLAGS_NAME)
+
+
+def browser_enabled():
+    """True only when the person's own settings folder plainly says browser use is on.
+
+    A missing file, a link, a file or folder someone else owns or can write to,
+    or anything that is not exactly true: all of those mean off.
+    """
+    path = flags_path()
+    me = os.getuid() if hasattr(os, "getuid") else None
+    try:
+        folder = os.lstat(os.path.dirname(path))
+        info = os.lstat(path)
+        if not stat.S_ISDIR(folder.st_mode) or not stat.S_ISREG(info.st_mode):
+            return False
+        if me is not None and (folder.st_uid != me or info.st_uid != me):
+            return False
+        if stat.S_IMODE(folder.st_mode) & 0o022 or stat.S_IMODE(info.st_mode) & 0o022 or info.st_size > 4096:
+            return False
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return False
+    return isinstance(data, dict) and data.get("browser_enabled") is True
+
+
+def starts_a_skill(event):
+    """True when this event is a workdecero skill starting: by slash command, or by the Skill tool."""
+    if event.get("hook_event_name") == "UserPromptSubmit":
+        prompt = event.get("prompt")
+        return isinstance(prompt, str) and prompt.lstrip().startswith("/" + SKILL_PREFIX)
+    if event.get("tool_name") == "Skill":
+        data = event.get("tool_input")
+        name = data.get("skill") if isinstance(data, dict) else None
+        return isinstance(name, str) and name.lstrip("/").startswith(SKILL_PREFIX)
     return False
 
 
 def refuse(event):
-    """A reason, when this tool call must be refused. Only ever a browser tool during a sweep with the pass off."""
-    tool = event.get("tool_name")
-    if is_browser_tool(tool) and browser_is_off_for_a_running_sweep():
-        return ("workdecero: browser use is off in your profile. A sweep is running, so the browser is not opened. "
-                "Do not try another way to open one. Carry on with public web pages, and name what could not be read "
-                "under not covered. Browser use can be turned on with /workdecero:setup.")
-    return None
+    """A reason, when this tool call must be refused. Only ever a browser tool, in a conversation that has
+    started a workdecero skill, for a person who has not turned browser use on."""
+    if not is_browser_tool(event.get("tool_name")):
+        return None
+    if not session_marked(event.get("session_id")) or browser_enabled():
+        return None
+    return ("workdecero: browser use is off in your profile. This conversation is running workdecero, so the browser "
+            "is not opened. Do not try another way to open one. Carry on with public web pages, and name what could "
+            "not be read under not covered. Browser use can be turned on with /workdecero:setup.")
 
 
 def decide(event):
@@ -198,7 +278,14 @@ def main():
         event = json.load(sys.stdin)
     except ValueError:
         return 0
-    reason = refuse(event) if isinstance(event, dict) else None
+    if not isinstance(event, dict):
+        return 0
+    if starts_a_skill(event):
+        mark_session(event.get("session_id"))
+        return 0                                   # noted. The normal prompt decides whether the skill starts
+    if event.get("hook_event_name") not in (None, "PreToolUse"):
+        return 0
+    reason = refuse(event)
     if reason:
         print(json.dumps({"hookSpecificOutput": {
             "hookEventName": "PreToolUse",
@@ -206,7 +293,8 @@ def main():
             "permissionDecisionReason": reason,
         }}))
         return 0
-    if isinstance(event, dict) and decide(event):
+    if decide(event):
+        mark_session(event.get("session_id"))      # one of our helpers is running here: this is a workdecero session
         print(json.dumps({"hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "allow",

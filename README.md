@@ -50,6 +50,8 @@ Nothing personal is stored in this repository or in the plugin folder.
 | Setup draft | `~/.cache/workdecero/` (`setup-answers.json`, `setup-state.json`) | Temporary files in a private folder. They hold your answers only while setup is running, in a folder only you can open, and are deleted when setup is saved or cancelled. `setup-answers.json` is written by Claude Code a few lines at a time and is taken in and deleted at the next step. |
 | Source hand-off | `~/.cache/workdecero/` (`sources-entries.json`, `sources-run.json`) | Temporary. Holds public names and links found while your local map is being built. Each batch is deleted as soon as it is checked, and the folder goes when the run ends. |
 | Sweep hand-off and state | `~/.cache/workdecero/` (`sweep-handoff.json`, `sweep-state.json`, `contract-handoff.json`, `contract-state.json`) | Temporary. Hold public postings found during a sweep, and are deleted when the sweep finishes. |
+| Browser setting | `~/.config/workdecero/flags.json` | One line: whether you turned browser use on. Kept in step with your profile, so the hook never reads the profile itself. |
+| Conversation marks | `~/.cache/workdecero-sessions/` | One empty file per conversation that started a workdecero skill, named by its id, in a folder only you can open. Removed after a day. |
 | Cache | The plugin data folder managed by Claude Code | Safe to lose. Removed when the plugin is uninstalled. |
 
 ## Your local map
@@ -106,7 +108,7 @@ What that means in practice:
 
 * The helpers take no arguments, so an approved command cannot be aimed at another file. They read and write your profile, your local map, the workdecero folder in your vault, and the temporary folder above. A command that changes anything only works while its skill has a run open, so a stray call in another conversation changes nothing.
 * Any other command, any extra word on those command lines, any other file: Claude Code asks you as usual. The hook never approves anything it does not recognise in full.
-* One thing is refused outright. While a sweep or a local map build is running and browser use is off in your profile (it is off unless you turn it on), any tool that drives a browser, such as Claude in Chrome, is refused with the reason "workdecero: browser use is off in your profile". Nothing else is ever refused, and outside a running sweep your browser tools behave as they always do.
+* One thing is refused outright. In a conversation where you have started a workdecero skill, while browser use is off in your profile (it is off unless you turn it on), any tool that drives a browser, such as Claude in Chrome, is refused with the reason "workdecero: browser use is off in your profile". Nothing else is ever refused, and your other conversations are never affected. To know which conversation is which, the hook keeps an empty file named by the conversation's id for a day.
 * Three things still ask on purpose:
   * Reading your resume if it is a PDF outside the folder you started in. That is your file, so you get to say yes.
   * Starting a skill by plain words. A slash command such as `/workdecero:job-sweep` asks nothing. If you say "run the job sweep" instead, Claude Code asks once to allow it, and you can allow it permanently from that prompt.

@@ -1,8 +1,18 @@
 {
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/allow_helper.py\""
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
-        "matcher": "Bash|Write|mcp__.*",
+        "matcher": "Bash|Write|Skill|mcp__.*",
         "hooks": [
           {
             "type": "command",

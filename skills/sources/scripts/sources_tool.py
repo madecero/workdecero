@@ -545,11 +545,11 @@ def main(argv=None):
         if command == "plan" or command == "plan-refresh":
             code = plan(refresh=command == "plan-refresh")
             if code == 0:
-                handoff.open_run(RUN, extra={"browser_pass": handoff.browser_pass(_profile())})
+                handoff.open_run(RUN)
             return code
         if command == "open":
             _profile()
-            handoff.open_run(RUN, extra={"browser_pass": handoff.browser_pass(_profile())})
+            handoff.open_run(RUN)
             print("Ready. Write the hand-off file, run `add` or `remove`, then run `close`.")
             return 0
         if command == "close":

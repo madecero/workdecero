@@ -1,3 +1,7 @@
+from contextlib import redirect_stdout
+import io
+import shutil
+import stat
 import json
 import os
 import re
@@ -10,6 +14,7 @@ import unittest
 import _paths
 
 sys.path.insert(0, os.path.join(_paths.REPO_ROOT, "hooks"))
+sys.path.insert(0, os.path.join(_paths.REPO_ROOT, "engine"))
 sys.path.insert(0, os.path.join(_paths.REPO_ROOT, "skills", "setup", "scripts"))
 import allow_helper  # noqa: E402
 import setup_tool  # noqa: E402
@@ -47,6 +52,16 @@ class PrivateFolder(unittest.TestCase):
         allow_helper.HANDOFF_DIR = self.folder
         self.addCleanup(setattr, allow_helper, "HANDOFF_DIR", self._original)
         self.answers = os.path.join(self.folder, "setup-answers.json")
+        # The session marks and the settings folder are temp ones too: a test never touches the real ones.
+        self.sessions = os.path.join(self.tmp.name, "workdecero-sessions")
+        self.addCleanup(setattr, allow_helper, "SESSIONS_DIR", allow_helper.SESSIONS_DIR)
+        allow_helper.SESSIONS_DIR = self.sessions
+        self.home = os.path.join(self.tmp.name, "config")
+        os.mkdir(self.home, 0o700)
+        previous = os.environ.get("WORKDECERO_HOME")
+        os.environ["WORKDECERO_HOME"] = self.home
+        self.addCleanup(lambda: os.environ.pop("WORKDECERO_HOME", None) if previous is None
+                        else os.environ.__setitem__("WORKDECERO_HOME", previous))
 
 
 class Approves(PrivateFolder):
@@ -224,114 +239,206 @@ class LeavesAlone(PrivateFolder):
             source = handle.read()
         self.assertEqual(source.count('"deny"'), 1)
         self.assertNotIn('"ask"', source)
-        # Nothing but a browser tool can ever be refused, whatever state the folder is in.
-        with open(os.path.join(self.folder, "sweep-state.json"), "w") as handle:
-            json.dump({"browser_pass": False}, handle)
+        # Nothing but a browser tool can ever be refused, even in a marked session with browser use off.
+        self.assertTrue(allow_helper.mark_session(SESSION))
         for event in (bash("ls"), bash(SETUP + "status"), write("/tmp/x"),
                       {"tool_name": "WebSearch", "tool_input": {"query": "x"}},
                       {"tool_name": "mcp__linear__save_comment", "tool_input": {}},
+                      {"tool_name": "Skill", "tool_input": {"skill": "workdecero:job-sweep"}},
                       {"tool_name": "Read", "tool_input": {"file_path": "/etc/hosts"}}):
-            self.assertIsNone(allow_helper.refuse(event), event)
+            self.assertIsNone(allow_helper.refuse(dict(event, session_id=SESSION)), event)
 
     def test_hook_file_runs_it_for_bash_write_and_connected_tools(self):
         with open(os.path.join(ROOT, "hooks", "hooks.json"), encoding="utf-8") as handle:
             hooks = json.load(handle)["hooks"]
-        self.assertEqual(list(hooks), ["PreToolUse"])
-        self.assertEqual(hooks["PreToolUse"][0]["matcher"], "Bash|Write|mcp__.*")
+        self.assertEqual(sorted(hooks), ["PreToolUse", "UserPromptSubmit"])
+        self.assertEqual(hooks["PreToolUse"][0]["matcher"], "Bash|Write|Skill|mcp__.*")
+        self.assertNotIn("matcher", hooks["UserPromptSubmit"][0])
         self.assertEqual(hooks["PreToolUse"][0]["hooks"][0]["command"],
                          'python3 "${CLAUDE_PLUGIN_ROOT}/hooks/allow_helper.py"')
 
 
 
-CHROME = {"hook_event_name": "PreToolUse", "tool_name": "mcp__claude-in-chrome__tabs_create_mcp", "tool_input": {}}
+SESSION, OTHER = "11111111-2222-3333-4444-555555555555", "99999999-8888-7777-6666-555555555555"
+CHROME = {"hook_event_name": "PreToolUse", "tool_name": "mcp__claude-in-chrome__tabs_create_mcp", "tool_input": {},
+          "session_id": SESSION}
 
 
-class BrowserDuringASweep(PrivateFolder):
-    """A sweep must never open the person's browser unless they turned that on."""
+def slash(text, session=SESSION):
+    return {"hook_event_name": "UserPromptSubmit", "prompt": text, "session_id": session}
 
-    def run_file(self, name, browser_pass, age_seconds=0):
-        path = os.path.join(self.folder, name)
+
+def skill(name, session=SESSION):
+    return {"hook_event_name": "PreToolUse", "tool_name": "Skill", "tool_input": {"skill": name}, "session_id": session}
+
+
+class BrowserInAWorkdeceroSession(PrivateFolder):
+    """workdecero must never open the person's browser unless they turned that on."""
+
+    def through_main(self, event):
+        out = io.StringIO()
+        stdin = sys.stdin
+        sys.stdin = io.StringIO(json.dumps(event))
+        try:
+            with redirect_stdout(out):
+                code = allow_helper.main()
+        finally:
+            sys.stdin = stdin
+        return code, out.getvalue().strip()
+
+    def flags(self, value):
+        path = os.path.join(self.home, "flags.json")
         with open(path, "w") as handle:
-            json.dump({"started": "2026-11-09T10:00:00", "browser_pass": browser_pass}, handle)
-        if age_seconds:
-            old = time.time() - age_seconds
-            os.utime(path, (old, old))
+            json.dump(value, handle)
+        os.chmod(path, 0o600)
         return path
 
-    def test_refused_while_a_sweep_runs_with_browser_use_off(self):
-        for name in allow_helper.RUN_FILES:
-            path = self.run_file(name, False)
-            reason = allow_helper.refuse(CHROME)
-            self.assertTrue(reason.startswith("workdecero: browser use is off in your profile."), name)
-            os.remove(path)
-        self.run_file("networking-state.json", False)
+    def refused(self, event=CHROME):
+        code, out = self.through_main(event)
+        self.assertEqual(code, 0)
+        if not out:
+            return False
+        decision = json.loads(out)["hookSpecificOutput"]
+        self.assertEqual(decision["permissionDecision"], "deny")
+        self.assertTrue(decision["permissionDecisionReason"].startswith("workdecero: browser use is off in your profile."))
+        return True
+
+    # ---- the session is marked the moment a skill starts, before any tool runs
+    def test_a_browser_call_before_the_helper_has_run_is_refused(self):
+        self.flags({"browser_enabled": False})
+        self.assertFalse(self.refused())                               # an ordinary conversation: left alone
+        self.assertEqual(self.through_main(slash("/workdecero:networking-sweep")), (0, ""))
+        self.assertTrue(self.refused())                                # no run file exists yet, and it is refused
+        self.assertEqual(os.listdir(self.folder), [])
         for tool in ("mcp__claude-in-chrome__navigate", "mcp__claude-in-chrome__computer",
                      "mcp__playwright__browser_navigate", "mcp__puppeteer__goto", "mcp__some_server__open_browser",
                      "mcp__browserbase__session"):
-            self.assertIsNotNone(allow_helper.refuse({"tool_name": tool, "tool_input": {}}), tool)
+            self.assertTrue(self.refused(dict(CHROME, tool_name=tool)), tool)
 
-    def test_left_alone_when_no_sweep_is_running(self):
-        self.assertIsNone(allow_helper.refuse(CHROME))                 # nothing in the folder
-        self.run_file("sweep-state.json", False, age_seconds=allow_helper.RUN_ACTIVE_SECONDS + 60)
-        self.assertIsNone(allow_helper.refuse(CHROME))                 # a sweep that went quiet long ago
-        os.remove(os.path.join(self.folder, "sweep-state.json"))
-        with open(os.path.join(self.folder, "setup-state.json"), "w") as handle:
-            json.dump({"browser_pass": False}, handle)
-        self.assertIsNone(allow_helper.refuse(CHROME))                 # setup is not a sweep
-        with open(os.path.join(self.folder, "sweep-state.json"), "w") as handle:
-            handle.write("not json")
-        self.assertIsNone(allow_helper.refuse(CHROME))                 # a damaged file refuses nothing
+    def test_a_skill_started_in_plain_words_marks_the_session_too(self):
+        self.assertEqual(self.through_main(skill("workdecero:job-sweep")), (0, ""))   # says nothing: the prompt decides
+        self.assertTrue(self.refused())
 
+    def test_a_helper_command_marks_the_session_as_well(self):
+        code, out = self.through_main(dict(bash(SETUP + "status"), session_id=SESSION))
+        self.assertEqual(json.loads(out)["hookSpecificOutput"]["permissionDecision"], "allow")
+        self.assertTrue(self.refused())
+
+    def test_other_prompts_and_other_skills_mark_nothing(self):
+        for event in (slash("run /workdecero:job-sweep later"), slash("/other:thing"), slash("tell me about workdecero"),
+                      skill("other:workdecero"), skill("docs"), dict(bash("ls"), session_id=SESSION),
+                      {"hook_event_name": "UserPromptSubmit", "prompt": None, "session_id": SESSION}):
+            self.through_main(event)
+        self.assertFalse(os.path.exists(self.sessions))
+        self.assertFalse(self.refused())
+
+    # ---- only that conversation
+    def test_another_session_is_untouched(self):
+        self.through_main(slash("/workdecero:job-sweep"))
+        self.assertTrue(self.refused())
+        self.assertFalse(self.refused(dict(CHROME, session_id=OTHER)))
+        self.assertFalse(self.refused(dict((key, value) for key, value in CHROME.items() if key != "session_id")))
+
+    def test_a_mark_lasts_a_day_and_old_ones_are_cleared(self):
+        self.through_main(slash("/workdecero:job-sweep"))
+        mark = os.path.join(self.sessions, SESSION)
+        self.assertEqual(stat.S_IMODE(os.stat(mark).st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE(os.stat(self.sessions).st_mode), 0o700)
+        self.assertEqual(os.path.getsize(mark), 0)                     # an empty file: the id is all it holds
+        old = time.time() - allow_helper.MARK_KEPT_SECONDS - 60
+        os.utime(mark, (old, old))
+        self.assertFalse(self.refused())
+        self.through_main(slash("/workdecero:setup", session=OTHER))
+        self.assertEqual(os.listdir(self.sessions), [OTHER])
+
+    def test_a_session_id_that_is_not_a_plain_id_never_becomes_a_file(self):
+        for bad in ("../../escape", "a/b/c/d/e/f/g/h", "short", "x" * 200, "", None, 12345678, "has space-in-it-xx"):
+            self.assertFalse(allow_helper.mark_session(bad), bad)
+            self.assertFalse(allow_helper.session_marked(bad), bad)
+        self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "escape")))
+
+    # ---- the person's choice
     def test_a_normal_prompt_when_browser_use_is_on(self):
-        self.run_file("contract-state.json", True)
-        self.assertIsNone(allow_helper.refuse(CHROME))
-        self.assertFalse(allow_helper.decide(CHROME))                  # and never approved for them either
-        os.remove(os.path.join(self.folder, "contract-state.json"))
-        with open(os.path.join(self.folder, "contract-state.json"), "w") as handle:
-            json.dump({"started": "x"}, handle)                        # a run written by an older version
-        self.assertIsNone(allow_helper.refuse(CHROME))
+        self.through_main(slash("/workdecero:job-sweep"))
+        self.flags({"browser_enabled": True})
+        self.assertEqual(self.through_main(CHROME), (0, ""))           # nothing said: Claude Code asks as usual
+        self.assertFalse(allow_helper.decide(CHROME))                  # and it is never approved for them
 
-    def test_a_folder_that_is_not_private_or_a_linked_file_refuses_nothing(self):
-        self.run_file("sweep-state.json", False)
-        os.chmod(self.folder, 0o755)
-        self.assertIsNone(allow_helper.refuse(CHROME))
-        os.chmod(self.folder, 0o700)
-        os.remove(os.path.join(self.folder, "sweep-state.json"))
+    def test_an_unknown_setting_is_refused_inside_a_marked_session(self):
+        self.through_main(slash("/workdecero:job-sweep"))
+        self.assertTrue(self.refused())                                # no flags file at all
+        for value in ({}, {"browser_enabled": "true"}, {"browser_enabled": 1}, ["x"], {"browser_enabled": None}):
+            self.flags(value)
+            self.assertTrue(self.refused(), value)
+        with open(os.path.join(self.home, "flags.json"), "w") as handle:
+            handle.write("not json")
+        self.assertTrue(self.refused())
+
+    def test_a_flags_file_that_cannot_be_trusted_counts_as_off(self):
+        self.through_main(slash("/workdecero:job-sweep"))
+        path = self.flags({"browser_enabled": True})
+        self.assertFalse(self.refused())
+        os.chmod(path, 0o666)                                          # anyone could have written it
+        self.assertTrue(self.refused())
+        os.chmod(path, 0o600)
+        os.chmod(self.home, 0o777)                                     # anyone could have replaced it
+        self.assertTrue(self.refused())
+        os.chmod(self.home, 0o700)
+        os.remove(path)
         real = os.path.join(self.tmp.name, "elsewhere.json")
         with open(real, "w") as handle:
-            json.dump({"browser_pass": False}, handle)
-        os.symlink(real, os.path.join(self.folder, "sweep-state.json"))
-        self.assertIsNone(allow_helper.refuse(CHROME))
+            json.dump({"browser_enabled": True}, handle)
+        os.symlink(real, path)                                         # a link is not their settings file
+        self.assertTrue(self.refused())
 
-    def test_the_whole_hook_answers_deny_with_the_plain_reason(self):
-        allow_helper.HANDOFF_DIR = self._original
-        if not os.path.isdir(allow_helper.handoff_dir()):              # never touch a real run: only when absent
-            self.run_file("sweep-state.json", False)
-            code, out = self.as_subprocess(CHROME)
-            decision = json.loads(out)["hookSpecificOutput"]
-            self.assertEqual((code, decision["permissionDecision"]), (0, "deny"))
-            self.assertIn("workdecero: browser use is off in your profile.", decision["permissionDecisionReason"])
-        allow_helper.HANDOFF_DIR = self.folder
+    def test_a_mark_that_cannot_be_trusted_is_ignored(self):
+        self.flags({"browser_enabled": False})
+        self.through_main(slash("/workdecero:job-sweep"))
+        os.chmod(self.sessions, 0o755)                                 # the folder is not private
+        self.assertFalse(self.refused())
+        self.assertFalse(allow_helper.mark_session(OTHER))             # and nothing is written into it
+        os.chmod(self.sessions, 0o700)
+        os.remove(os.path.join(self.sessions, SESSION))
+        os.symlink(os.path.join(self.home, "flags.json"), os.path.join(self.sessions, SESSION))
+        self.assertFalse(self.refused())                               # a link in place of the mark
+        self.assertFalse(allow_helper.mark_session(SESSION))           # is not followed either
+        shutil.rmtree(self.sessions)
+        elsewhere = os.path.join(self.tmp.name, "elsewhere")
+        os.mkdir(elsewhere, 0o700)
+        os.symlink(elsewhere, self.sessions)                           # a link in place of the folder
+        self.assertFalse(allow_helper.mark_session(SESSION))
+        self.assertEqual(os.listdir(elsewhere), [])
+        self.assertFalse(self.refused())
 
-    def as_subprocess(self, event):
-        """Run the hook file itself, pointed at the test folder."""
-        code = ("import json, sys; sys.path.insert(0, %r); import allow_helper; allow_helper.HANDOFF_DIR = %r; "
-                "sys.exit(allow_helper.main())" % (os.path.dirname(HOOK), self.folder))
-        result = subprocess.run([sys.executable, "-c", code], input=json.dumps(event), stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, universal_newlines=True)
-        return result.returncode, result.stdout.strip()
+    # ---- the settings side
+    def test_reading_or_saving_the_profile_keeps_the_flag_in_step(self):
+        import wdprofile
+        self.assertIs(wdprofile.write_flags({}), False)
+        path = os.path.join(self.home, "flags.json")
+        with open(path) as handle:
+            self.assertEqual(json.load(handle), {"browser_enabled": False})
+        self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
+        self.assertIs(wdprofile.write_flags({"integrations": {"browser": {"enabled": True}}}), True)
+        self.assertTrue(allow_helper.browser_enabled())
+        self.assertIs(wdprofile.write_flags({"integrations": {"browser": {"enabled": "yes"}}}), False)
+        self.assertFalse(allow_helper.browser_enabled())
+        # Every helper reads the profile before it does anything, and that read writes the flag.
+        os.remove(path)
+        shutil.copy(os.path.join(ROOT, "examples", "profiles", "product-leader-denver.yaml"),
+                    os.path.join(self.home, "profile.yaml"))
+        profile, problems = wdprofile.load()
+        self.assertEqual(problems, [])
+        with open(path) as handle:
+            self.assertEqual(json.load(handle), {"browser_enabled": False})
+        # Checking an example profile somewhere else writes nothing.
+        os.remove(path)
+        wdprofile.load(os.path.join(ROOT, "examples", "profiles", "product-leader-denver.yaml"))
+        self.assertFalse(os.path.exists(path))
 
-    def test_each_sweep_records_the_setting_when_it_starts(self):
-        import handoff
-        self.assertIs(handoff.browser_pass({}), False)
-        self.assertIs(handoff.browser_pass({"integrations": {"browser": {"enabled": True}}}), True)
-        self.assertIs(handoff.browser_pass({"integrations": {"browser": {"enabled": "yes"}}}), False)
-        for name, tool in (("job-sweep", "sweep_tool.py"), ("contract-sweep", "contract_tool.py"),
-                           ("sources", "sources_tool.py")):
-            with open(os.path.join(ROOT, "skills", name, "scripts", tool), encoding="utf-8") as handle:
-                self.assertIn("browser_pass", handle.read(), name)
+    def test_every_web_skill_says_never_open_a_browser(self):
+        for name in ("job-sweep", "contract-sweep", "sources"):
             with open(os.path.join(ROOT, "skills", name, "SKILL.md"), encoding="utf-8") as handle:
-                self.assertIn("**Never open a browser.**", handle.read(), name)
+                self.assertIn("**Never open a browser", handle.read(), name)
 
 
 if __name__ == "__main__":

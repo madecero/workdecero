@@ -21,6 +21,7 @@ Standard library only, Python 3.9+.
 import datetime
 import json
 import os
+import stat
 import sys
 
 import miniyaml
@@ -75,6 +76,39 @@ def write_private(path, text):
     os.chmod(temp, 0o600)
     os.replace(temp, path)
     return path
+
+
+FLAGS_NAME = "flags.json"
+
+
+def flags_path():
+    return os.path.join(config_home(), FLAGS_NAME)
+
+
+def write_flags(profile):
+    """Keep flags.json in step with the profile. Returns True when browser use is on.
+
+    The plugin hook must know one thing about the profile: whether the person
+    turned browser use on. It reads this small file so that it never has to
+    read the profile itself. The file holds that one yes or no and nothing else.
+    """
+    browser = (((profile or {}).get("integrations") or {}).get("browser") or {}).get("enabled") is True
+    text = json.dumps({"browser_enabled": browser}) + "\n"
+    path = flags_path()
+    try:
+        info = os.lstat(path)
+        same = stat.S_ISREG(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o600
+        if same:
+            with open(path, "r", encoding="utf-8") as handle:
+                same = handle.read() == text
+        if same:
+            return browser
+        if not stat.S_ISREG(info.st_mode):
+            os.remove(path)                        # a link put there is not followed: it is replaced
+    except OSError:
+        pass
+    write_private(path, text)
+    return browser
 
 
 def profile_path():
@@ -285,6 +319,7 @@ def load(path=None):
     when the file cannot be read as YAML. `problems` is empty when all is well.
     Raises OSError if the file does not exist or cannot be opened.
     """
+    own = path is None                             # the person's own profile, not an example being checked
     path = path or profile_path()
     with open(path, "r", encoding="utf-8") as handle:
         text = handle.read()
@@ -298,6 +333,11 @@ def load(path=None):
     schema = load_schema()
     problems = check(raw, schema)
     profile = schema_check.apply_defaults(raw, schema) if isinstance(raw, dict) else None
+    if own and profile is not None and not problems:
+        try:
+            write_flags(profile)                   # every helper reads the profile first, so the flag never goes stale
+        except OSError:
+            pass
     return profile, problems
 
 

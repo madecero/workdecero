@@ -774,6 +774,11 @@ def _write_atomic(path, text):
     """The profile holds pay floors and the current employer, so only its owner may read it."""
     wdprofile.secure_home(os.path.dirname(path))
     wdprofile.write_private(path, text)
+    if os.path.normpath(path) == os.path.normpath(wdprofile.profile_path()):
+        try:
+            wdprofile.load()                       # reading it back also writes flags.json, which the plugin hook reads
+        except OSError:
+            pass
 
 
 def obsidian_link(vault_path, folder):
