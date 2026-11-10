@@ -259,6 +259,8 @@ EVENT = NoteType(
     [
         Status("New", "1 New", "new"),
         Status("Want to go", "2 Want to go", "active"),
+        # Going is what a ticked Going? box means. The two always move together.
+        Status("Going", "3 Registered", "active"),
         # Once the person has registered or agreed to speak, a sweep never changes the status again.
         Status("Registered", "3 Registered", "active", engaged=True),
         Status("Speaking", "3 Registered", "active", engaged=True),

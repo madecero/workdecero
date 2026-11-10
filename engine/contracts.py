@@ -402,6 +402,9 @@ def start_report(state, profile):
             lines.append("      No text was available. Open the link and read it.")
     if not candidates:
         lines.append("  none from the platforms' own pages this time")
+    if state.get("platforms_read"):
+        lines.append("  ALREADY READ BY THE ENGINE, so never list these under not_covered as not opened: %s."
+                     % ", ".join(state["platforms_read"]))
     lines += ["", "PLACES TO LOOK, from their local map"]
     shown = None
     for kind, name, url in state["places"]:
@@ -660,8 +663,38 @@ def intake(state, handoff, profile, store, today=None):
         state["searches"] = max(0, handoff["searches"])
     for name in handoff.get("not_covered") or []:
         if isinstance(name, str) and name.strip() and name.strip() not in state["not_covered"]:
-            state["not_covered"].append(name.strip())
+            name = already_read_removed(name.strip(), state.get("platforms_read") or [])
+            if name and name not in state["not_covered"]:
+                state["not_covered"].append(name)
     return state
+
+
+NOT_OPENED = re.compile(r"\b(not opened|not read|not visited|not checked|were not|was not|skipped|unread)\b", re.I)
+
+
+def already_read_removed(line, platforms_read):
+    """A "not covered" line, without the platforms the engine read itself at the start of the sweep.
+
+    Research sometimes reports a platform as not opened because it did not
+    open the page: the engine had already read it. Saying both in one digest
+    contradicts itself. A line that is only about such platforms is dropped,
+    and their names are taken out of a line that lists others too. A line
+    that says something else about a platform (a login wall, say) is kept.
+    """
+    read = [name for name in platforms_read if name and scoring._text(name) in scoring._text(line)]
+    if not read or not NOT_OPENED.search(line):
+        return line
+    head = NOT_OPENED.split(line)[0]
+    names = [part.strip() for part in re.split(r",|\band\b", head) if part.strip()]
+    kept = [part for part in names if not any(scoring._text(name) in scoring._text(part) or
+                                             scoring._text(part) in scoring._text(name) for name in read)]
+    kept = [part for part in kept if len(scoring._text(part).split()) <= 6 and
+            scoring._text(part) not in ("listing pages", "listing page", "pages", "the", "")]
+    if not kept:
+        return None
+    if len(kept) == len(names):
+        return line
+    return "%s: not opened" % ", ".join(kept)
 
 
 def intake_report(state, profile):
@@ -877,11 +910,13 @@ def finish_report(state, profile, title, featured, more, pending, due, problems)
         lines += ["", "TOP %d" % len(featured)]
         for entry in featured:
             who = entry["client"] or "client not named"
-            lines.append("  Win odds %d  %s (%s%s).%s" % (
-                entry["fit"], entry["title"], who, ", via %s" % entry["via"] if entry["via"] else "",
+            lines.append("  %s  Win odds %d  %s (%s%s).%s" % (
+                entry["id"], entry["fit"], entry["title"], who, ", via %s" % entry["via"] if entry["via"] else "",
                 " Someone you know can help." if entry.get("warm") else ""))
     if more:
         lines.append("  %d more %s in the tracker." % (more, "is" if more == 1 else "are"))
+    if featured:
+        lines.append("  The code before each one is its note's id. Use only these ids. Never make one up.")
     if pending:
         lines += ["", "CHANNELS TO SET UP (%d): %s." % (len(pending), ", ".join(
             "%s (%s)" % (name, status.lower()) for name, status, _ in pending))]

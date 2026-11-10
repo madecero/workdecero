@@ -53,6 +53,7 @@ STATE_NAME = "networking-state.json"
 ACTIVE_WITHIN_DAYS = 183        # a group with nothing in six months and nothing scheduled is not alive
 FOLLOW_UP_DAYS = 7
 FOLLOW_UP_AFTER_EVENT_DAYS = 7     # someone met at an event gets a follow-up date a week out
+GAP_FILLER = ("with", "that", "this", "from", "people", "other", "local", "groups", "group", "their", "who")
 DEFAULT_PICKS = 2                  # events a month when the profile does not say
 ALSO_COMING_UP = 5
 GROUPS_WORTH_TRYING = 3
@@ -318,7 +319,7 @@ def _event_status(row):
 
 def _committed(row):
     """The person registered, agreed to speak, or ticked Going? themselves."""
-    return _event_status(row) in ("Registered", "Speaking") or row.values.get("going") is True
+    return _event_status(row) in ("Going", "Registered", "Speaking") or row.values.get("going") is True
 
 
 def housekeeping(store, today):
@@ -928,7 +929,13 @@ def choose(found, cap):
     order = sorted(found, key=lambda entry: (-entry["fit"], entry["date"]))
     going = [entry for entry in order if entry["going"]]
     eligible = [entry for entry in order if not entry["going"] and not entry["outside"]]
-    picks = (going + eligible)[:max(0, cap)]
+    picks = list(going[:max(0, cap)])
+    for entry in eligible:
+        if len(picks) >= cap:
+            break
+        if any(entry["date"] == other["date"] for other in picks):
+            continue                              # nobody goes to two things in one evening: the better one is the pick
+        picks.append(entry)
     rest = [entry for entry in order if entry not in picks]
     return sorted(picks, key=lambda entry: entry["date"]), rest[:ALSO_COMING_UP]
 
@@ -988,16 +995,26 @@ def not_found_lines(state, profile, store):
     text = scoring._text(" ".join((row.section or "") for row in store.rows("group") + store.rows("event")
                                   if not model.BY_NAME[row.values.get("type") or "group"].is_done(row.values.get("status"))))
     missing = [who for who in wanted if scoring._text(who) not in text]
-    lines = ["No group or event found for: %s." % who for who in missing]
-    seen = set(scoring._text(line) for line in lines)
+    detailed, seen = [], set()
     for line in state.get("not_found") or []:
         said = scoring._text(line)
-        # Research often says the same thing in its own words. Each gap is named once.
-        if said in seen or any(scoring._text(who) in said for who in missing):
-            continue
-        seen.add(said)
-        lines.append(line)
-    return lines
+        if said and said not in seen:
+            seen.add(said)
+            detailed.append(line)
+
+    def covered(who):
+        # Research names the same gap in its own words, with detail (the nearest thing it did find). When it
+        # has, its line is the one kept, and the plain one is not said as well.
+        words = [word for word in scoring._text(who).split() if len(word) > 3 and word not in GAP_FILLER]
+        if not words:
+            return False
+        for line in detailed:
+            said = scoring._text(line)
+            hits = len([word for word in words if word in said or word.rstrip("s") in said])
+            if hits * 2 >= len(words):
+                return True
+        return False
+    return ["No group or event found for: %s." % who for who in missing if not covered(who)] + detailed
 
 
 def write_digest(state, profile, store, today=None):
@@ -1246,22 +1263,23 @@ def apply_updates(updates, store, profile, today=None):
                 # Going? is theirs to tick. Saying "I am going" is the same as ticking it.
                 values["going"] = True
                 force.append("going")
-                if _event_status(row) == "New":
-                    values["status"] = "Want to go"
+                if _event_status(row) in ("New", "Want to go"):
+                    values["status"] = "Going"
                     force.append("status")
                 calendar = True
             if entry.get("going") is False and not status:
                 values["going"] = False
                 force.append("going")
-                if _event_status(row) == "Want to go":
-                    values["status"] = "New"
+                if _event_status(row) == "Going":
+                    values["status"] = "Want to go"    # still interested, no longer committed
                     force.append("status")
-            if status == "Want to go":
-                values["going"] = True                 # the box and the status always say the same thing
+            if status in ("New", "Want to go"):
+                values["going"] = False                # interested is not going: the box and the status always agree
                 force.append("going")
-            if status == "New":
-                values["going"] = False
+            if status == "Going":
+                values["going"] = True
                 force.append("going")
+                calendar = True
             if status in ("Registered", "Speaking"):
                 values["going"] = True
                 force.append("going")
@@ -1371,31 +1389,34 @@ def write_prep(note_id, store, profile, today=None, there=None):
         ", ".join(store.link("person", person.title) for person in known[:3]) if known else "no one yet"))
     if public:
         lines.append("**From the group's public page:** %s." % "; ".join(public))
-    listen = who[0] if who else "people in your field"
+    def mid(text):
+        """Their words, for the middle of a sentence: the first letter lowered unless it starts a name or acronym."""
+        text = str(text).strip().rstrip(".")
+        return text[:1].lower() + text[1:] if len(text) > 1 and text[1].islower() and " " in text else text
     about = scoring._text("%s %s" % (row.title, row.section or ""))
     own = list(net.get("topics") or [])
-    fitting = [topic for topic in own if scoring._text(topic) and scoring._text(topic) in about]
-    ideas = own + list((net.get("speaking") or {}).get("talk_ideas") or [])
-    story = (" Have one short story ready about %s: the problem, what you did, the result." % ideas[0].rstrip(".")
+    # What they care about: the topics they named, or failing that their strongest skills.
+    interests = own or list((profile.get("skills") or {}).get("core") or [])[:2]
+    fitting = [topic for topic in interests if scoring._text(topic) and scoring._text(topic) in about]
+    ideas = own + list((net.get("speaking") or {}).get("talk_ideas") or []) + interests
+    story = (" Have one short story ready about %s: the problem, what you did, the result." % mid(ideas[0])
              if ideas else "")
     subject = row.title if not host or "**Why it has its own note:**" in (row.section or "") else None
-    if subject:
-        lines.append("**Opener 1:** \"What brought you to %s?\" Then ask what they hope to take back to work. "
-                     "Listen for %s." % (subject, listen))
-    elif host:
-        lines.append("**Opener 1:** \"How long have you been coming to %s, and what keeps you coming back?\" "
-                     "Listen for %s." % (host, listen))
-    else:
-        lines.append("**Opener 1:** \"What are you working on this quarter?\" Listen for %s." % listen)
     if fitting:
-        lines.append("**Opener 2:** \"What is your team doing about %s?\" It is in this event's description and it "
-                     "is one of your topics.%s" % (fitting[0].rstrip("."), story))
-    elif own:
-        lines.append("**Opener 2:** \"Is anyone here working on %s?\"%s" % (own[0].rstrip("."), story))
-    elif story:
-        lines.append("**Opener 2:**%s" % story)
+        lines.append("**Opener 1:** \"What is your team doing about %s?\" It is in this event's description and it "
+                     "is one of your interests." % mid(fitting[0]))
+    elif interests:
+        lines.append("**Opener 1:** \"I spend most of my time on %s. Does that come up in your work?\"" % mid(interests[0]))
+    elif subject:
+        lines.append("**Opener 1:** \"What brought you to %s?\" Then ask what they hope to take back to work." % subject)
+    elif host:
+        lines.append("**Opener 1:** \"How long have you been coming to %s, and what keeps you coming back?\"" % host)
     else:
-        lines.append("**Opener 2:** \"Who else here should I meet?\"")
+        lines.append("**Opener 1:** \"What are you working on this quarter?\"")
+    if who:
+        lines.append("**Opener 2:** \"I'm hoping to meet %s. Who here should I talk to?\"%s" % (mid(who[0]), story))
+    else:
+        lines.append("**Opener 2:** \"Who else here should I meet?\"%s" % story)
     if public and (net.get("speaking") or {}).get("interested"):
         lines.append("**If you meet an organiser:** ask what topics they are short of speakers on.")
     lines.append("**Bring:** one sentence on what you do, and a way to swap details.")

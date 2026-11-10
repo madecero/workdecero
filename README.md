@@ -110,6 +110,8 @@ Your profile and local map live in `~/.config/workdecero/`. Your trackers live i
 
 Claude Code normally asks you before it runs a command or writes a file. Setup and the sweeps have many small steps, so while workdecero is enabled it approves a short, fixed list of its own actions for you: five helper commands that take no extra words, and one temporary file for each. Nothing else. To turn that off, disable the plugin with `claude plugin disable workdecero@workdecero`.
 
+To do this, a small check runs each time you send a prompt and each time Claude Code is about to run a shell command, write a file, start a skill or use a connected tool. It is a short Python script on your own computer. It takes a few hundredths of a second, reads nothing but the name of what is about to happen, and sends nothing anywhere.
+
 A few things still ask on purpose: reading a PDF resume outside the folder you started in, starting by plain words, each web search or page read when you ask for more later in the same conversation, and every optional connection.
 
 The exact commands and files are listed in [docs/permissions.md](docs/permissions.md).

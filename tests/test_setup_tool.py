@@ -493,6 +493,24 @@ class Preview(SetupCase):
         self.assertNotIn("Networking", nurse)
         self.assertLessEqual(len(nurse.split("\n\n")[0].splitlines()), 14)
 
+    def test_the_summary_card_shows_when_they_cannot_go_and_how_many_events_a_month(self):
+        # From the tester's run: setup asked about networking times, and the summary showed neither answer.
+        answers = self.example()
+        answers["networking"]["unavailable"] = ["Weekday daytime (9 to 5)", "Sundays"]
+        answers["networking"]["max_events_per_month"] = 2
+        self.put(answers)
+        card = self.call("preview")[1]
+        self.assertIn("Cannot go: Weekday daytime (9 to 5), Sundays. At most 2 events a month suggested.", card)
+        answers["networking"].pop("unavailable")
+        answers["networking"].pop("max_events_per_month")
+        self.put(answers)
+        card = self.call("preview")[1]
+        self.assertIn("Cannot go: no limits given. Events a month: not set, so 2 are suggested.", card)
+        with open(os.path.join(_paths.REPO_ROOT, "skills", "setup", "SKILL.md"), encoding="utf-8") as handle:
+            skill = handle.read()
+        self.assertIn("**How many events a month do you want suggested?**", skill)
+        self.assertIn("**When can you not go to events?**", skill)
+
     def test_details_and_file_only_on_request(self):
         self.put(self.example())
         short = self.call("preview")[1]

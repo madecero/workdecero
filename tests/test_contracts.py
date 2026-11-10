@@ -372,6 +372,28 @@ class Intake(ContractCase):
         _, again = self.intake([gig("two", "Menu design for a brewery", engagement="1099", posted="2026-11-06")], searches=4)
         self.assertNotIn("BEFORE YOU FINISH", again)                   # said once
 
+    def test_a_platform_the_engine_read_is_never_also_reported_as_not_opened(self):
+        # From the tester's run: one platform appeared under "read directly" and under "not opened" in one digest.
+        read = ["Example Talent Portland", "Sample Creative Staffing", "Marketplace One"]
+        fix = contracts.already_read_removed
+        self.assertEqual(fix("Other Board, Third Network, Example Talent Portland and Sample Creative Staffing listing "
+                             "pages were not opened", read), "Other Board, Third Network: not opened")
+        self.assertIsNone(fix("Marketplace One (not read this run)", read))
+        self.assertIsNone(fix("Sample Creative Staffing was not opened", read))
+        # Something else said about a platform is the person's to know, and is kept as written.
+        kept = "Marketplace One, no open gigs visible without a member login"
+        self.assertEqual(fix(kept, read), kept)
+        other = "Two leads seen in search were not read"
+        self.assertEqual(fix(other, read), other)
+
+    def test_the_closing_report_gives_each_top_gig_its_note_id(self):
+        self.start()
+        self.intake([gig("ok", "Identity for a cafe group", engagement="1099", posted="2026-11-05")])
+        _, done = self.finish()
+        row = self.store().rows("contract")[0]
+        self.assertRegex(done, r"  %s  Win odds \d+  Identity for a cafe group" % row.id)
+        self.assertIn("Use only these ids. Never make one up.", done)
+
     def test_the_closing_report_points_at_the_reasons_and_never_says_there_are_none(self):
         self.start()
         self.intake([gig("shut", "Packaging for a tea company", engagement="1099", closed=True)])

@@ -167,8 +167,9 @@ This works at any time, with or without a sweep. Examples: "I joined the product
 
 `status` must be one of the statuses `list` printed. `met` holds the names the person gave, exactly as given, and only when they said they met someone. Each becomes a People note with a follow-up date a week out.
 
-* **"I'm going to (a group)"**: send `{"id": "G-2", "going": true}`. The engine makes a note for that group's next meeting, ticks Going on it and tells you the note's id. Then offer, in one line, to prepare them for it.
-* **"I'm not going after all"** (an event): send `{"id": "E-4", "going": false}`. The engine unticks Going and puts a Want to go event back to New. The Going box and the status always agree, so never send one without meaning the other.
+* **"I'm going to (a group)"**: send `{"id": "G-2", "going": true}`. The engine makes a note for that group's next meeting, sets it to Going and tells you the note's id. Then offer, in one line, to prepare them for it.
+* **"I'm not going after all"** (an event): send `{"id": "E-4", "going": false}`. The engine unticks Going and sets a Going event back to Want to go.
+* **Going and the status are one thing.** "I'm going" makes the status Going and ticks the box. "I'd like to go" or "maybe" is `{"status": "Want to go"}`, with the box left clear. Registered and Speaking tick it too. The engine keeps the two in step, so send whichever the person said and never both.
 * **"I met (someone) at (a group)"**: send `{"id": "G-2", "met": ["Priya Raman"]}`, with `"date"` if they said which day. The engine makes the meeting's note, marks it attended and adds the person.
 * Never message anyone, and never offer to.
 

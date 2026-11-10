@@ -435,6 +435,19 @@ class BrowserInAWorkdeceroSession(PrivateFolder):
         wdprofile.load(os.path.join(ROOT, "examples", "profiles", "product-leader-denver.yaml"))
         self.assertFalse(os.path.exists(path))
 
+    def test_the_readme_says_the_check_runs_on_every_prompt_and_tool_call(self):
+        for name in ("README.md", os.path.join("docs", "permissions.md")):
+            with open(os.path.join(ROOT, name), encoding="utf-8") as handle:
+                text = handle.read()
+            self.assertIn("a small check runs each time you send a prompt", text, name)
+            self.assertIn("sends nothing anywhere", text, name)
+
+    def test_the_check_is_quick(self):
+        started = time.time()
+        for _ in range(5):
+            run_hook(dict(bash("ls -la"), session_id=SESSION))
+        self.assertLess((time.time() - started) / 5, 0.5)              # a whole Python start each time, and still brief
+
     def test_every_skill_says_no_subagents(self):
         skills = os.path.join(ROOT, "skills")
         for name in sorted(os.listdir(skills)):

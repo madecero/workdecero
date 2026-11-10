@@ -671,6 +671,13 @@ def short_card(profile, inferred=()):
     if tracks.get("networking") and networking:
         row("Networking", "Meet: %s%s" % (_join((networking.get("who_to_meet") or [])[:4]),
                                           mark("networking.who_to_meet")))
+        bits = ["Cannot go: %s" % (_join(networking["unavailable"]) if networking.get("unavailable") else "no limits given")]
+        if isinstance(networking.get("max_events_per_month"), int) and not isinstance(networking.get("max_events_per_month"), bool):
+            bits.append("At most %d event%s a month suggested" % (
+                networking["max_events_per_month"], "" if networking["max_events_per_month"] == 1 else "s"))
+        else:
+            bits.append("Events a month: not set, so 2 are suggested")
+        row("", ". ".join(bits) + ".")
     modes = location.get("work_modes") or []
     reach = ", within %s miles" % location.get("radius_miles") if any(m in modes for m in ("hybrid", "onsite")) else ""
     row("Where", "%s%s. %s%s. Relocation: %s." % (

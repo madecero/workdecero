@@ -4,6 +4,8 @@
 
 Claude Code normally asks you before it runs a command or writes a file. Setup and the sweeps have many small steps, and being asked a dozen times would make them unusable. So while workdecero is enabled, it approves a short, fixed list of its own actions for you. Nothing else.
 
+To do this, a small check runs each time you send a prompt and each time Claude Code is about to run a shell command, write a file, start a skill or use a connected tool. It is a short Python script on your own computer. It takes a few hundredths of a second, reads nothing but the name of what is about to happen, and sends nothing anywhere. For a shell command it compares the whole command line with its fixed list, and for a file it compares the path. It does not keep or log either.
+
 **Exactly what is approved:**
 
 | What | Exactly |
