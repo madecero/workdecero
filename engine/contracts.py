@@ -294,6 +294,12 @@ def start_report(state, profile):
 # Step 2: intake
 # --------------------------------------------------------------------------
 
+def _site(url):
+    """The site a link is on, without a leading www."""
+    host = merge._host(url or "") or ""
+    return host[4:] if host.startswith("www.") else host
+
+
 def _clean(item):
     return dict((key, item[key]) for key in FIND_KEYS if key in item and item[key] not in (None, ""))
 
@@ -453,6 +459,11 @@ def intake(state, handoff, profile, store, today=None):
         if isinstance(entry, dict) and entry.get("title") and entry.get("url"):
             items.append(_clean(entry))
     state["finds_read"] = state.get("finds_read", 0) + len(items)
+    # A gig whose link sits on one of the person's platforms came through that platform, said or not.
+    hosts = dict((_site(url), name) for kind, name, url in state.get("places") or [] if kind in CHANNEL_KINDS and _site(url))
+    for item in items:
+        if not item.get("via") and _site(item.get("url")) in hosts:
+            item["via"] = hosts[_site(item["url"])]
     items, folded = merge_agency_copies(items)
     state["merged"] = state.get("merged", 0) + folded
 

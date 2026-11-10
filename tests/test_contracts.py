@@ -485,6 +485,15 @@ class Contact(ContractCase):
         self.assertIn("Someone you know can help.", summary)
         self.assertNotIn("Imani", summary)
 
+    def test_a_link_on_one_of_their_platforms_is_a_platform_gig_even_when_research_did_not_say(self):
+        self.start()
+        find = gig("x", "Brand identity for a cafe group", engagement="fixed price", fixed_price=6000)
+        find["url"] = "https://www.market.example.com/projects/88"       # Design marketplace, from the local map
+        self.intake([find])
+        row = self.gigs()["Brand identity for a cafe group"]
+        self.assertEqual(row.values["via"], "Design marketplace")
+        self.assertIn("- **Contact first:** Reply on Design marketplace.", row.section)
+
     def test_no_one_named_and_no_one_known(self):
         self.start()
         self.intake([gig("a", "Illustration set", engagement="1099", rate_max=90, via="Northside Staffing"),
