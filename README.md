@@ -47,7 +47,7 @@ Nothing personal is stored in this repository or in the plugin folder.
 | --- | --- | --- |
 | Profile and local source map | `~/.config/workdecero/` | Location can be overridden. Untouched by updates and by uninstall. |
 | Trackers (postings, contracts, groups, events, people, companies) | Your Obsidian vault | Plain Markdown notes that you own. |
-| Setup draft | `~/.cache/workdecero/setup-draft.json` | Temporary. Holds your answers only while setup is running, readable by you alone, and deleted when setup is saved or cancelled. |
+| Setup draft | `~/.cache/workdecero/` (`setup-answers.json`, `setup-state.json`) | Temporary. Holds your answers only while setup is running, in a folder only you can open, and is deleted when setup is saved or cancelled. |
 | Cache | The plugin data folder managed by Claude Code | Safe to lose. Removed when the plugin is uninstalled. |
 
 ## Your profile
@@ -65,6 +65,22 @@ python3 engine/wdprofile.py validate path/to/profile.yaml
 Trackers are plain notes in your Obsidian vault, with table views that update as you work. Everything stays in one folder, and your own writing in a note is never touched. See [trackers/README.md](trackers/README.md) for the layout, the promises the plugin keeps, and how to build a demo vault to look around.
 
 ![The Start here note](docs/screenshots/start-here.png)
+
+## What workdecero is allowed to do without asking
+
+Claude Code normally asks before it runs a command or writes a file. Setup is a conversation with many steps, and being asked a dozen times would make it unusable. So while this plugin is enabled, a small hook (`hooks/allow_helper.py`) approves exactly the following, and nothing else:
+
+| What | Exactly |
+| --- | --- |
+| Run the setup helper | `python3 "<plugin folder>/skills/setup/scripts/setup_tool.py"` followed by one of: `status`, `takeover`, `fields`, `save`, `read-resume`, `check-vault`, `preview`, `preview-details`, `preview-file`, `write`, `cancel`, `import-connections`. Nothing may follow the subcommand |
+| Write one temporary file | `~/.cache/workdecero/setup-answers.json`, and only while that folder is a real folder that you own and nobody else can open |
+
+What that means in practice:
+
+* The helper takes no arguments, so an approved command cannot be aimed at another file. It reads and writes your profile, your local map, the workdecero folder in your vault, and the temporary folder above. It does nothing unless a setup run is open.
+* Any other command, any extra word on those command lines, any other file: Claude Code asks you as usual. The hook never blocks anything and never approves anything it does not recognise in full.
+* One thing still asks on purpose: reading your resume if it is a PDF outside the folder you started in. That is your file, so you get to say yes.
+* The approval applies in any conversation while the plugin is enabled, not only during setup. To turn it off, disable the plugin: `claude plugin disable workdecero@workdecero`.
 
 ## What it does not do
 

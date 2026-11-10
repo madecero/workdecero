@@ -89,6 +89,10 @@ def validate(root):
         for folder in sorted(os.listdir(skills_dir)):
             if not os.path.isdir(os.path.join(skills_dir, folder)):
                 continue
+            real_files = [name for _, _, names in os.walk(os.path.join(skills_dir, folder)) for name in names
+                          if not name.endswith(".pyc")]
+            if not real_files:
+                continue      # an empty folder, or compiled leftovers from another branch
             skill_path = os.path.join(skills_dir, folder, "SKILL.md")
             label = "skills/%s/SKILL.md" % folder
             if not os.path.isfile(skill_path):

@@ -1,43 +1,52 @@
 #!/usr/bin/env python3
 """The helper behind /workdecero:setup.
 
-The setup conversation gathers answers as a draft. The assistant writes the
-draft to ONE fixed file with its Write tool, and this script reads it from
-there. No answer ever travels on a command line, so every helper call is a
-fixed command with no arguments.
+The helper owns the draft. It keeps the profile being built in a private
+state file that the assistant never reads or rewrites. The assistant sends
+each step's answers as a small file written with its Write tool, and the
+helper absorbs and deletes that file at the start of the next command. No
+answer ever travels on a command line, so every helper call is a fixed
+command with no arguments.
 
-    The draft file:  ~/.cache/workdecero/setup-draft.json
+    The answers file (written by the assistant, a few lines per step):
+        ~/.cache/workdecero/setup-answers.json
+    The state file (the helper's own, never touched by the assistant):
+        ~/.cache/workdecero/setup-state.json
 
-The draft is temporary and private. This script creates it empty with
-owner-only permissions before any answer exists, keeps it that way, deletes
-it after a save or a cancel, and clears out one left behind by an earlier
-run. It is never copied into backups.
+Both live in a folder only the user can open, hold answers only while setup
+is running, and are deleted after a save or a cancel. One left behind by an
+earlier session is cleared on the next run. Neither is ever copied to backups.
 
-A draft is one JSON object: the profile itself (the same sections as
-profile.yaml), plus helper keys that start with an underscore and are never
-saved:
+An answers file is one JSON object:
 
-    "_from_resume": {"person.summary": "...", "jobs.titles": [...]}
-                                 what was read from the resume, by setting name
+    "_run": "ab12cd34"                   the run id from status. Required
+    "set": {"jobs.salary_floor": 210000, "location.work_modes": ["remote"]}
+                                         settings to set, by dotted name. A whole section may be set
+                                         at once ("person": {...}). null removes a setting
+    "append": {"jobs.titles": ["Head of Product"], "exclusions": [{...}]}
+                                         items to add to a list
+    "remove": ["jobs.deal_breakers"]     settings to remove
+    "from_resume": true                  the values in "set" were read from the resume
     "_dropped": ["person.summary"]       resume values the person chose to leave out
-    "_new_vault": true                   the person agreed to create a new vault folder
     "_confirmed": ["jobs.salary_floor"]  unusual values the person was asked about and kept
+    "_new_vault": true                   the person agreed to create a new vault folder
     "_resume_path": "..."                the resume file to read (for read-resume)
     "_connections_path": "...", "_include_emails": false
                                          for import-connections
 
-Commands (none takes an argument):
-    status               what exists already: profile, draft, known Obsidian vaults.
-                         Prepares the draft file (seeded from the saved profile on a re-run)
+Commands (none takes an argument). Each one first absorbs a waiting answers file:
+    status               open a setup run: says what exists already (profile, vaults) and gives the run id
     fields               every profile setting with its description, for drafting
+    save                 absorb the answers file and say which settings are now filled in
     read-resume          the text of the .txt, .md or .docx file named in "_resume_path"
     check-vault          whether the vault folder in the draft can hold the tracker
-    preview              the short summary card and any open questions (writes nothing but a checksum)
+    preview              the short summary card and any open questions
     preview-details      the full summary card
     preview-file         the profile file as it would be written
     write                saves the profile and sets up the vault folder. Refused unless the draft
                          is exactly what the last preview showed
     cancel               deletes the draft
+    takeover             discards another session's unfinished setup
     import-connections   adds the LinkedIn file named in "_connections_path" to the People notes
 
 Exit codes: 0 fine, 1 the draft has problems to fix first, 2 the command could not run.
@@ -66,7 +75,8 @@ import wdprofile  # noqa: E402
 
 OBSIDIAN_CONFIG_ENV = "WORKDECERO_OBSIDIAN_CONFIG"   # for tests: where to look for Obsidian's vault list
 DRAFT_DIR_ENV = "WORKDECERO_DRAFT_DIR"               # for tests: where the draft file lives
-DRAFT_NAME = "setup-draft.json"
+DRAFT_NAME = "setup-state.json"                       # the helper's own copy of the draft
+ANSWERS_NAME = "setup-answers.json"                  # what the assistant writes, one step at a time
 SHOWN_NAME = "setup-preview.sha256"                  # a checksum of the last draft shown. No answers in it
 RUN_NAME = "setup-run.json"                          # which setup run owns the draft. No answers in it
 RUN_ACTIVE_MINUTES = 30
@@ -86,6 +96,10 @@ def draft_dir():
 
 def draft_path():
     return os.path.join(draft_dir(), DRAFT_NAME)
+
+
+def answers_path():
+    return os.path.join(draft_dir(), ANSWERS_NAME)
 
 
 def _shown_path():
@@ -108,7 +122,8 @@ def current_run():
 
 def minutes_since_activity():
     """Minutes since any setup file was last touched, or None when there are none."""
-    stamps = [os.path.getmtime(path) for path in (draft_path(), _run_path(), _shown_path()) if os.path.isfile(path)]
+    stamps = [os.path.getmtime(path) for path in (draft_path(), answers_path(), _run_path(), _shown_path())
+              if os.path.isfile(path)]
     return max(0.0, (time.time() - max(stamps)) / 60.0) if stamps else None
 
 
@@ -133,7 +148,7 @@ def _lock_down():
     folder = draft_dir()
     if os.path.isdir(folder):
         os.chmod(folder, 0o700)
-    for name in (DRAFT_NAME, SHOWN_NAME, RUN_NAME):
+    for name in (DRAFT_NAME, ANSWERS_NAME, SHOWN_NAME, RUN_NAME):
         path = os.path.join(folder, name)
         if os.path.isfile(path):
             os.chmod(path, 0o600)
@@ -153,7 +168,7 @@ def prepare_draft(content="{}\n"):
 def delete_draft():
     """Remove the draft, its checksum and the folder if nothing else is in it. Returns True if a draft was removed."""
     removed = False
-    for path in (draft_path(), _shown_path(), _run_path()):
+    for path in (draft_path(), answers_path(), _shown_path(), _run_path()):
         if os.path.isfile(path):
             os.remove(path)
             removed = removed or path == draft_path()
@@ -181,33 +196,124 @@ def draft_state():
     return "resumable", age, data
 
 
-def read_draft():
-    """The draft as the assistant last wrote it. Raises ValueError with what to do when it cannot be used."""
-    path = draft_path()
+LIST_HELPERS = ("_dropped", "_confirmed")
+PLAIN_HELPERS = ("_new_vault", "_resume_path", "_connections_path", "_include_emails")
+
+
+def _set_path(draft, dotted, value):
+    keys = [key for key in str(dotted).split(".") if key]
+    if not keys:
+        return
+    node = draft
+    for key in keys[:-1]:
+        if not isinstance(node.get(key), dict):
+            node[key] = {}
+        node = node[key]
+    if value is None:
+        node.pop(keys[-1], None)
+    else:
+        node[keys[-1]] = value
+
+
+def _get_path(draft, dotted):
+    node = draft
+    for key in str(dotted).split("."):
+        node = node.get(key) if isinstance(node, dict) else None
+    return node
+
+
+def _save_state(draft):
+    handle = os.open(draft_path(), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(handle, "w", encoding="utf-8") as out:
+        json.dump(draft, out, indent=1, ensure_ascii=False)
+    os.chmod(draft_path(), 0o600)
+
+
+def absorb(draft):
+    """Merge a waiting answers file into the draft and delete it. Returns the names that changed."""
+    path = answers_path()
     if not os.path.isfile(path):
-        raise ValueError("There is no draft yet. Run the status command first, then write the draft to %s."
-                         % _tilde(path))
-    _lock_down()
+        return []
+    os.chmod(path, 0o600)
     with open(path, "r", encoding="utf-8") as handle:
         text = handle.read()
     try:
-        data = json.loads(text or "{}")
+        answers = json.loads(text or "{}")
     except ValueError as exc:
-        raise ValueError("The draft file is not valid JSON (%s). Write the whole draft again as one JSON object."
-                         % exc)
-    if not isinstance(data, dict):
-        raise ValueError("The draft must be one JSON object with the profile sections.")
+        os.remove(path)
+        raise ValueError("The answers file was not valid JSON (%s). Write this step's answers again as one "
+                         "JSON object." % exc)
+    if not isinstance(answers, dict):
+        os.remove(path)
+        raise ValueError("The answers file must hold one JSON object.")
     owner = current_run()
     if owner is None:
+        os.remove(path)
         raise ValueError("No setup run is open. Run the status command first.")
-    if data.get("_run") != owner["run"]:
+    if answers.get("_run") != owner["run"]:
+        os.remove(path)
         raise ValueError(
-            "This draft does not belong to the setup run that is open (run %s). Another setup session on this "
-            "computer may have taken over. Do not save and do not cancel. Tell the person, and run the status "
-            "command to see what is going on. Every draft must carry \"_run\": \"<the run id status gave you>\"."
-            % owner["run"])
+            "The answers file was written for setup run %s, but the open run is %s. If %s is the run id you were "
+            "given, another session wrote over your answers: write this step's answers again. If it is not, "
+            "another setup session has taken over: do not save and do not cancel, tell the person, and run the "
+            "status command. Every answers file must carry \"_run\": \"<the run id status gave you>\"."
+            % (answers.get("_run") or "(none)", owner["run"], owner["run"]))
+    changed = []
+    resume = draft.setdefault("_from_resume", {}) if answers.get("from_resume") is True else None
+    for dotted, value in (answers.get("set") or {}).items() if isinstance(answers.get("set"), dict) else []:
+        _set_path(draft, dotted, value)
+        changed.append(str(dotted))
+        if resume is not None and value not in (None, "", [], {}):
+            if isinstance(value, dict) and "." not in str(dotted):
+                for key, item in value.items():           # a whole section: record each setting in it
+                    if item not in (None, "", [], {}) and not isinstance(item, dict):
+                        resume["%s.%s" % (dotted, key)] = item
+            else:
+                resume[str(dotted)] = value
+    for dotted, items in (answers.get("append") or {}).items() if isinstance(answers.get("append"), dict) else []:
+        current = _get_path(draft, dotted)
+        current = list(current) if isinstance(current, list) else []
+        for item in items if isinstance(items, list) else [items]:
+            if item not in current:
+                current.append(item)
+        _set_path(draft, dotted, current)
+        changed.append(str(dotted))
+    for dotted in answers.get("remove") or []:
+        _set_path(draft, dotted, None)
+        changed.append(str(dotted))
+    for key in LIST_HELPERS:
+        if isinstance(answers.get(key), list):
+            draft[key] = sorted(set(list(draft.get(key) or []) + [str(item) for item in answers[key]]))
+    for key in PLAIN_HELPERS:
+        if key in answers:
+            draft[key] = answers[key]
+    if not draft.get("_from_resume"):
+        draft.pop("_from_resume", None)
+    os.remove(path)
+    _save_state(draft)
+    return changed
+
+
+def read_draft():
+    """The draft as it stands, after absorbing any answers the assistant has just written."""
+    path = draft_path()
+    owner = current_run()
+    idle = minutes_since_activity()
+    if owner is None or not os.path.isfile(path) or idle is None or idle > DRAFT_MAX_AGE_HOURS * 60:
+        # Nothing changes outside a setup run that is open and recent. A stray call does nothing.
+        if os.path.isfile(answers_path()):
+            os.remove(answers_path())
+        raise ValueError("No setup run is open. Run the status command first.")
+    _lock_down()
+    with open(path, "r", encoding="utf-8") as handle:
+        draft = json.loads(handle.read() or "{}")
+    draft["_run"] = owner["run"]
+    read_draft.changed = absorb(draft)
     touch_run()
-    return data
+    return draft
+
+
+read_draft.changed = []
 
 
 def _checksum(draft):
@@ -801,9 +907,9 @@ def _open_run(out, seed_from_profile=True):
         prepare_draft(json.dumps({"_run": run}) + "\n")
     _lock_down()
     print("RUN ID: %s" % run, file=out)
-    print("  Put \"_run\": \"%s\" in every draft you write. A draft without it is refused." % run, file=out)
-    print("DRAFT FILE: %s" % draft_path(), file=out)
-    print("  Private to this user, and deleted when setup is saved or cancelled.", file=out)
+    print("  Put \"_run\": \"%s\" in every answers file you write. One without it is refused." % run, file=out)
+    print("ANSWERS FILE: %s" % answers_path(), file=out)
+    print("  Write each step's answers there, a few lines at a time. The helper reads it and deletes it.", file=out)
     print("", file=out)
     if problems:
         print("SAVED PROFILE: %s has problems:" % _tilde(wdprofile.profile_path()), file=out)
@@ -813,8 +919,8 @@ def _open_run(out, seed_from_profile=True):
         print("SAVED PROFILE: yes, at %s. This is a change, not a first setup." % _tilde(wdprofile.profile_path()),
               file=out)
         if seeded:
-            print("  The draft file now holds the saved profile. Read it, change only what the person asks for, "
-                  "and write it back.", file=out)
+            print("  The saved profile is loaded as the starting point. Send only what the person wants changed.",
+                  file=out)
         print("", file=out)
         print(short_card(existing), file=out)
     else:
@@ -852,8 +958,8 @@ def status(out=None):
         name = ((old or {}).get("person") or {}).get("name") or "someone"
         hours = int(age_hours)
         note = ("UNFINISHED SETUP FOUND: started for %s, last touched %s ago. Ask the person whether to pick it up "
-                "or start over. To pick it up, read the draft file and write it back with the new run id. To start "
-                "over, run the cancel command and then status again."
+                "or start over. To pick it up, run the preview command to see what was answered so far and carry "
+                "on from there. To start over, run the cancel command and then status again."
                 % (name, "%d hour%s" % (hours, "" if hours == 1 else "s") if hours else "under an hour"))
         run = start_run()
         kept = dict(old)
@@ -862,8 +968,8 @@ def status(out=None):
         if os.path.isfile(_shown_path()):
             os.remove(_shown_path())
         print("RUN ID: %s" % run, file=out)
-        print("  Put \"_run\": \"%s\" in every draft you write. A draft without it is refused." % run, file=out)
-        print("DRAFT FILE: %s" % draft_path(), file=out)
+        print("  Put \"_run\": \"%s\" in every answers file you write. One without it is refused." % run, file=out)
+        print("ANSWERS FILE: %s" % answers_path(), file=out)
         print("", file=out)
         print(note, file=out)
         print("", file=out)
@@ -950,7 +1056,7 @@ def preview(out=None, details=False, show_file=False):
     return 0
 
 
-COMMANDS = ("status", "takeover", "fields", "read-resume", "check-vault", "preview", "preview-details",
+COMMANDS = ("status", "takeover", "fields", "save", "read-resume", "check-vault", "preview", "preview-details",
             "preview-file", "write", "cancel", "import-connections")
 
 
@@ -971,10 +1077,15 @@ def main(argv=None):
             return fields()
         if command == "cancel":
             return cancel()
+        if command == "save":
+            read_draft()
+            names = read_draft.changed
+            print("Saved: %s." % ", ".join(names) if names else "Nothing new to save.")
+            return 0
         if command == "read-resume":
             path = str(read_draft().get("_resume_path") or "").strip()
             if not path:
-                raise ValueError("Put the resume file's path in the draft as \"_resume_path\" first.")
+                raise ValueError("Put the resume file's path in the answers file as \"_resume_path\" first.")
             print(read_resume(path))
             return 0
         if command == "check-vault":

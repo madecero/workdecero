@@ -91,14 +91,29 @@ class SetupCase(unittest.TestCase):
         self.run_id = match.group(1) if match else None
         return code, out
 
-    def put(self, draft, run=None):
-        """Write the draft the way the assistant's Write tool does: the whole file, default permissions."""
+    def send(self, answers, run=None):
+        """Write an answers file the way the assistant's Write tool does: a new file, default permissions."""
         if self.run_id is None and run is None:
             self.open_run()
-        content = dict(draft)
+        content = dict(answers)
         content["_run"] = run or self.run_id
-        with open(setup_tool.draft_path(), "w", encoding="utf-8") as handle:
+        with open(setup_tool.answers_path(), "w", encoding="utf-8") as handle:
             json.dump(content, handle, ensure_ascii=False)
+
+    def put(self, draft, run=None):
+        """Send a whole draft as answers: resume values first, then every section, then the helper keys."""
+        draft = dict(draft)
+        resume = draft.pop("_from_resume", None)
+        if resume:
+            self.send({"set": resume, "from_resume": True}, run)
+            self.call("save")
+        sections = dict((key, value) for key, value in draft.items() if not key.startswith("_"))
+        helpers = dict((key, value) for key, value in draft.items() if key.startswith("_"))
+        self.send(dict(helpers, set=sections), run)
+
+    def state(self):
+        with open(setup_tool.draft_path(), encoding="utf-8") as handle:
+            return json.load(handle)
 
     def preview(self, draft):
         self.put(draft)
@@ -116,32 +131,64 @@ class SetupCase(unittest.TestCase):
 
 
 class DraftFile(SetupCase):
-    def test_status_prepares_a_private_draft_before_any_answer_exists(self):
+    def test_status_prepares_a_private_folder_and_no_answers_file(self):
         code, out = self.open_run()
         self.assertEqual(code, 0)
         self.assertEqual(mode_of(self.cache), 0o700)
-        self.assertEqual(mode_of(setup_tool.draft_path()), 0o600)
-        with open(setup_tool.draft_path()) as handle:
-            self.assertEqual(json.load(handle), {"_run": self.run_id})
-        self.assertIn("DRAFT FILE: %s" % setup_tool.draft_path(), out)
+        self.assertEqual(mode_of(setup_tool.draft_path()), 0o600)      # the helper's own state
+        self.assertEqual(self.state(), {"_run": self.run_id})
+        self.assertFalse(os.path.exists(setup_tool.answers_path()))    # never pre-created: the Write tool makes it
+        self.assertIn("ANSWERS FILE: %s" % setup_tool.answers_path(), out)
         self.assertIn("SAVED PROFILE: none. This is a first setup.", out)
         self.assertIn("  Notes   (", out)                              # the one vault that exists
         self.assertNotIn("gone", out)
         self.assertFalse(out.lstrip().startswith("{"))                 # plain words, not data
 
-    def test_permissions_are_restored_if_a_write_replaced_the_file(self):
-        self.open_run()
-        os.remove(setup_tool.draft_path())
-        self.put(self.example())                                       # recreated with default permissions
-        os.chmod(setup_tool.draft_path(), 0o644)
-        self.call("preview")
+    def test_answers_are_absorbed_deleted_and_kept_private(self):
+        self.put(self.example())
+        self.assertEqual(mode_of(setup_tool.answers_path()), 0o644)    # as the Write tool leaves it, inside a 700 folder
+        code, out, _ = self.call("save")
+        self.assertEqual(code, 0)
+        self.assertIn("Saved: schema_version, person, location, tracks", out)
+        self.assertNotIn("Theo", out)                                  # names of settings, never their values
+        self.assertFalse(os.path.exists(setup_tool.answers_path()))    # gone, so the next Write is a new file again
         self.assertEqual(mode_of(setup_tool.draft_path()), 0o600)
+        self.assertEqual(self.state()["person"]["name"], "Theo Lindqvist")
+        self.send({"set": {"digest.max_new_items": 5}})                # the next step: a few lines only
+        self.assertEqual(self.call("preview")[0], 0)
+        self.assertEqual(self.state()["digest"]["max_new_items"], 5)
+        self.assertEqual(self.state()["person"]["name"], "Theo Lindqvist")   # nothing else was touched
         self.assertEqual(mode_of(os.path.join(self.cache, setup_tool.SHOWN_NAME)), 0o600)
+        self.assertEqual(self.call("save")[1].strip(), "Nothing new to save.")
 
-    def test_default_location_is_the_fixed_cache_path(self):
-        os.environ.pop(setup_tool.DRAFT_DIR_ENV)
-        self.assertEqual(setup_tool.draft_path(),
-                         os.path.join(os.path.expanduser("~"), ".cache", "workdecero", "setup-draft.json"))
+    def test_small_answers_set_append_and_remove(self):
+        self.put(self.example())
+        self.call("save")
+        self.send({"set": {"jobs.salary_floor": 220000, "location.work_modes": ["remote"],
+                           "person.website": None},
+                   "append": {"jobs.titles": ["Chief Product Officer", "GM, Product"],
+                              "exclusions": [{"name": "O'Brien Analytics", "kind": "employer"}]},
+                   "remove": ["jobs.deal_breakers", "writing"],
+                   "_confirmed": ["jobs.salary_floor"], "_dropped": ["person.summary"]})
+        self.call("save")
+        state = self.state()
+        self.assertEqual(state["jobs"]["salary_floor"], 220000)
+        self.assertEqual(state["location"]["work_modes"], ["remote"])
+        self.assertNotIn("website", state["person"])
+        self.assertEqual(state["jobs"]["titles"][-1], "GM, Product")
+        self.assertEqual(state["jobs"]["titles"].count("Chief Product Officer"), 1)   # no duplicate
+        self.assertEqual(state["exclusions"][-1]["name"], "O'Brien Analytics")
+        self.assertNotIn("deal_breakers", state["jobs"])
+        self.assertNotIn("writing", state)
+        self.assertEqual((state["_confirmed"], state["_dropped"]), (["jobs.salary_floor"], ["person.summary"]))
+
+    def test_default_answers_location_is_the_fixed_cache_path(self):
+        saved = os.environ.pop(setup_tool.DRAFT_DIR_ENV)
+        try:
+            self.assertEqual(setup_tool.answers_path(),
+                             os.path.join(os.path.expanduser("~"), ".cache", "workdecero", "setup-answers.json"))
+        finally:
+            os.environ[setup_tool.DRAFT_DIR_ENV] = saved
 
     def test_draft_is_deleted_after_a_save(self):
         code, out, _ = self.save(self.example())
@@ -165,11 +212,12 @@ class DraftFile(SetupCase):
         self.save(draft)                                               # second save makes a profile backup
         for folder, _, files in os.walk(self.tmp.name):
             for name in files:
-                self.assertNotIn("draft", name)
-                self.assertNotIn("setup-run", name)
+                for leftover in ("setup-state", "setup-answers", "setup-run", "setup-preview"):
+                    self.assertNotIn(leftover, name)
 
     def test_a_killed_sessions_old_draft_is_deleted_by_the_next_status(self):
         self.put(self.example())
+        self.call("save")
         old = time.time() - 30 * 3600
         for name in os.listdir(self.cache):
             os.utime(os.path.join(self.cache, name), (old, old))
@@ -177,11 +225,11 @@ class DraftFile(SetupCase):
         code, out = self.open_run()
         self.assertEqual(code, 0)
         self.assertIn("too old to use and has been deleted", out)
-        with open(setup_tool.draft_path()) as handle:
-            self.assertEqual(json.load(handle), {"_run": self.run_id})  # nothing of the old answers remains
+        self.assertEqual(self.state(), {"_run": self.run_id})          # nothing of the old answers remains
 
     def test_a_recent_abandoned_draft_is_offered_once(self):
         self.put(self.example())
+        self.call("save")
         first_run = self.run_id
         idle = time.time() - 3 * 3600                                  # three hours ago: not active, not stale
         for name in os.listdir(self.cache):
@@ -191,8 +239,7 @@ class DraftFile(SetupCase):
         self.assertEqual(code, 0)
         self.assertIn("UNFINISHED SETUP FOUND: started for Theo Lindqvist, last touched 3 hours ago.", out)
         self.assertNotEqual(self.run_id, first_run)
-        with open(setup_tool.draft_path()) as handle:
-            kept = json.load(handle)
+        kept = self.state()
         self.assertEqual(kept["_run"], self.run_id)                    # handed to the new run
         self.assertEqual(kept["person"]["name"], "Theo Lindqvist")
         self.assertEqual(mode_of(setup_tool.draft_path()), 0o600)
@@ -201,6 +248,7 @@ class DraftFile(SetupCase):
 class TwoSessions(SetupCase):
     def test_second_session_is_warned_and_nothing_is_deleted(self):
         self.put(self.example())                                       # session A is mid-setup
+        self.call("save")
         run_a = self.run_id
         with open(setup_tool.draft_path()) as handle:
             before = handle.read()
@@ -222,25 +270,44 @@ class TwoSessions(SetupCase):
         self.assertNotEqual(run_a, run_b)
         b_draft = self.example("nurse-manager-texas")
         self.put(b_draft, run=run_b)                                   # B writes its answers
-        self.put(self.example(), run=run_a)                            # A, unaware, writes its draft over them
-        for command in ("preview", "write", "check-vault"):
-            code, _, err = self.call(command)
-            self.assertEqual(code, 2, command)
-            self.assertIn("does not belong to the setup run that is open (run %s)" % run_b, err)
-            self.assertIn("Do not save and do not cancel", err)
+        self.put(self.example(), run=run_a)                            # A, unaware, writes its answers over them
+        code, _, err = self.call("preview")
+        self.assertEqual(code, 2)
+        self.assertIn("was written for setup run %s, but the open run is %s" % (run_a, run_b), err)
+        self.assertIn("do not save and do not cancel", err)
+        self.assertNotIn("Theo", json.dumps(self.state()))             # A's answers never entered B's draft
+        self.assertEqual(self.call("write")[0], 1)                     # and nothing can be saved without a preview
         self.assertFalse(os.path.exists(self.home))                    # nobody's answers were saved
         self.put(b_draft, run=run_b)                                   # B writes again and carries on
         self.assertEqual(self.call("preview")[0], 0)
         self.assertEqual(self.call("write")[0], 0)
         self.assertEqual(wdprofile.load()[0]["person"]["name"], "Dana Whitfield")
 
-    def test_a_draft_without_a_run_id_is_refused(self):
+    def test_answers_without_a_run_id_are_refused(self):
         self.open_run()
-        with open(setup_tool.draft_path(), "w") as handle:
-            json.dump(self.example(), handle)
+        with open(setup_tool.answers_path(), "w") as handle:
+            json.dump({"set": self.example()}, handle)
         code, _, err = self.call("preview")
         self.assertEqual(code, 2)
-        self.assertIn('Every draft must carry "_run"', err)
+        self.assertIn('Every answers file must carry "_run"', err)
+        self.assertEqual(self.state(), {"_run": self.run_id})
+
+    def test_nothing_changes_outside_an_open_recent_run(self):
+        """A stray helper call, outside a setup conversation, must do nothing."""
+        for command in ("write", "save", "preview", "check-vault", "read-resume", "import-connections"):
+            code, _, err = self.call(command)
+            self.assertEqual(code, 2, command)
+            self.assertIn("No setup run is open", err)
+        self.assertFalse(os.path.exists(self.home))
+        self.put(self.example())
+        self.call("preview")
+        old = time.time() - 30 * 3600                                  # a run left open since yesterday
+        for name in os.listdir(self.cache):
+            os.utime(os.path.join(self.cache, name), (old, old))
+        code, _, err = self.call("write")
+        self.assertEqual(code, 2)
+        self.assertIn("No setup run is open", err)
+        self.assertFalse(os.path.exists(self.home))
 
     def test_a_run_idle_for_over_thirty_minutes_no_longer_blocks(self):
         self.open_run()                                                # opened, then abandoned at the welcome
@@ -280,22 +347,22 @@ class ReadOnlyCommands(SetupCase):
         self.assertIn("exclusions[].kind:", out)
 
     def test_check_vault_reads_the_folder_from_the_draft(self):
-        self.put({"storage": {"vault_path": self.parent}})
+        self.send({"set": {"storage.vault_path": self.parent}})
         code, out, _ = self.call("check-vault")
         self.assertEqual(code, 1)
         self.assertIn("is not an Obsidian vault", out)
         self.assertIn("did you mean Notes?", out)                    # the parent of the real vault
-        self.put({"storage": {"vault_path": os.path.join(self.parent, "typo")}})
+        self.send({"set": {"storage.vault_path": os.path.join(self.parent, "typo")}})
         self.assertIn("does not exist", self.call("check-vault")[1])
-        self.put({"storage": {"vault_path": self.vault, "vault_folder": "/abs/path"}})
+        self.send({"set": {"storage": {"vault_path": self.vault, "vault_folder": "/abs/path"}}})
         self.assertIn("not a full path", self.call("check-vault")[1])
-        self.put({"storage": {"vault_path": self.vault}})
+        self.send({"set": {"storage": {"vault_path": self.vault}}})
         code, out, _ = self.call("check-vault")
         self.assertEqual(code, 0)
         self.assertIn("A workdecero folder will be added, and nothing else is touched.", out)
         spaced = os.path.join(self.parent, "My Vault's \"copy\" $HOME")
         os.makedirs(os.path.join(spaced, ".obsidian"))
-        self.put({"storage": {"vault_path": spaced}})
+        self.send({"set": {"storage.vault_path": spaced}})
         self.assertEqual(self.call("check-vault")[0], 0)              # any characters, since no shell is involved
 
     def test_read_resume_takes_its_path_from_the_draft(self):
@@ -318,7 +385,9 @@ class ReadOnlyCommands(SetupCase):
         open(pdf, "wb").close()
         self.put({"_resume_path": pdf})
         self.assertIn("Read tool", self.call("read-resume")[2])
-        self.put({})
+        self.call("cancel")
+        self.run_id = None
+        self.open_run()
         self.assertIn('"_resume_path"', self.call("read-resume")[2])
 
     def test_the_helper_takes_no_arguments_at_all(self):
@@ -453,9 +522,9 @@ class Preview(SetupCase):
         self.assertEqual(profile["person"]["resume_path"], os.path.join("~", "Documents", "resume.pdf"))
         self.assertEqual(profile["storage"]["vault_path"], self.vault)      # not under home: left as given
 
-    def test_a_broken_draft_is_reported_not_guessed_at(self):
+    def test_broken_answers_are_reported_not_guessed_at(self):
         self.open_run()
-        with open(setup_tool.draft_path(), "w") as handle:
+        with open(setup_tool.answers_path(), "w") as handle:
             handle.write("{ not json")
         code, _, err = self.call("preview")
         self.assertEqual(code, 2)
@@ -595,10 +664,9 @@ class RunAgain(SetupCase):
         code, out = self.open_run()
         self.assertEqual(code, 0)
         self.assertIn("SAVED PROFILE: yes", out)
-        self.assertIn("The draft file now holds the saved profile.", out)
+        self.assertIn("The saved profile is loaded as the starting point. Send only what the person wants changed.", out)
         self.assertIn("You          Theo Lindqvist.", out)
-        with open(setup_tool.draft_path()) as handle:
-            seeded = json.load(handle)
+        seeded = self.state()
         self.assertEqual(seeded.pop("_run"), self.run_id)
         self.assertEqual(seeded, self.example())
         self.assertEqual(mode_of(setup_tool.draft_path()), 0o600)
@@ -609,10 +677,10 @@ class RunAgain(SetupCase):
             first = handle.read()
         vault_before = tree(self.vault)
         self.open_run()
-        with open(setup_tool.draft_path()) as handle:
-            draft = json.load(handle)
-        draft["digest"]["max_new_items"] = 5
-        code, out, _ = self.save(draft)
+        self.send({"set": {"digest.max_new_items": 5}})                # the only thing the assistant sends
+        self.assertEqual(self.call("preview")[0], 0)
+        code, out, _ = self.call("write")
+        self.run_id = None
         self.assertEqual(code, 0, out)
         with open(wdprofile.profile_path(), encoding="utf-8") as handle:
             second = handle.read()
@@ -704,7 +772,8 @@ class SkillText(unittest.TestCase):
                        "Nothing is ever applied for, sent or posted for you.",
                        "Never guess pay", "Always confirm the current employer explicitly",
                        "Step 1 of 5", "Step 5 of 5", "What would you like to change?",
-                       "carry every existing value forward"):
+                       "The person has only seen what you said to them", "Saving your answers...",
+                       "Never ask them to confirm something that appeared only there"):
             self.assertIn(phrase, self.text)
 
     def test_every_helper_command_is_an_exact_rule_with_no_wildcard(self):
@@ -717,8 +786,9 @@ class SkillText(unittest.TestCase):
         self.assertNotIn("Bash(python3:", self.text)
 
     def test_only_the_one_draft_file_may_be_written(self):
-        self.assertEqual(re.findall(r'(?:Write|Edit)\(([^)]*)\)', self.front),
-                         ["~/.cache/workdecero/setup-draft.json"] * 2)
+        self.assertEqual(re.findall(r'(?:Write|Edit|Read)\(([^)]*)\)', self.front),
+                         ["~/.cache/workdecero/setup-answers.json"])
+        self.assertNotIn("Edit", self.front)                          # the answers file is always written new
 
     def test_every_command_line_in_the_instructions_is_one_of_the_fixed_lines(self):
         lines = [line.strip() for line in self.text.splitlines() if line.strip().startswith("python3 ")]
