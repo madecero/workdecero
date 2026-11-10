@@ -620,6 +620,26 @@ def plan_update(row, result, note_type, today):
             "state": state, "evidence": result.evidence}
 
 
+def kept_statuses(rows, operations):
+    """{note title: the person's status} for postings that closed while the person's own status was kept."""
+    by_id = dict((row.id, row) for row in rows)
+    kept = {}
+    for operation in operations:
+        row = by_id.get(operation["id"])
+        if row is not None and operation["state"] == CLOSED and operation.get("append") and \
+                "status" not in operation["values"]:
+            kept[row.title] = str(row.values.get("status") or "").strip()
+    return kept
+
+
+def closed_line(link, title, kept):
+    """One line of "Closed since the last sweep". Says so when the person's own status was left alone."""
+    if title in (kept or {}):
+        status = kept[title]
+        return "- %s. The posting has closed. Your status%s was kept." % (link, " (%s)" % status if status else "")
+    return "- %s" % link
+
+
 def plan_updates(rows, note_type, fetcher=None, today=None, on_result=None):
     """Check every open row and return the list of operations."""
     today = today or datetime.date.today()

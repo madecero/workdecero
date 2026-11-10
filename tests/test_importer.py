@@ -37,6 +37,13 @@ Imani Brooks,Example Tea Company,Creative Director,Portland Brand Meetup,2026-11
 Aaron Zed,,Recruiter,Cold email,
 """
 
+EVENTS = """Event,When,Went?,Signed up
+Brand Summit,2026-10-02,went,yes
+Maker Market,2026-10-09,skipped,no
+Design Awards,2026-12-05,,
+Founders Supper,2026-10-20,WENT,x
+"""
+
 GROUPS = """Group,Status,Site,Dues,Thoughts
 Portland Brand Meetup,member,https://groups.example.org/brand,0,Good room
 Oregon Design Association,New,https://groups.example.org/oda,$250,Pricey but worth a look
@@ -65,7 +72,7 @@ class ImportCase(unittest.TestCase):
         with open(wdprofile.profile_path(), "w", encoding="utf-8") as handle:
             handle.write(miniyaml.dumps(raw))
         self.files = {}
-        for name, text in (("Jobs.csv", JOBS), ("Contacts.csv", PEOPLE), ("Groups.csv", GROUPS)):
+        for name, text in (("Jobs.csv", JOBS), ("Contacts.csv", PEOPLE), ("Groups.csv", GROUPS), ("Events.csv", EVENTS)):
             self.files[name] = os.path.join(self.exports, name)
             with open(self.files[name], "w", encoding="utf-8") as handle:
                 handle.write(text)
@@ -165,8 +172,49 @@ class Check(ImportCase):
         self.assertIn("NOT READY.", out)
         with self.assertRaises(ValueError) as caught:
             self.run_import()
-        self.assertIn("Some status words still have no meaning, so nothing was written.", str(caught.exception))
+        self.assertIn("Some words still have no meaning, so nothing was written.", str(caught.exception))
         self.assertFalse(os.path.isdir(os.path.join(self.vault_dir, "workdecero", "Jobs")))
+
+    def events_plan(self, yes_no=None):
+        table = {"csv": self.files["Events.csv"], "type": "event", "title": "Event",
+                 "columns": {"When": "date", "Went?": "attended", "Signed up": "going"}}
+        if yes_no is not None:
+            table["yes_no"] = yes_no
+        return {"tables": [table]}
+
+    def test_a_tick_box_word_that_is_not_yes_or_no_is_never_read_as_no(self):
+        # From the tester's run: "Went?" = "went" became attended false, silently.
+        code, out = self.check(self.events_plan())
+        self.assertEqual(code, 1)
+        self.assertIn('YES OR NO? "Went?" is a tick box, and these words are neither (the import cannot run until each '
+                      'is mapped under "yes_no" as true or false): "WENT" (1), "skipped" (1), "went" (1).', out)
+        self.assertIn("NOT READY.", out)
+        with self.assertRaises(ValueError):
+            self.run_import()
+        self.assertFalse(os.path.isdir(os.path.join(self.vault_dir, "workdecero", "Events")))
+        code, out = self.check(self.events_plan({"went": True, "skipped": False}))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("YES OR NO?", out)
+        self.run_import()
+        events = self.notes("event")
+        self.assertEqual((events["Brand Summit"].values["attended"], events["Brand Summit"].values["going"]), (True, True))
+        self.assertEqual(events["Founders Supper"].values["attended"], True)            # any casing of a mapped word
+        self.assertEqual(events["Maker Market"].values["attended"], False)
+        self.assertIn("- **Went?:** went", events["Brand Summit"].body)                 # their word is kept too
+        self.assertEqual(events["Design Awards"].values.get("attended"), False)         # an empty cell is simply unticked
+        with self.assertRaises(ValueError) as caught:
+            self.check(self.events_plan({"went": "yes"}))
+        self.assertIn('"yes_no" must map each word to true or false', str(caught.exception))
+
+    def test_columns_that_name_people_are_pointed_out_on_the_first_look(self):
+        code, out = self.check({"tables": [{"csv": self.files["Jobs.csv"], "type": "job"},
+                                           {"csv": self.files["Groups.csv"], "type": "group"}]})
+        self.assertIn("These look like people. Map them to contact or warm_path so each becomes a linked People note: "
+                      "Hiring manager.", out)
+        self.assertEqual(out.count("These look like people"), 1)
+        self.assertEqual(importer.people_columns(["Referral", "Recruiter name", "Referred by", "Notes"], "job"),
+                         ["Referral", "Recruiter name", "Referred by"])
+        self.assertIn("map one to contact and another to warm_path", importer.fields_report())
 
     def test_a_bad_plan_is_refused_in_plain_words(self):
         bad = self.plan()
@@ -223,6 +271,9 @@ class Run(ImportCase):
         self.assertIn("Companies/Example Tea Company", job.values["company"])
         self.assertIn("People/Imani Brooks", job.values["contact"])
         self.assertEqual(people["Imani Brooks"].values["role"], "Creative Director")      # the fuller note won
+        # A person named only in a job row carries what that row says: their part and their employer.
+        self.assertEqual(people["Raj Patel"].values["role"], "Hiring manager")
+        self.assertIn("Companies/Sample Roasters", people["Raj Patel"].values["company"])
         self.assertEqual(people["Imani Brooks"].values["follow_up_by"], "2026-11-16")
         self.assertEqual(groups["Portland Brand Meetup"].values["status"], "Joined")
         self.assertEqual(groups["Oregon Design Association"].values["cost_per_year"], 250)
@@ -294,6 +345,25 @@ class Run(ImportCase):
         self.assertIn("Nothing is in progress", err)
 
 
+class AfterAnImport(unittest.TestCase):
+    def test_a_closed_posting_says_the_persons_status_was_kept(self):
+        # From the tester's run: the first sweep after an import listed a closed posting with no word on the status.
+        import liveness
+
+        class Row(object):
+            def __init__(self, note_id, title, status):
+                self.id, self.title, self.values = note_id, title, {"status": status}
+        rows = [Row("J-1", "Brand Designer, Example Tea Company", "Interviewing"), Row("J-2", "Packaging Lead", "New")]
+        operations = [{"id": "J-1", "state": liveness.CLOSED, "append": "POSTING CLOSED", "values": {"liveness": "closed"}},
+                      {"id": "J-2", "state": liveness.CLOSED, "append": "Closed", "values": {"status": "Closed"}}]
+        kept = liveness.kept_statuses(rows, operations)
+        self.assertEqual(kept, {"Brand Designer, Example Tea Company": "Interviewing"})
+        self.assertEqual(liveness.closed_line("[[a]]", "Brand Designer, Example Tea Company", kept),
+                         "- [[a]]. The posting has closed. Your status (Interviewing) was kept.")
+        self.assertEqual(liveness.closed_line("[[b]]", "Packaging Lead", kept), "- [[b]]")
+        self.assertEqual(liveness.closed_line("[[b]]", "Packaging Lead", None), "- [[b]]")
+
+
 class Reading(unittest.TestCase):
     def test_dates_and_numbers(self):
         self.assertEqual(importer.read_date("2026-11-02", []), "2026-11-02")
@@ -318,7 +388,11 @@ class SkillText(unittest.TestCase):
             self.assertNotIn(tool, front)
         self.assertIn("Write(~/.cache/workdecero/import-plan.json)", front)
         for rule in ("**Never open, read or print the CSV files yourself.**", "**Never guess what a status word means.**",
-                     "**Check first, and get a clear yes before `run`.**", "**Nothing is left behind.**"):
+                     "**Check first, and get a clear yes before `run`.**", "**Nothing is left behind.**",
+                     "**Show the mapping and get a yes before the first full check.**",
+                     "**Never guess what a word in a tick-box column means.**",
+                     "**Columns that name people link to People by default.**",
+                     "Never say which step you are on"):
             self.assertIn(rule, text)
         self.assertEqual(import_tool.fields(out=io.StringIO()), 0)
         self.assertIn("job  (one row becomes one note in Jobs)", importer.fields_report())

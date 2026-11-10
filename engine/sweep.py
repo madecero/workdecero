@@ -143,6 +143,7 @@ def start(profile, store, source_map, fetcher, today=None):
     store.apply(operations)
     titles = dict((row.id, row.title) for row in rows)
     closed = [titles[op["id"]] for op in operations if op["state"] == liveness.CLOSED and op.get("append")]
+    closed_kept = liveness.kept_statuses(rows, operations)
     suspect = [titles[op["id"]] for op in operations if op["values"].get("liveness") == liveness.SUSPECT]
     checked = len(operations)
 
@@ -206,7 +207,7 @@ def start(profile, store, source_map, fetcher, today=None):
         "started": datetime.datetime.now().isoformat(timespec="seconds"),
         "day": today.isoformat(),
         "mode": profile.get("mode") or "lite",
-        "checked": checked, "closed": closed, "suspect": suspect,
+        "checked": checked, "closed": closed, "closed_kept": closed_kept, "suspect": suspect,
         "employers_read": harvested.read, "employers_failed": harvested.failed,
         "employers_as_pages": harvested.unreadable,
         "candidates": chosen, "not_read": max(0, len(candidates) - len(chosen)),
@@ -625,7 +626,8 @@ def write_digest(state, profile, store, problems, today=None):
             lines.append("- And %d more." % (len(near) - NEAR_MISSES_SHOWN))
 
     lines += ["", "## Closed since the last sweep"]
-    lines += ["- %s" % store.link("job", title) for title in state["closed"]] or ["None."]
+    lines += [liveness.closed_line(store.link("job", title), title, state.get("closed_kept"))
+              for title in state["closed"]] or ["None."]
     if state["suspect"]:
         lines.append("")
         lines.append("Possibly closed, worth a look: " + ", ".join(store.link("job", title) for title in state["suspect"]) + ".")

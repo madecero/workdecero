@@ -65,6 +65,17 @@ def mappable(type_name):
             if field.name not in NOT_MAPPABLE and (field.kind not in (model.LINK, model.LINKS) or field.name in LINK_TARGETS)]
 
 
+PEOPLE_WORDS = ("referral", "referred", "referrer", "contact", "recruiter", "hiring manager", "manager", "introduced",
+                "intro", "warm path", "who i know", "connection")
+
+
+def people_columns(headers, type_name):
+    """Columns whose names say they hold people, for kinds of note that can link to a person."""
+    if type_name not in ("job", "contract"):
+        return []
+    return [header for header in headers if any(word in header.lower() for word in PEOPLE_WORDS)]
+
+
 def fields_report():
     """What a mapping may name: each kind of note, its properties and its statuses."""
     lines = ["WHAT A MAPPING MAY USE", ""]
@@ -74,7 +85,11 @@ def fields_report():
         lines.append("  properties: %s" % ", ".join("%s (%s)" % (field.name, field.kind) for field in mappable(type_name)))
         if note_type.statuses:
             lines.append("  statuses:   %s" % ", ".join(note_type.status_names()))
-    lines += ["", "\"title\" names the column that holds each row's name (the role, the gig, the group, the person).",
+    lines += ["", "A column that names people (a referral, a contact, a recruiter, a hiring manager) should link to "
+              "People: map one to contact and another to warm_path. Left unmapped, the names stay as plain text.",
+              "\"yes_no\" says what a word in a tick-box column means when it is not plainly yes or no: "
+              "{\"went\": true, \"skipped\": false}.",
+              "\"title\" names the column that holds each row's name (the role, the gig, the group, the person).",
               "A column mapped to company, contact, warm_path, people_met or group makes a note for what it names "
               "and links to it.",
               "A column you leave out of the mapping is kept, word for word, in the note's body."]
@@ -159,6 +174,10 @@ def check_plan(plan):
                 raise ImportError_("Table %d: status \"%s\" is mapped to \"%s\", which is not a status a %s note has. "
                                    "Use one of: %s." % (number, word, status, table["type"],
                                                         ", ".join(note_type.status_names())))
+        if not isinstance(table.get("yes_no") or {}, dict) or any(
+                not isinstance(value, bool) for value in (table.get("yes_no") or {}).values()):
+            raise ImportError_("Table %d: \"yes_no\" must map each word to true or false, such as {\"went\": true}."
+                               % number)
         for pattern in table.get("date_formats") or []:
             if not isinstance(pattern, str) or "%" not in pattern:
                 raise ImportError_("Table %d: \"%s\" is not a date format such as %%m/%%d/%%Y." % (number, pattern))
@@ -213,6 +232,7 @@ class TableReport(object):
         self.statuses = {}          # unmapped status word -> count
         self.dates = {}             # column -> [values that could not be read]
         self.numbers = {}           # column -> count of values that could not be read
+        self.yes_no = {}            # column -> {word that is neither yes nor no: count}
         self.kept_columns = []
         self.missing_columns = []
         self.headers = []
@@ -278,6 +298,7 @@ def plan_table(table, store, profile, today, taken, linked):
     statuses = dict((str(word).strip().lower(), note_type.canonical_status(str(status)))
                     for word, status in (table.get("statuses") or {}).items())
     formats = list(table.get("date_formats") or [])
+    yes_no = dict((str(word).strip().lower(), value) for word, value in (table.get("yes_no") or {}).items())
     heading = str(table.get("keep_heading") or DEFAULT_HEADING).strip().lstrip("#").strip() or DEFAULT_HEADING
     names = scoring.confidential_names(profile)
     existing = store.rows(type_name)
@@ -286,8 +307,11 @@ def plan_table(table, store, profile, today, taken, linked):
     seen = {}
     operations = []
 
-    def link_to(target, name):
-        """A link to the note for this person, company or group, planning the note if it does not exist."""
+    def link_to(target, name, about=None):
+        """A link to the note for this person, company or group, planning the note if it does not exist.
+
+        `about` is what the row says about a person: their part (the column's name) and their company.
+        """
         clean = scoring.scrub_confidential(name, names).strip()
         key = (target, scoring._text(clean))
         if key not in linked:
@@ -299,7 +323,8 @@ def plan_table(table, store, profile, today, taken, linked):
                 note_id = merge.next_id(model.BY_NAME[target], store.rows(target), taken.setdefault(target, []))
                 taken[target].append(note_id)
                 linked[key] = clean
-                operations.append({"kind": "make", "type": target, "id": note_id, "title": clean})
+                operations.append({"kind": "make", "type": target, "id": note_id, "title": clean,
+                                   "values": dict(about or {})})
                 if target == "person":
                     report.people += 1
                 elif target == "company":
@@ -319,6 +344,9 @@ def plan_table(table, store, profile, today, taken, linked):
             report.confidential += 1                                  # counted, never written and never named
             continue
         values, kept = {}, []
+        # A person named in a job or gig row works at that row's employer, in the part the column names.
+        employer = next((row.get(column, "").strip() for column, target in columns.items() if target == "company"), "")
+        employer = _names(employer)[0] if employer and type_name == "job" else ""
         for header in headers:
             cell = row.get(header, "")
             if header == title_column or not cell:
@@ -353,9 +381,15 @@ def plan_table(table, store, profile, today, taken, linked):
                     values[target] = value
             elif field.kind == model.CHECKBOX:
                 word = cell.strip().lower()
-                if word in YES or word in NO:
+                if word in yes_no:
+                    values[target] = yes_no[word]
+                    kept.append((header, cell))                       # their own word is kept beside the tick
+                elif word in YES or word in NO:
                     values[target] = word in YES
                 else:
+                    # Not plainly yes or no. It is never read as "no": the person says what it means.
+                    words = report.yes_no.setdefault(header, {})
+                    words[cell.strip()] = words.get(cell.strip(), 0) + 1
                     kept.append((header, cell))
             elif field.kind == model.URL:
                 if cell.lower().startswith(("http://", "https://")):
@@ -366,7 +400,12 @@ def plan_table(table, store, profile, today, taken, linked):
                 people = _names(cell)
                 if target == "company":
                     values["_company"] = people[0]
-                links = [link_to(LINK_TARGETS[target], name) for name in people]
+                about = None
+                if LINK_TARGETS[target] == "person" and target in ("contact", "warm_path"):
+                    about = {"role": header}
+                    if employer:
+                        about["company"] = link_to("company", employer)
+                links = [link_to(LINK_TARGETS[target], name, about) for name in people]
                 values[target] = links if field.kind == model.LINKS else links[0]
                 if field.kind == model.LINK and len(people) > 1:
                     kept.append((header, cell))                       # one link fits. The full cell is kept too
@@ -427,7 +466,8 @@ def plan_import(plan, store, profile, today=None):
 
 
 def unmapped_statuses(reports):
-    return sum(len(report.statuses) for report in reports)
+    """How many words still need a meaning from the person: status words, and yes/no words. Zero means ready."""
+    return sum(len(report.statuses) + sum(len(words) for words in report.yes_no.values()) for report in reports)
 
 
 def report_text(reports, profile, wrote=False):
@@ -456,6 +496,10 @@ def report_text(reports, profile, wrote=False):
                              " and more" if len(set(values)) > 5 else ""))
         for column, count in sorted(report.numbers.items()):
             lines.append("  Numbers in \"%s\" that could not be read: %d. Kept as text in the note." % (column, count))
+        for column, words in sorted(report.yes_no.items()):
+            lines.append("  YES OR NO? \"%s\" is a tick box, and these words are neither (the import cannot run until "
+                         "each is mapped under \"yes_no\" as true or false): %s." % (column, ", ".join(
+                             '"%s" (%d)' % (word, count) for word, count in sorted(words.items()))))
         if report.statuses:
             lines.append("  STATUS WORDS WITH NO MEANING YET (the import cannot run until each is mapped): %s." % ", ".join(
                 '"%s" (%d)' % (word, count) for word, count in sorted(report.statuses.items())))
@@ -473,7 +517,8 @@ def detail_text(reports):
     lines = []
     for report in reports:
         lines.append("%s" % report.label)
-        lines += ["  " + line for line in report.details] or ["  every row with a title is accounted for above"]
+        lines += ["  " + line for line in report.details] or [
+            "  nothing to list: every row was imported, was already in the vault, or was counted as confidential"]
     return "\n".join(lines) + "\n"
 
 
@@ -487,7 +532,7 @@ def apply(operations, store):
     for step in operations:
         if step["kind"] == "make":
             if store.get(step["type"], step["id"]) is None:
-                store.upsert(step["type"], step["id"], step["title"], {})
+                store.upsert(step["type"], step["id"], step["title"], step.get("values") or {})
                 created += 1
         elif step["kind"] == "fill":
             # Only properties the note does not have yet are filled. Nothing the person set is changed.

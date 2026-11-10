@@ -13,12 +13,16 @@ You are moving one person's existing tracker into their vault. They export each 
 1. **Never open, read or print the CSV files yourself.** They hold the person's private tracker: employers, pay, people, their own notes. Only the helper reads them. You see column names, counts, status words and dates that could not be read. That is all you need.
 2. **Never put a path, a column name or a status word on a command line.** Everything goes in the hand-off file with the Write tool. Every helper command is one fixed line with no arguments.
 3. **Never guess what a status word means.** If the helper lists a status word with no meaning, ask the person. Offer the plugin's statuses for that kind of note as the choices.
-4. **Check first, and get a clear yes before `run`.** Show the person the counts from `check`. Do not run on "ok" to something else.
-5. **Nothing is left behind.** A column you do not map is kept word for word in each note's body. Say so. Never tell the person a column will be dropped.
-6. **Do not read the person's profile or their notes.** The helper applies their confidential names. Rows at a confidential name are counted and not written. Never ask which rows those were.
-7. Use plain hyphens and commas in everything you write. No long dashes.
-8. **Never open a browser,** and do not use web search. This skill needs neither.
-9. **Do not start subagents or background tasks.** Do every step in this conversation. The one exception: if this session has no page fetch tool of its own, the built-in page reader (the `web-fetch` agent) may be used to read a public page, in the foreground.
+4. **Show the mapping and get a yes before the first full check.** After you have seen the column names, show the person what each column would become, as a short table, and wait for their yes or their corrections. Do not run a check with a mapping they have not seen.
+5. **Never guess what a word in a tick-box column means.** If the helper says a word is neither yes nor no ("went", "skipped", "maybe"), ask the person, and put their answer under `"yes_no"`. It is never read as "no".
+6. **Columns that name people link to People by default.** A referral, a contact, a recruiter or a hiring manager column goes to `contact` or `warm_path`, so each person becomes a linked note. Leave such a column as plain text only if the person asks.
+7. **Check first, and get a clear yes before `run`.** Show the person the counts from `check`. Do not run on "ok" to something else.
+8. **Nothing is left behind.** A column you do not map is kept word for word in each note's body. Say so. Never tell the person a column will be dropped.
+9. **Do not read the person's profile or their notes.** The helper applies their confidential names. Rows at a confidential name are counted and not written. Never ask which rows those were.
+10. Use plain hyphens and commas in everything you write. No long dashes.
+11. **Never open a browser,** and do not use web search. This skill needs neither.
+12. **Do not start subagents or background tasks.** Do every step in this conversation. The one exception: if this session has no page fetch tool of its own, the built-in page reader (the `web-fetch` agent) may be used to read a public page, in the foreground.
+13. **Talk to the person plainly.** Never say which step you are on, and never mention the helper, the hand-off file or the mapping file by name. Say what you are doing in their words: "I'll look at the column names", "here is what each column would become".
 
 ## The helper and the hand-off file
 
@@ -68,9 +72,10 @@ For each table, decide from the column names:
 * **`title`**: the column that holds each row's name. For jobs, the role. For gigs, the gig. For people, the name.
 * **`columns`**: column name to property, for the columns that match a property in `TOOL fields`. A column mapped to `company`, `contact`, `warm_path`, `people_met` or `group` makes a note for the person, company or group it names and links to it.
 * Leave every other column out. It is kept in the note's body under the heading "From my old tracker". Use `"keep_heading"` if the person wants other words.
+* A column that names people (the helper points these out) goes to `contact` or `warm_path`. The person becomes a People note that carries their part and the row's employer.
 * If a column's meaning is not clear from its name, ask the person. Do not guess.
 
-Show the person the mapping as a short table (column, what it becomes) and ask them to confirm or correct it. Then write the full plan and run `TOOL check`:
+**Show the person the mapping as a short table (column, what it becomes, and which columns are kept as text) and wait for their yes.** Only then write the full plan and run `TOOL check`:
 
 ```json
 {"tables": [{"csv": "/Users/me/Exports/Jobs.csv", "type": "job", "title": "Role",
@@ -85,6 +90,7 @@ Show the person the mapping as a short table (column, what it becomes) and ask t
 `TOOL check` prints, for each table: rows, how many would be written, how many are already in the vault, how many would not be imported and why, the columns kept as text, dates and numbers it could not read, and status words with no meaning.
 
 * **Status words with no meaning.** Ask the person what each one means, with a picker of that kind of note's statuses. Add each answer to `"statuses"`, such as `{"sent": "Applied", "ghosted": "Closed"}`. Their own word is kept in the note as well.
+* **Yes or no words.** A tick-box column (going, attended, remote and the like) with a word that is neither. Ask what each word means and add it to `"yes_no"`, such as `{"went": true, "skipped": false}`.
 * **Dates it could not read.** If the examples show a pattern, add it to `"date_formats"` (`"%d.%m.%Y"` for 05.11.2026). If they are not dates at all ("next week"), leave them. They are kept as text.
 * **Rows not imported.** Say how many and why, in the helper's words. The row-by-row detail is in a private file the helper names. Tell the person where it is. Do not open it.
 

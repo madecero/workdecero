@@ -113,6 +113,10 @@ def check(out=None, today=None):
             headers, rows = importer.read_csv(table["csv"])
             print("  %s (%s, %d rows): %s" % (os.path.basename(table["csv"]), table["type"], len(rows),
                                              ", ".join(headers)), file=out)
+            people = importer.people_columns(headers, table["type"])
+            if people:
+                print("    These look like people. Map them to contact or warm_path so each becomes a linked People "
+                      "note: %s." % ", ".join(people), file=out)
         return 1
     reports, _ = importer.plan_import(plan, store, profile, today)
     handoff.ensure_folder()
@@ -125,8 +129,8 @@ def check(out=None, today=None):
     print("\nThe row-by-row detail is in %s, for the person to read. It is not shown here." % handoff.tilde(report_path()),
           file=out)
     if importer.unmapped_statuses(reports):
-        print("\nNOT READY. Ask the person what each status word above means, add them to \"statuses\" in the "
-              "mapping, and run check again.", file=out)
+        print("\nNOT READY. Ask the person what each word above means. Status words go under \"statuses\", yes or no "
+              "words under \"yes_no\". Then run check again.", file=out)
         return 1
     print("\nREADY. Show the person the counts above and ask for a clear yes. Only then run the run command.", file=out)
     return 0
@@ -146,7 +150,7 @@ def run(out=None, today=None):
         raise ValueError("A CSV file changed after the check, so nothing was written. Run `check` again.")
     reports, operations = importer.plan_import(plan, store, profile, today)
     if importer.unmapped_statuses(reports):
-        raise ValueError("Some status words still have no meaning, so nothing was written. Run `check` to see them.")
+        raise ValueError("Some words still have no meaning, so nothing was written. Run `check` to see them.")
     store.ensure_layout()
     importer.apply(operations, store)
     store.refresh_rollups()
