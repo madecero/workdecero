@@ -444,7 +444,7 @@ class BrowserInAWorkdeceroSession(PrivateFolder):
                 self.assertIn("**Do not start subagents or background tasks.**", handle.read(), name)
 
     def test_every_web_skill_says_never_open_a_browser(self):
-        for name in ("job-sweep", "contract-sweep", "sources"):
+        for name in ("job-sweep", "contract-sweep", "sources", "networking-sweep"):
             with open(os.path.join(ROOT, "skills", name, "SKILL.md"), encoding="utf-8") as handle:
                 self.assertIn("**Never open a browser", handle.read(), name)
 
