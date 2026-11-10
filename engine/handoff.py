@@ -47,6 +47,23 @@ def ensure_folder():
     return path
 
 
+def keep_folder(command, code, ends):
+    """Leave the private folder in place for the assistant's next file, unless this command ended the work.
+
+    Claude Code only lets the assistant write the hand-off file without
+    asking while the folder exists and is private. Reading a hand-off file,
+    or closing a run, removes the folder when it is empty. So every helper
+    command that can be followed by another write puts it back. A command
+    that finished the work (and succeeded) leaves nothing behind.
+    """
+    if command in ends and code == 0:
+        return
+    try:
+        ensure_folder()
+    except (ValueError, OSError):
+        pass                                   # a link or a file is in the way: the next step will say so plainly
+
+
 def _run_path(skill):
     return os.path.join(folder(), "%s-run.json" % skill)
 

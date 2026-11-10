@@ -128,10 +128,22 @@ def minutes_since_activity():
     return max(0.0, (time.time() - max(stamps)) / 60.0) if stamps else None
 
 
+def _own_folder():
+    """The private folder, created if needed. A link in its place is refused: answers never follow one."""
+    folder = draft_dir()
+    if os.path.islink(folder):
+        raise ValueError("%s is a link, not a folder. Remove it and run setup again." % folder.replace(
+            os.path.expanduser("~"), "~", 1))
+    os.makedirs(folder, mode=0o700, exist_ok=True)
+    if not os.path.isdir(folder):
+        raise ValueError("%s is not a folder. Remove it and run setup again." % folder)
+    os.chmod(folder, 0o700)
+    return folder
+
+
 def start_run():
     """Begin a new setup run and return its id. The id goes into every draft this run writes."""
-    folder = draft_dir()
-    os.makedirs(folder, mode=0o700, exist_ok=True)
+    folder = _own_folder()
     run = hashlib.sha256(("%s-%s" % (time.time(), os.getpid())).encode("utf-8")).hexdigest()[:8]
     handle = os.open(_run_path(), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(handle, "w", encoding="utf-8") as out:
@@ -157,9 +169,7 @@ def _lock_down():
 
 def prepare_draft(content="{}\n"):
     """Create the private folder and the draft file before any answer exists, with owner-only permissions."""
-    folder = draft_dir()
-    os.makedirs(folder, mode=0o700, exist_ok=True)
-    os.chmod(folder, 0o700)
+    _own_folder()
     handle = os.open(draft_path(), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(handle, "w", encoding="utf-8") as out:
         out.write(content)
@@ -1206,7 +1216,7 @@ COMMANDS = ("status", "takeover", "pick-up", "fields", "save", "read-resume", "c
             "preview-file", "write", "cancel", "import-connections")
 
 
-def main(argv=None):
+def _dispatch(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     command = argv[0] if argv else ""
     if len(argv) != 1 or command not in COMMANDS:
@@ -1259,6 +1269,27 @@ def main(argv=None):
         print(str(exc), file=sys.stderr)
         return 2
     return 2
+
+
+ENDS = ("write", "cancel", "import-connections")        # after one of these succeeds, nothing more is written
+
+
+def main(argv=None):
+    args = sys.argv[1:] if argv is None else argv
+    code = _dispatch(argv)
+    if len(args) == 1 and args[0] in COMMANDS and not (args[0] in ENDS and code == 0):
+        # Claude Code only lets the answers file be written without asking while this folder exists and is
+        # private. Reading the answers removes an empty folder, so every command that can be followed by
+        # another answer puts it back.
+        folder = draft_dir()
+        try:
+            if not os.path.islink(folder):
+                os.makedirs(folder, mode=0o700, exist_ok=True)
+                if os.path.isdir(folder):
+                    os.chmod(folder, 0o700)
+        except OSError:
+            pass
+    return code
 
 
 if __name__ == "__main__":

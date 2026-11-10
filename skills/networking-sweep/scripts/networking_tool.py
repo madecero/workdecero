@@ -241,7 +241,7 @@ def close_change(out=None):
     return 0
 
 
-def main(argv=None):
+def _dispatch(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     command = argv[0] if argv else ""
     if len(argv) != 1 or command not in COMMANDS:
@@ -257,6 +257,17 @@ def main(argv=None):
     except (ValueError, sources.SourceError) as exc:
         print(str(exc), file=sys.stderr)
         return 2
+
+
+ENDS = ("finish", "cancel", "close")        # after one of these succeeds, nothing more is written
+
+
+def main(argv=None):
+    args = sys.argv[1:] if argv is None else argv
+    code = _dispatch(argv)
+    if len(args) == 1 and args[0] in COMMANDS:
+        handoff.keep_folder(args[0], code, ENDS)       # so the next hand-off file can be written without a prompt
+    return code
 
 
 if __name__ == "__main__":
