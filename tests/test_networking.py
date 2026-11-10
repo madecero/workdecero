@@ -263,10 +263,10 @@ class Groups(NetCase):
         self.assertIn('A short talk: "What a brand refresh really costs".', self.groups()["Packaging Roundtable"].section)
         self.assertNotIn("Speaking angle", self.groups()["Quiet Lunch Club"].section)
         self.finish()
-        angles = self.digest().section.split("## Speaking angles")[1].split("##")[0]
-        self.assertIn("Portland Brand Meetup", angles)
-        self.assertIn("Packaging Roundtable", angles)
-        self.assertNotIn("Quiet Lunch Club", angles)
+        angle = self.digest().section.split("## Speaking angle")[1].split("##")[0]
+        self.assertEqual(angle.strip().count("\n"), 0)                # one line
+        self.assertIn("takes speakers. A draft talk idea is in its note. Nothing was proposed or sent.", angle)
+        self.assertNotIn("Quiet Lunch Club", angle)
 
     def test_no_speaking_angle_when_they_are_not_interested(self):
         self.raw["networking"]["speaking"] = {"interested": False}
@@ -325,18 +325,30 @@ class Events(NetCase):
         self.assertIn("It is at a time you said you cannot do.", self.events()["Maker Market Opening"].section)
         self.assertNotIn("40", report)
         self.finish()
-        coming = self.digest().section.split("## Coming up")[1].split("##")[0]
-        self.assertIn("Design Awards Gala]] on 2026-12-05. **Fit", coming)
-        self.assertIn("**Costs $150, above the $40 an event you set.**", coming)
+        section = self.digest().section
+        picks = section.split("## This month's picks")[1].split("##")[0]
+        self.assertIn("- **Sat Dec 5, 6:00 PM**: [[workdecero/Events/Design Awards Gala|Design Awards Gala]]. In person, "
+                      "Example Hall, Portland. $150, over your $40 limit.", picks)      # flagged, never hidden
+        self.assertNotIn("Maker Market Opening", picks)               # at a time they cannot do: never a pick
+        also = section.split("## Also coming up")[1].split("##")[0]
+        self.assertIn("Maker Market Opening", also)
+        self.assertIn("Free.", also)
+        self.assertIn("*Evening, outside your times.*", also)
 
     def test_the_digest_holds_events_to_the_monthly_number_they_asked_for(self):
         found = [event("e%d" % index, "Special evening %d" % index, "2026-11-%02d" % (12 + index),
                        fit_assessment=10 + index) for index in range(5)]
         self.intake([], found)
         self.finish()
-        coming = self.digest().section.split("## Coming up")[1].split("##")[0]
-        self.assertEqual(coming.count("- [["), 3)                     # max_events_per_month is 3 in this profile
-        self.assertIn("2 more are in your tracker. You asked for at most 3 a month here.", coming)
+        section = self.digest().section
+        picks = section.split("## This month's picks")[1].split("##")[0]
+        self.assertEqual(picks.count("\n- **"), 3)                    # max_events_per_month is 3: a hard cap
+        self.assertIn("You asked for at most 3 a month, so that is the list.", picks)
+        for index in (4, 3, 2):                                       # the three best fits
+            self.assertIn("Special evening %d" % index, picks)
+        also = section.split("## Also coming up")[1].split("##")[0]
+        self.assertEqual(also.count("\n- **"), 2)
+        self.assertIn("In case you want to swap one in.", also)
         self.assertEqual(len(self.events()), 5)                       # all are in the tracker
 
 
@@ -372,14 +384,18 @@ class Housekeeping(NetCase):
         self.assertIn("marked Did not go", self.events()["Never planned to go"].section)
         self.intake(searches=9)
         _, summary = self.finish()
-        asked = self.digest().section.split("## Did you go?")[1].split("##")[0]
+        asked = self.digest().section.split("## Did you go?")[1].split("## ")[0]
         for title in ("Registered and passed", "Speaking and passed", "Ticked going by hand"):
             self.assertIn(title, asked)
         self.assertNotIn("Went already", asked)
         self.assertIn("Events to ask about (did they go?): Registered and passed, Speaking and passed, Ticked going by "
                       "hand.", summary)
-        house = self.digest().section.split("## Housekeeping")[1].split("##")[0]
-        self.assertIn("Never planned to go]]: the date passed, marked Did not go.", house)
+        tidied = self.digest().section.split("## Tidied")[1].split("##")[0]
+        self.assertIn("Never planned to go]]: the date passed, marked Did not go.", tidied)
+        # The one still ahead is this month's pick. Nothing that has passed is listed as coming up.
+        picks = self.digest().section.split("## This month's picks")[1].split("##")[0]
+        self.assertIn("Still ahead", picks)
+        self.assertEqual(picks.count("\n- **"), 1)
 
     def test_a_quiet_group_is_marked_inactive_with_evidence_unless_the_person_is_in_it(self):
         store = self.store()
@@ -407,10 +423,12 @@ class Housekeeping(NetCase):
         self.assertIn("this group looks quiet", groups["Type Club"].section)
         self.assertEqual(str(groups["Print Makers"].values["next_meeting"]), "2026-12-02")
         self.finish()
-        house = self.digest().section.split("## Housekeeping")[1].split("##")[0]
-        self.assertIn("Sketch Night]]: marked Inactive.", house)
-        self.assertIn("Type Club]]: looks quiet. You are in it, so its status was left alone.", house)
-        self.assertIn("- Groups looked at again: 3 of 4.", self.digest().section)
+        drop = self.digest().section.split("## Groups to drop")[1].split("##")[0]
+        self.assertIn("Sketch Night]]: no meeting in six months and none scheduled. Moved to Inactive. The note is kept.",
+                      drop)
+        self.assertIn("Type Club]]: looks quiet. You are in it, so its status was left alone.", drop)
+        self.assertIn("3 of 4 known groups looked at again.", self.digest().section)
+        self.assertIn("Sketch Night", self.groups())                  # moved, never deleted
 
 
 class FollowUps(NetCase):
@@ -426,7 +444,7 @@ class FollowUps(NetCase):
         _, summary = self.sweep([group("a", "Portland Brand Meetup")])
         section = self.digest().section
         self.assertTrue(section.startswith("## Follow-ups"))
-        lead = section.split("## Coming up")[0]
+        lead = section.split("## This month's pick")[0]
         self.assertLess(lead.index("Overdue:"), lead.index("Due this week:"))
         self.assertIn("Imani Brooks|Imani Brooks]] (met at Maker Market Opening): follow-up was due 2026-11-05.", lead)
         self.assertIn("Lars Novak|Lars Novak]]: follow up by 2026-11-12.", lead)
@@ -434,14 +452,15 @@ class FollowUps(NetCase):
         self.assertIn("Follow-ups: 1 overdue, 1 due this week. They lead the digest note.", summary)
         for name in ("Imani", "Lars", "Dana"):
             self.assertNotIn(name, summary)                           # no names of people in the conversation
-        self.assertIn("Nothing was registered for, joined, paid for or sent.", section)
-        self.assertIn("Calendar is off, so nothing was added to it.", section)
+        self.assertIn("Nothing was registered for, RSVP'd, joined or messaged. Nothing was added to your calendar.",
+                      section)
+        self.assertIn("Your notes and this digest stay on your computer.", section)
         self.assertEqual(self.digest().values["track"], "Networking")
         self.assertFalse(os.path.exists(self.cache))
 
     def test_nothing_due_says_so(self):
         self.sweep([group("a", "Portland Brand Meetup")])
-        self.assertIn("## Follow-ups\nNothing is due.", self.digest().section)
+        self.assertIn("## Follow-ups\nNothing owed yet.", self.digest().section)
 
 
 class Updates(NetCase):
@@ -488,9 +507,9 @@ class Updates(NetCase):
         self.assertEqual(str(people["Raj Patel"].values["follow_up_by"]), due)
         self.assertEqual(str(self.groups()["Portland Brand Meetup"].values["last_attended"]), day.isoformat())
         # The next digest leads with those follow-ups once they are due.
-        later = day + datetime.timedelta(days=5)
+        later = day + datetime.timedelta(days=9)
         self.sweep(today=later)
-        lead = self.digest(later.isoformat()).section.split("## Coming up")[0]
+        lead = self.digest(later.isoformat()).section.split("## This month's pick")[0]
         self.assertIn("Jane Doe|Jane Doe]] (met at Northwest Food Brand Summit): follow-up was due %s." % due, lead)
 
     def test_bad_ids_and_statuses_are_reported_and_change_nothing(self):
@@ -522,22 +541,25 @@ class Prep(NetCase):
         ids = dict((row.title, row.id) for row in self.store().rows("event"))
         self.update({"id": ids["Brand Meetup autumn special"], "status": "Went", "met": ["Jane Doe", "Raj Patel"]})
         self.command("open")
-        self.hand_off({"prep": ids["Packaging that sells"]})
+        self.hand_off({"prep": ids["Packaging that sells"], "there": ["Organiser: Sam Okoro"]})
         code, out, _ = self.command("prep")
         self.command("close")
         self.assertEqual(code, 0, out)
-        self.assertIn('Prep brief written into the note "Packaging that sells": 2 people you know may be there', out)
+        self.assertIn('Prep brief written into the note "Packaging that sells" (%s): 2 people you know may be there'
+                      % ids["Packaging that sells"], out)
         for name in ("Jane", "Raj"):
             self.assertNotIn(name, out)
         note = self.events()["Packaging that sells"].section
         prep = note.split("### Prep")[1]
-        self.assertIn("**Packaging that sells, 2026-12-10 at 6:00 PM, Example Hall, Portland.**", prep)
-        self.assertIn("Jane Doe|Jane Doe]]", prep)
-        self.assertIn("**Three talking points**", prep)
-        self.assertIn("1. Look for founders of food and drink brands.", prep)
-        self.assertIn("2. Have one story ready about rebranding on a small budget", prep)
-        self.assertIn("**Follow-up plan**", prep)
+        self.assertIn("**Thu Dec 10, 6:00 PM, Example Hall, Portland.**", prep)
+        self.assertIn("**People you know who may be there:** [[workdecero/People/Jane Doe|Jane Doe]]", prep)
+        self.assertIn("**From the group's public page:** Organiser: Sam Okoro.", prep)
+        self.assertIn("**Opener 1:**", prep)
+        self.assertIn("Listen for founders of food and drink brands.", prep)
+        self.assertIn("**Opener 2:** Have one short story ready about rebranding on a small budget", prep)
+        self.assertIn("**Bring:**", prep)
         self.assertIn("Nothing was registered or sent.", prep)
+        self.assertLessEqual(len([line for line in prep.strip().splitlines() if line.strip()]), 10)
         self.assertIn("**Fit", note.split("### Prep")[0])              # the rest of the note is kept
 
     def test_prep_needs_an_open_run_and_a_real_event(self):
@@ -550,6 +572,147 @@ class Prep(NetCase):
         code, _, err = self.command("prep")
         self.assertEqual(code, 2)
         self.assertIn("There is no event with the id E-42.", err)
+
+
+class WeekOne(NetCase):
+    """The digest answers one question: what is worth leaving the house for this month, and who is owed a note."""
+
+    def found(self):
+        return [
+            group("brand", "Portland Brand Meetup", audience=[FOUNDERS], fit_assessment=26, members=1240,
+                  cadence="Monthly, third Wednesday", next_meeting="2026-11-18", weekday="Wed", next_time="6:00 PM",
+                  evening=True, where="Example Hall, Portland", distance_miles=4, next_cost=0, cost_per_year=0,
+                  last_active="2026-10-21", virtual_option=True,
+                  why="Founders of new food brands show their packaging. Good if you are open to opportunities."),
+            group("directors", "Creative Directors Breakfast", audience=[DIRECTORS], fit_assessment=28, members=310,
+                  cadence="Monthly", next_meeting="2026-11-20", next_time="7:30 AM", evening=False,
+                  where="Example Cafe, Portland", distance_miles=6, next_cost=45, conflicts=True,
+                  why="Agency creative directors over breakfast."),
+            group("freelance", "Freelance Designers Coffee", audience=[DESIGNERS], fit_assessment=18,
+                  next_meeting="2026-11-24", next_time="5:30 PM", evening=True, where="Example Roasters",
+                  distance_miles=2, next_cost=0, why="Working freelancers swap referrals."),
+            group("chamber", "Eastside Chamber", audience=[], fit_assessment=8, next_meeting="2026-11-25",
+                  next_time="5:00 PM", evening=True, next_cost=20, why="General business mixer."),
+            group("year", "Listing With No Year", audience=[DESIGNERS], next_meeting="2025-11-19", weekday="Thursday",
+                  next_time="6:00 PM", evening=True, why="A page that showed Thu, Nov 19 with no year."),
+        ]
+
+    def test_week_one(self):
+        self.start()
+        self.intake(self.found(), [
+            event("talk", "Packaging that sells: a brand lead on shelf impact", "2026-11-18", weekday="Wednesday",
+                  group="Portland Brand Meetup", special="Speaker in their field: packaging", distance_miles=4, cost=0,
+                  why="A packaging lead from a national drinks brand, squarely their field."),
+        ])
+        _, summary = self.finish()
+        section = self.digest().section
+        heads = re.findall(r"^## (.+)$", section, re.MULTILINE)
+        self.assertEqual(heads, ["Follow-ups", "This month's picks", "Also coming up", "Groups worth trying",
+                                 "What was searched"])                # nothing missing, so no Not found section
+        self.assertIn("## Follow-ups\nNothing owed yet.", section)
+
+        picks = section.split("## This month's picks")[1].split("##")[0]
+        self.assertEqual(picks.count("\n- **"), 3)                    # this profile asks for at most 3 a month
+        # The special event stands for its group's meeting that night: the series shows once.
+        self.assertEqual(section.count("Wed Nov 18"), 2)              # once as a pick, once as the group's next date
+        self.assertIn("- **Wed Nov 18, 6:00 PM**: [[workdecero/Events/Packaging that sells a brand lead on shelf impact|"
+                      "Packaging that sells a brand lead on shelf impact]], run by Portland Brand Meetup. In person, "
+                      "4 miles, Example Hall, Portland. Free. A packaging lead from a national drinks brand, squarely "
+                      "their field. *Evening.*", picks)
+        self.assertIn("**Tue Nov 24, 5:30 PM**: [[workdecero/Groups/Freelance Designers Coffee|Freelance Designers "
+                      "Coffee]] (its regular meeting). In person, 2 miles, Example Roasters. Free.", picks)
+        # A daytime breakfast at a time they cannot do never takes a pick, however good the room.
+        self.assertNotIn("Creative Directors Breakfast", picks)
+        also = section.split("## Also coming up")[1].split("##")[0]
+        self.assertIn("**Fri Nov 20, 7:30 AM**", also)
+        self.assertIn("$45, over your $40 limit.", also)
+        self.assertIn("*Daytime, outside your times.*", also)
+
+        worth = section.split("## Groups worth trying")[1].split("##")[0]
+        self.assertEqual(worth.count("\n- [["), 3)                    # three at most
+        self.assertLess(worth.index("Portland Brand Meetup"), worth.index("Creative Directors Breakfast"))
+        self.assertIn("Portland Brand Meetup]]: 1,240 members, Monthly, third Wednesday, last met Wed Oct 21, next Wed "
+                      "Nov 18, 6:00 PM, online option, free.", worth)
+        self.assertIn("more are in the Groups view.", worth)
+        self.assertNotIn("join", section.lower().replace("joined or messaged", ""))
+
+        # A page that left the year off: the weekday settles it.
+        self.assertEqual(str(self.groups()["Listing With No Year"].values["next_meeting"]), "2026-11-19")
+        # Quiet search: nothing reads as a job hunt, in the digest or in the notes.
+        note = self.groups()["Portland Brand Meetup"].section
+        for text in (section, note, summary):
+            self.assertNotIn("open to opportunities", text)
+        self.assertIn("Founders of new food brands show their packaging.", note)
+        self.assertIn("Nothing was registered for, RSVP'd, joined or messaged.", section)
+        self.assertIn("THIS MONTH'S PICKS (3)", summary)
+        self.assertNotIn("$", summary)                                # no costs or limits in the conversation
+        self.assertLess(len(section.split()), 420)                    # a two-minute read
+
+    def test_what_was_not_found_is_said_plainly(self):
+        self.start()
+        self.hand_off({"groups": [group("freelance", "Freelance Designers Coffee", audience=[DESIGNERS])],
+                       "not_found": ["No Portland group for food and drink founders. Nearest: a statewide food "
+                                     "association that meets online."], "searches": 9})
+        self.run_step(networking_tool.intake, today=TODAY)
+        self.finish()
+        missing = self.digest().section.split("## Not found")[1].split("##")[0]
+        self.assertIn("- No group or event found for: %s." % FOUNDERS, missing)
+        self.assertIn("- No group or event found for: %s." % DIRECTORS, missing)
+        self.assertNotIn(DESIGNERS, missing)
+        self.assertIn("- No Portland group for food and drink founders. Nearest:", missing)
+
+    def test_a_second_run_a_week_later(self):
+        self.sweep(self.found())
+        row = self.groups()["Freelance Designers Coffee"]
+        code, out, _ = self.update({"id": row.id, "going": True})      # "I'm going to the freelancers coffee"
+        self.assertEqual(code, 0, out)
+        self.assertIn("Freelance Designers Coffee, Tue Nov 24: now Want to go.", out)
+        self.assertIn("Calendar is off", out)
+        meeting = self.events()["Freelance Designers Coffee, Tue Nov 24"]
+        self.assertEqual((meeting.values["going"], meeting.values["status"], meeting.values["time"]),
+                         (True, "Want to go", "5:30 PM"))
+        later = datetime.date(2026, 11, 16)
+        self.start(today=later)
+        self.intake(self.found(), today=later)                        # research finds the same groups again
+        self.finish(today=later)
+        self.assertEqual(len(self.groups()), 5)                       # no duplicates
+        self.assertEqual(len(self.events()), 1)
+        section = self.digest("2026-11-16").section
+        picks = section.split("## This month's picks")[1].split("##")[0]
+        self.assertIn("Freelance Designers Coffee, Tue Nov 24", picks)
+        self.assertIn("You said you are going.", picks)
+        shown = [line for line in section.splitlines() if "**Tue Nov 24" in line]
+        self.assertEqual(len(shown), 1)                               # the meeting shows once, as the one they chose
+        self.assertIn("No new groups this time.", section)
+        # After the date, the engine does not decide for them whether they went.
+        self.start(today=datetime.date(2026, 11, 30))
+        self.intake(searches=9, today=datetime.date(2026, 11, 30))
+        self.finish(today=datetime.date(2026, 11, 30))
+        last = self.digest("2026-11-30").section
+        self.assertIn("## Did you go?", last)
+        self.assertEqual(self.events()["Freelance Designers Coffee, Tue Nov 24"].values["status"], "Want to go")
+        self.assertNotIn("Nov 18", last.split("## This month's pick")[1])      # nothing past is listed as coming up
+
+    def test_i_met_someone_at_a_group(self):
+        self.sweep(self.found())
+        row = self.groups()["Portland Brand Meetup"]
+        code, out, _ = self.update({"id": row.id, "met": ["Priya Raman"], "date": "2026-11-18"})
+        self.assertEqual(code, 0, out)
+        people = self.people()
+        self.assertEqual(people["Priya Raman"].values["met"], "Portland Brand Meetup, Wed Nov 18")
+        due = (datetime.date.today() + datetime.timedelta(days=7)).isoformat()
+        self.assertEqual(str(people["Priya Raman"].values["follow_up_by"]), due)
+        meeting = self.events()["Portland Brand Meetup, Wed Nov 18"]
+        self.assertEqual((meeting.values["status"], meeting.values["attended"]), ("Went", True))
+        self.assertIn("Priya Raman", " ".join(meeting.values["people_met"]))
+
+    def test_settle_date_uses_the_weekday_to_find_the_year(self):
+        settle = networking.settle_date
+        self.assertEqual(settle("2025-11-19", "Thu", TODAY), (datetime.date(2026, 11, 19), False))
+        self.assertEqual(settle("2026-11-18", "Wednesday", TODAY), (datetime.date(2026, 11, 18), False))
+        self.assertEqual(settle("2026-11-18", None, TODAY), (datetime.date(2026, 11, 18), False))
+        self.assertEqual(settle("2026-11-18", "Sunday", TODAY), (datetime.date(2026, 11, 18), True))
+        self.assertEqual(networking.when_text("2026-11-18", "6:00 PM"), "Wed Nov 18, 6:00 PM")
 
 
 class Guards(NetCase):

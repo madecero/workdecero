@@ -39,6 +39,7 @@ Standard library only, Python 3.9+.
 import datetime
 import json
 import os
+import re
 
 import merge
 import model
@@ -51,7 +52,11 @@ BUDGET = {
 STATE_NAME = "networking-state.json"
 ACTIVE_WITHIN_DAYS = 183        # a group with nothing in six months and nothing scheduled is not alive
 FOLLOW_UP_DAYS = 7
-FOLLOW_UP_AFTER_EVENT_DAYS = 3
+FOLLOW_UP_AFTER_EVENT_DAYS = 7     # someone met at an event gets a follow-up date a week out
+DEFAULT_PICKS = 2                  # events a month when the profile does not say
+ALSO_COMING_UP = 5
+GROUPS_WORTH_TRYING = 3
+PICK_WINDOW_DAYS = 31
 PLACE_KINDS = ("meetup", "user-group", "association", "chamber", "conference")
 PLACE_WORDS = {"meetup": "Meetups", "user-group": "User groups", "association": "Associations",
                "chamber": "Chambers", "conference": "Conferences"}
@@ -59,10 +64,15 @@ GROUP_WEIGHTS = {"who": 40, "fit": 30, "active": 15, "place": 15}
 PENALTY_COST = 5
 PENALTY_TIME = 5
 
-GROUP_KEYS = ("name", "url", "focus", "cadence", "next_meeting", "last_active", "virtual", "where", "cost_per_year",
+GROUP_KEYS = ("name", "url", "focus", "cadence", "next_meeting", "weekday", "next_time", "evening", "where",
+              "distance_miles", "next_cost", "last_active", "virtual", "virtual_option", "cost_per_year", "members",
               "audience", "fit_assessment", "why", "takes_speakers", "speaking_angle", "conflicts", "in_area")
-EVENT_KEYS = ("title", "url", "date", "time", "evening", "virtual", "where", "cost", "group", "special",
-              "audience", "fit_assessment", "why", "conflicts", "in_area", "speaking_angle")
+EVENT_KEYS = ("title", "url", "date", "weekday", "time", "evening", "virtual", "where", "distance_miles", "cost",
+              "group", "special", "audience", "fit_assessment", "why", "conflicts", "in_area", "speaking_angle")
+WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+# A networking note describes interests. It never says the person is looking for work.
+_SEARCH_WORDS = re.compile(r"job[ -]?(search|hunt|seek)|open to (new )?(opportunit|work|roles)|looking for (a )?(new )?"
+                           r"(job|role|position)|between (jobs|roles)|laid off|unemployed|career change", re.IGNORECASE)
 
 
 def budget(profile):
@@ -110,6 +120,66 @@ def brief(profile):
     speaking = net.get("speaking") or {}
     lines.append("Interested in speaking: %s" % ("yes" if speaking.get("interested") else "no"))
     return _safe("\n".join(lines), profile)
+
+
+def discreet(text):
+    """Text with any sentence about looking for work taken out. Networking notes never mention a search."""
+    sentences = re.split(r"(?<=[.!?])\s+", str(text or "").strip())
+    return " ".join(sentence for sentence in sentences if sentence and not _SEARCH_WORDS.search(sentence))
+
+
+def settle_date(value, weekday, today):
+    """A date as YEAR-MONTH-DAY, with the year corrected from the weekday when a page left the year off.
+
+    Listings often show "Tue, Nov 18" with no year. If the date given does not
+    fall on the weekday given, the same day next year or last year is tried.
+    Returns (date or None, True when the weekday could not be made to agree).
+    """
+    when = scoring._date(value)
+    wanted = scoring._text(weekday)[:3]
+    days = [name[:3] for name in WEEKDAYS]
+    if when is None or wanted not in days:
+        return when, False
+    if days[when.weekday()] == wanted:
+        return when, False
+    for shift in (1, -1):
+        try:
+            other = when.replace(year=when.year + shift)
+        except ValueError:
+            continue
+        if days[other.weekday()] == wanted and other >= today:
+            return other, False
+    return when, True
+
+
+def when_text(day, time_text=None):
+    """A date as people read it: "Tue Nov 18, 6:00 PM"."""
+    when = day if isinstance(day, datetime.date) else scoring._date(day)
+    if when is None:
+        return "date not set"
+    text = "%s %s %d" % (when.strftime("%a"), when.strftime("%b"), when.day)
+    return "%s, %s" % (text, str(time_text).strip()) if time_text else text
+
+
+def schedule_tag(evening, virtual, outside):
+    if virtual is True:
+        tag = "Virtual"
+    elif evening is True:
+        tag = "Evening"
+    else:
+        tag = "Daytime"
+    return "%s, outside your times" % tag if outside is True else tag
+
+
+def cost_text(cost, cap):
+    if cost in (None, ""):
+        return "cost not listed"
+    if not cost:
+        return "free"
+    text = "$%s" % format(int(cost), ",")
+    if cap is not None and cost > cap:
+        text += ", over your $%s limit" % format(int(cap), ",")
+    return text
 
 
 # --------------------------------------------------------------------------
@@ -459,11 +529,14 @@ def _clean(item, keys):
 
 def _section(rank, item, names):
     lines = ["**Fit %d**: %s." % (rank.total, rank.breakdown())]
-    if item.get("why"):
-        lines.append("**Why go:** %s" % str(item["why"]).strip())
+    why = discreet(item.get("why"))
+    if why:
+        lines.append("**Why go:** %s" % why)
     audience = item.get("audience")
     if audience:
         lines.append("**Who you would meet:** %s." % ", ".join(audience if isinstance(audience, list) else [audience]))
+    if item.get("virtual_option") is True and item.get("virtual") is not True:
+        lines.append("**Online option:** yes, you can also join online.")
     if rank.caveats:
         lines.append("**Caveats:** " + " ".join(caveat.rstrip(".") + "." for caveat in rank.caveats))
     return scoring.scrub_confidential("\n\n".join(lines), names)
@@ -485,12 +558,21 @@ def speaking_angle(item, profile):
 
 
 def _group_values(item, rank, today):
-    values = {"focus": item.get("focus"), "cadence": item.get("cadence"), "next_meeting": item.get("next_meeting"),
-              "virtual": item.get("virtual"), "cost_per_year": item.get("cost_per_year"), "link": item.get("url"),
+    values = {"focus": item.get("focus"), "cadence": item.get("cadence"), "virtual": item.get("virtual"),
+              "cost_per_year": item.get("cost_per_year"), "members": item.get("members"), "link": item.get("url"),
               "fit": rank.total}
-    when = scoring._date(values.get("next_meeting"))
-    if when is not None and when < today:
-        values.pop("next_meeting")
+    upcoming, unsure = settle_date(item.get("next_meeting"), item.get("weekday"), today)
+    last = scoring._date(item.get("last_active"))
+    if upcoming is not None and upcoming < today:
+        last = max(last, upcoming) if last else upcoming
+        upcoming = None
+    if upcoming is not None and not unsure:
+        values.update({"next_meeting": upcoming.isoformat(), "next_time": item.get("next_time"),
+                       "next_where": item.get("where"), "evening": item.get("evening"),
+                       "miles": item.get("distance_miles"), "next_cost": item.get("next_cost"),
+                       "outside_times": item.get("conflicts") is True})
+    if last is not None:
+        values["last_meeting"] = last.isoformat()
     return dict((key, value) for key, value in values.items() if value not in (None, ""))
 
 
@@ -539,6 +621,11 @@ def intake(state, handoff, profile, store, today=None):
             continue
         finds += 1
         item = _clean(entry, GROUP_KEYS)
+        settled, unsure = settle_date(item.get("next_meeting"), item.get("weekday"), today)
+        if settled is not None and not unsure:
+            item["next_meeting"] = settled.isoformat()
+        elif "next_meeting" in item:
+            item.pop("next_meeting")            # a date that does not fall on the weekday shown is not trusted
         rank = rank_group(item, profile, today)
         if rank.dropped:
             state["left_out"] += 1
@@ -568,8 +655,7 @@ def intake(state, handoff, profile, store, today=None):
             store.apply([{"type": "group", "id": note_id, "values": {}, "force": [],
                           "part": (model.PART_SPEAKING, scoring.scrub_confidential(angle, names))}])
         state["new_groups"].append({"id": note_id, "title": title, "fit": rank.total, "url": item.get("url"),
-                                    "next_meeting": values.get("next_meeting"), "cost_flag": rank.cost_flag,
-                                    "speaking": bool(angle)})
+                                    "who": rank.parts.get("who", 0), "speaking": bool(angle)})
 
     # Events. A group's ordinary meeting only moves that group's next-meeting date.
     group_rows = store.rows("group")
@@ -580,6 +666,12 @@ def intake(state, handoff, profile, store, today=None):
             continue
         finds += 1
         item = _clean(entry, EVENT_KEYS)
+        settled, unsure = settle_date(item.get("date"), item.get("weekday"), today)
+        if unsure:
+            state["left_out"] += 1              # the date and the weekday on the page do not agree
+            continue
+        if settled is not None:
+            item["date"] = settled.isoformat()
         host = [row for row in group_rows if item.get("group") and merge.same(
             "group", merge.row_as_item("group", row), {"name": item["group"], "url": None})]
         if not (item.get("special") or "").strip():
@@ -587,8 +679,12 @@ def intake(state, handoff, profile, store, today=None):
             if host and when is not None and when >= today and not model.GROUP.is_done(host[0].values.get("status")):
                 current = scoring._date(host[0].values.get("next_meeting"))
                 if current is None or current < today or when < current:
-                    store.apply([{"type": "group", "id": host[0].id, "values": {"next_meeting": when.isoformat()},
-                                  "force": []}])
+                    values = {"next_meeting": when.isoformat(), "next_time": item.get("time"),
+                              "next_where": item.get("where"), "evening": item.get("evening"),
+                              "miles": item.get("distance_miles"), "next_cost": item.get("cost"),
+                              "outside_times": item.get("conflicts") is True}
+                    store.apply([{"type": "group", "id": host[0].id, "force": [],
+                                  "values": dict((k, v) for k, v in values.items() if v not in (None, ""))}])
             state["folded"] += 1
             continue
         rank = rank_event(item, profile, today)
@@ -604,6 +700,7 @@ def intake(state, handoff, profile, store, today=None):
         taken.append(note_id)
         values = {"date": item.get("date"), "time": item.get("time"), "evening": item.get("evening"),
                   "virtual": item.get("virtual"), "where": item.get("where"), "cost": item.get("cost"),
+                  "miles": item.get("distance_miles"), "outside_times": item.get("conflicts") is True,
                   "link": item.get("url"), "fit": rank.total, "first_seen": day}
         if host:
             values["group"] = store.link("group", host[0].title)
@@ -618,9 +715,9 @@ def intake(state, handoff, profile, store, today=None):
                           "part": (model.PART_SPEAKING, scoring.scrub_confidential(
                               angle.rstrip(".") + ".\n\nThis is a draft idea only. Nothing was proposed or sent.", names))}])
         state["new_events"].append({"id": note_id, "title": title, "fit": rank.total, "date": item.get("date"),
-                                    "url": item.get("url"), "cost_flag": rank.cost_flag, "speaking": bool(angle)})
+                                    "url": item.get("url"), "speaking": bool(angle)})
 
-    state["new_groups"].sort(key=lambda entry: -entry["fit"])
+    state["new_groups"].sort(key=lambda entry: (-entry.get("who", 0), -entry["fit"]))
     state["new_events"].sort(key=lambda entry: (entry["date"] or "", -entry["fit"]))
     state["finds_read"] = state.get("finds_read", 0) + finds
     if isinstance(handoff.get("searches"), int) and not isinstance(handoff.get("searches"), bool):
@@ -628,6 +725,10 @@ def intake(state, handoff, profile, store, today=None):
     for name in handoff.get("not_covered") or []:
         if isinstance(name, str) and name.strip() and name.strip() not in state["not_covered"]:
             state["not_covered"].append(name.strip())
+    for line in handoff.get("not_found") or []:
+        line = scoring.scrub_confidential(discreet(line), names).strip()
+        if line and line not in state.setdefault("not_found", []):
+            state["not_found"].append(line)
     return state
 
 
@@ -660,18 +761,118 @@ def intake_report(state, profile):
 # Step 3: finish
 # --------------------------------------------------------------------------
 
+def _why(row):
+    match = re.search(r"\*\*Why go:\*\* (.+)", row.section or "")
+    return match.group(1).strip() if match else ""
+
+
+def coming_up(store, today):
+    """Everything on the calendar in the next month: special events, and each open group's next meeting once."""
+    last = today + datetime.timedelta(days=PICK_WINDOW_DAYS)
+    found, taken = [], set()
+    for row in store.rows("event"):
+        when = scoring._date(row.values.get("date"))
+        if when is None or not (today <= when <= last) or model.EVENT.is_done(row.values.get("status")):
+            continue
+        host = merge.link_label(row.values.get("group")) or ""
+        taken.add((scoring._text(host), when))
+        found.append({"kind": "event", "id": row.id, "title": row.title, "date": when,
+                      "time": row.values.get("time"), "evening": row.values.get("evening"),
+                      "virtual": row.values.get("virtual"), "where": row.values.get("where"),
+                      "miles": row.values.get("miles"), "cost": row.values.get("cost"), "host": host,
+                      "fit": row.values.get("fit") or 0, "outside": row.values.get("outside_times") is True,
+                      "why": _why(row), "going": _committed(row)})
+    for row in store.rows("group"):
+        when = scoring._date(row.values.get("next_meeting"))
+        if when is None or not (today <= when <= last) or model.GROUP.is_done(row.values.get("status")):
+            continue
+        if (scoring._text(row.title), when) in taken:
+            continue                              # the series shows once: its special event stands for it
+        found.append({"kind": "group", "id": row.id, "title": row.title, "date": when,
+                      "time": row.values.get("next_time"), "evening": row.values.get("evening"),
+                      "virtual": row.values.get("virtual"), "where": row.values.get("next_where"),
+                      "miles": row.values.get("miles"), "cost": row.values.get("next_cost"), "host": row.title,
+                      "fit": row.values.get("fit") or 0, "outside": row.values.get("outside_times") is True,
+                      "why": _why(row), "going": False})
+    return found
+
+
+def choose(found, cap):
+    """Split what is coming up into (picks, the rest). The cap is hard, and a pick always fits the schedule."""
+    order = sorted(found, key=lambda entry: (-entry["fit"], entry["date"]))
+    going = [entry for entry in order if entry["going"]]
+    eligible = [entry for entry in order if not entry["going"] and not entry["outside"]]
+    picks = (going + eligible)[:max(0, cap)]
+    rest = [entry for entry in order if entry not in picks]
+    return sorted(picks, key=lambda entry: entry["date"]), rest[:ALSO_COMING_UP]
+
+
+def _coming_line(entry, store, cap):
+    link = store.link(entry["kind"], entry["title"])
+    if entry["virtual"] is True:
+        place = "Virtual"
+    else:
+        place = "In person"
+        if isinstance(entry["miles"], (int, float)) and not isinstance(entry["miles"], bool):
+            place += ", %d miles" % round(entry["miles"])
+        if entry["where"]:
+            place += ", %s" % str(entry["where"]).strip()
+    what = "%s (its regular meeting)" % link if entry["kind"] == "group" else link
+    if entry["kind"] == "event" and entry["host"]:
+        what += ", run by %s" % entry["host"]
+    cost = cost_text(entry["cost"], cap)
+    line = "- **%s**: %s. %s. %s." % (when_text(entry["date"], entry["time"]), what, place, cost[:1].upper() + cost[1:])
+    if entry["why"]:
+        line += " %s" % entry["why"].rstrip(".") + "."
+    line += " *%s.*" % schedule_tag(entry["evening"], entry["virtual"], entry["outside"])
+    if entry["going"]:
+        line += " You said you are going."
+    return line
+
+
+def _group_line(row, store, cap):
+    values = row.values
+    bits = []
+    if values.get("members"):
+        bits.append("%s members" % format(int(values["members"]), ","))
+    if values.get("cadence"):
+        bits.append(str(values["cadence"]).strip().rstrip("."))
+    if values.get("last_meeting"):
+        bits.append("last met %s" % when_text(values["last_meeting"]))
+    bits.append("next %s" % when_text(values["next_meeting"], values.get("next_time")) if values.get("next_meeting")
+                else "no next meeting posted yet")
+    if values.get("virtual") is True:
+        bits.append("online only")
+    elif "**Online option:**" in (row.section or ""):
+        bits.append("online option")
+    yearly = values.get("cost_per_year")
+    if yearly not in (None, ""):
+        text = cost_text(yearly, cap)
+        bits.append(text if text == "free" else text.replace(", over", " a year, over") if ", over" in text else text + " a year")
+    line = "- %s: %s." % (store.link("group", row.title), ", ".join(bits))
+    why = _why(row)
+    return line + (" %s." % why.rstrip(".") if why else "")
+
+
+def not_found_lines(state, profile, store):
+    """Said plainly: which of the people they want to meet no group or event was found for."""
+    wanted = list(_net(profile).get("who_to_meet") or [])
+    text = scoring._text(" ".join((row.section or "") for row in store.rows("group") + store.rows("event")
+                                  if not model.BY_NAME[row.values.get("type") or "group"].is_done(row.values.get("status"))))
+    lines = ["No group or event found for: %s." % who for who in wanted if scoring._text(who) not in text]
+    return lines + list(state.get("not_found") or [])
+
+
 def write_digest(state, profile, store, today=None):
-    """Write the digest note. Returns (title, featured events, featured groups, overdue count, due count)."""
+    """Write the digest note: who is owed a note, then the one or two things worth going to this month.
+
+    Returns (title, picks, also coming up, overdue count, due count).
+    """
     today = today or datetime.date.today()
     net = _net(profile)
-    limit = ((profile.get("digest") or {}).get("max_new_items")) or 10
-    per_month = net.get("max_events_per_month") if isinstance(net.get("max_events_per_month"), int) else limit
-    month_ahead = (today + datetime.timedelta(days=31)).isoformat()
-    soon = [entry for entry in state["new_events"] if (entry["date"] or "") <= month_ahead]
-    later = [entry for entry in state["new_events"] if (entry["date"] or "") > month_ahead]
-    events = sorted(soon, key=lambda entry: -entry["fit"])[:max(1, per_month)]
-    events = sorted(events, key=lambda entry: entry["date"] or "") + later[:max(0, limit - len(events))]
-    groups = state["new_groups"][:limit]
+    cap = net.get("max_events_per_month") if isinstance(net.get("max_events_per_month"), int) else DEFAULT_PICKS
+    event_cap, year_cap = _number(net.get("max_cost_per_event")), _number(net.get("max_cost_per_year"))
+    picks, rest = choose(coming_up(store, today), cap)
     overdue, due = follow_ups(store, today)
     lines = []
 
@@ -683,7 +884,7 @@ def write_digest(state, profile, store, today=None):
         lines.append("Due this week:")
         lines += ["- " + text for text in due]
     if not overdue and not due:
-        lines.append("Nothing is due.")
+        lines.append("Nothing owed yet.")
 
     if state["did_you_go"]:
         lines += ["", "## Did you go?",
@@ -691,56 +892,63 @@ def write_digest(state, profile, store, today=None):
                   "or \"I did not go to E-4\". They are left as they are until you do."]
         lines += ["- %s" % store.link("event", title) for title in state["did_you_go"]]
 
-    lines += ["", "## Coming up"]
-    for entry in events:
-        flag = " **%s.**" % entry["cost_flag"] if entry.get("cost_flag") else ""
-        lines.append("- %s on %s. **Fit %d.**%s" % (store.link("event", entry["title"]), entry["date"], entry["fit"], flag))
-    if not events:
-        lines.append("No special events this time. Your groups' regular meetings are in the Groups view.")
-    hidden = len(state["new_events"]) - len(events)
-    if hidden > 0:
+    lines += ["", "## This month's pick" + ("" if cap == 1 else "s")]
+    lines += [_coming_line(entry, store, event_cap) for entry in picks]
+    if not picks:
+        lines.append("Nothing in the next month fits your times and the people you want to meet.")
+    elif len(picks) == cap:
         lines.append("")
-        lines.append("%d more %s in your tracker. You asked for at most %s a month here." % (
-            hidden, "is" if hidden == 1 else "are", per_month))
+        lines.append("You asked for at most %d a month, so that is the list." % cap)
 
-    lines += ["", "## Groups to try"]
-    for entry in groups:
-        when = " Next meeting %s." % entry["next_meeting"] if entry.get("next_meeting") else " No next meeting posted yet."
-        flag = " **%s.**" % entry["cost_flag"] if entry.get("cost_flag") else ""
-        lines.append("- %s **Fit %d.**%s%s" % (store.link("group", entry["title"]), entry["fit"], when, flag))
-    if not groups:
+    if rest:
+        lines += ["", "## Also coming up", "In case you want to swap one in."]
+        lines += [_coming_line(entry, store, event_cap) for entry in rest]
+
+    new_rows = dict((row.id, row) for row in store.rows("group"))
+    worth = [new_rows[entry["id"]] for entry in state["new_groups"] if entry["id"] in new_rows][:GROUPS_WORTH_TRYING]
+    lines += ["", "## Groups worth trying"]
+    lines += [_group_line(row, store, year_cap) for row in worth]
+    if not worth:
         lines.append("No new groups this time.")
+    extra = len(state["new_groups"]) - len(worth)
+    if extra > 0:
+        lines.append("")
+        lines.append("%d more %s in the Groups view." % (extra, "is" if extra == 1 else "are"))
 
-    talks = [entry for entry in state["new_groups"] + state["new_events"] if entry.get("speaking")]
-    if talks:
-        lines += ["", "## Speaking angles",
-                  "Draft ideas only, in each note. Nothing was proposed or sent."]
-        lines += ["- %s" % store.link("group" if entry["id"].startswith(model.GROUP.id_prefix) else "event", entry["title"])
-                  for entry in talks]
-
-    if state["did_not_go"] or state["inactive"] or state["told"]:
-        lines += ["", "## Housekeeping"]
-        lines += ["- %s: the date passed, marked Did not go." % store.link("event", title) for title in state["did_not_go"]]
-        lines += ["- %s: marked Inactive. No meeting in six months and none scheduled." % store.link("group", title)
-                  for title in state["inactive"]]
+    if state["inactive"] or state["told"]:
+        lines += ["", "## Groups to drop"]
+        lines += ["- %s: no meeting in six months and none scheduled. Moved to Inactive. The note is kept."
+                  % store.link("group", title) for title in state["inactive"]]
         lines += ["- %s: looks quiet. You are in it, so its status was left alone." % store.link("group", title)
                   for title in state["told"]]
 
-    lines += ["", "## What this sweep covered"]
-    lines.append("- Places in your local map searched: %d." % len(state["places"]))
-    lines.append("- Groups looked at again: %d of %d." % (
+    missing = not_found_lines(state, profile, store)
+    if missing:
+        lines += ["", "## Not found"]
+        lines += ["- %s" % line for line in missing]
+
+    talks = [entry for entry in state["new_groups"] + state["new_events"] if entry.get("speaking")]
+    if talks:
+        first = talks[0]
+        kind = "group" if first["id"].startswith(model.GROUP.id_prefix) else "event"
+        lines += ["", "## Speaking angle",
+                  "%s takes speakers. A draft talk idea is in its note. Nothing was proposed or sent."
+                  % store.link(kind, first["title"])]
+
+    if state["did_not_go"]:
+        lines += ["", "## Tidied"]
+        lines += ["- %s: the date passed, marked Did not go." % store.link("event", title) for title in state["did_not_go"]]
+
+    lines += ["", "## What was searched"]
+    lines.append("%d %s in your local map, %d of %d web searches (%s mode), %d of %d known groups looked at again." % (
+        len(state["places"]), "place" if len(state["places"]) == 1 else "places", state["searches"],
+        budget(profile)["searches"], "Lite" if state["mode"] == "lite" else "Full",
         len([entry for entry in state["recheck"] if entry[0] in state["refreshed"] or entry[1] in state["inactive"]
              or entry[1] in state["told"]]), len(state["recheck"])))
-    lines.append("- Web searches used: %d of %d (%s mode)." % (state["searches"], budget(profile)["searches"],
-                                                              "Lite" if state["mode"] == "lite" else "Full"))
-    if state["left_out"]:
-        lines.append("- Left out by your profile (inactive, format, area, leave-outs): %d." % state["left_out"])
-    if state["folded"]:
-        lines.append("- Regular meetings kept on their group instead of as events: %d." % state["folded"])
-    lines += ["", "## Not covered"]
-    lines += ["- %s" % name for name in state["not_covered"]] or ["Every source in your local map was covered."]
-    lines += ["", "Calendar is off, so nothing was added to it.",
-              "Nothing was registered for, joined, paid for or sent."]
+    if state["not_covered"]:
+        lines.append("Not covered: %s." % "; ".join(state["not_covered"]))
+    lines += ["", "Nothing was registered for, RSVP'd, joined or messaged. Nothing was added to your calendar.",
+              "Your notes and this digest stay on your computer."]
 
     title = "%s Networking sweep" % today.isoformat()
     existing = [row for row in store.rows("digest") if row.title == title]
@@ -750,33 +958,35 @@ def write_digest(state, profile, store, today=None):
     store.upsert("digest", note_id, title,
                  {"date": today.isoformat(), "track": "Networking", "new": len(touched), "closed": len(state["inactive"]),
                   "touched": touched},
-                 section=scoring.scrub_confidential("\n".join(lines), scoring.confidential_names(profile)))
-    return title, events, groups, len(overdue), len(due)
+                 section=scoring.scrub_confidential(discreet_lines(lines), scoring.confidential_names(profile)))
+    return title, picks, rest, len(overdue), len(due)
 
 
-def finish_report(state, profile, title, events, groups, overdue, due):
-    """The short version for the conversation. No names of people the person knows, and no costs."""
+def discreet_lines(lines):
+    """The digest text, with any line that speaks of a job search removed."""
+    return "\n".join(line for line in lines if not _SEARCH_WORDS.search(line))
+
+
+def finish_report(state, profile, title, picks, rest, overdue, due):
+    """The short version for the conversation. No names of people the person knows, and no spending limits."""
     lines = ["NETWORKING SWEEP DONE", ""]
     lines.append("Follow-ups: %d overdue, %d due this week. They lead the digest note." % (overdue, due))
     if state["did_you_go"]:
         lines.append("Events to ask about (did they go?): %s." % ", ".join(state["did_you_go"]))
-    lines.append("New groups: %d. New events: %d. Marked inactive: %d." % (
+    lines.append("New groups: %d. New special events: %d. Moved to inactive: %d." % (
         len(state["new_groups"]), len(state["new_events"]), len(state["inactive"])))
-    if events:
-        lines += ["", "COMING UP"]
-        for entry in events:
-            lines.append("  %s  %s  Fit %d%s" % (entry["date"], entry["title"], entry["fit"],
-                                                 "  (costs more than they set)" if entry.get("cost_flag") else ""))
-    if groups:
-        lines += ["", "GROUPS TO TRY"]
-        for entry in groups:
-            lines.append("  Fit %d  %s%s%s" % (entry["fit"], entry["title"],
-                                               ", next meeting %s" % entry["next_meeting"] if entry.get("next_meeting") else "",
-                                               "  (costs more than they set)" if entry.get("cost_flag") else ""))
+    lines += ["", "THIS MONTH'S PICK%s (%d)" % ("" if len(picks) == 1 else "S", len(picks))]
+    for entry in picks:
+        lines.append("  %s  %s  %s" % (when_text(entry["date"], entry["time"]), entry["title"],
+                                       schedule_tag(entry["evening"], entry["virtual"], entry["outside"])))
+    if not picks:
+        lines.append("  none that fit their times this month")
+    if rest:
+        lines.append("ALSO COMING UP: %d more in the digest." % len(rest))
     if state["not_covered"]:
         lines += ["", "Not covered: %s." % ", ".join(state["not_covered"])]
     lines += ["", "The full digest is the note \"%s\" in the Digests folder of the tracker, with follow-ups first." % title,
-              "Nothing was registered for, joined, paid for or sent."]
+              "Nothing was registered for, RSVP'd, joined or messaged."]
     return _safe("\n".join(lines), profile)
 
 
@@ -812,6 +1022,28 @@ def _find(store, kind, note_id):
     return store.get(kind, canonical)
 
 
+def meeting_event(store, group_row, when, today):
+    """The Events note for one meeting of a group, made from the group's note if it does not exist yet."""
+    for row in store.rows("event"):
+        if scoring._text(merge.link_label(row.values.get("group"))) == scoring._text(group_row.title) and \
+                scoring._date(row.values.get("date")) == when:
+            return row
+    values = {"date": when.isoformat(), "group": store.link("group", group_row.title),
+              "link": group_row.values.get("link"), "fit": group_row.values.get("fit"), "first_seen": today.isoformat()}
+    if scoring._date(group_row.values.get("next_meeting")) == when:
+        values.update({"time": group_row.values.get("next_time"), "where": group_row.values.get("next_where"),
+                       "evening": group_row.values.get("evening"), "virtual": group_row.values.get("virtual"),
+                       "miles": group_row.values.get("miles"), "cost": group_row.values.get("next_cost"),
+                       "outside_times": group_row.values.get("outside_times")})
+    values = dict((key, value) for key, value in values.items() if value not in (None, ""))
+    note_id = merge.next_id(model.EVENT, store.rows("event"))
+    title = "%s, %s" % (group_row.title, when_text(when))
+    why = _why(group_row)
+    store.upsert("event", note_id, title, values,
+                 section="A regular meeting of %s.%s" % (group_row.title, "\n\n**Why go:** %s" % why if why else ""))
+    return store.get("event", note_id)
+
+
 def apply_updates(updates, store, profile, today=None):
     """Record what the person did. Returns (lines describing what was done, problems)."""
     today = today or datetime.date.today()
@@ -828,21 +1060,51 @@ def apply_updates(updates, store, profile, today=None):
         if row is None:
             problems.append("There is no group or event with the id %s." % (entry.get("id") or "(none)"))
             continue
+        met = [str(name).strip() for name in entry.get("met") or [] if str(name).strip()] \
+            if isinstance(entry.get("met"), list) else []
+        met = [name for name in met if not any(scoring._contains_phrase(scoring._text(name), scoring._text(secret))
+                                               for secret in names)]
+        going = entry.get("going") is True
+        extra = []
+
+        # "I am going to (a group)" or "I met someone at (a group)" is about one meeting of it.
+        if kind == "group" and (going or met):
+            upcoming = scoring._date(row.values.get("next_meeting"))
+            if going and (upcoming is None or upcoming < today):
+                problems.append("%s has no next meeting on file, so there is nothing to mark as going. Run the sweep "
+                                "to find its next date." % row.title)
+                continue
+            when = upcoming if going else (scoring._date(entry.get("date")) or today)
+            if entry.get("status") is not None and model.GROUP.canonical_status(str(entry["status"])):
+                store.apply([{"type": "group", "id": row.id, "force": ["status"],
+                              "values": {"status": model.GROUP.canonical_status(str(entry["status"]))}}])
+            group_row, row, kind = row, meeting_event(store, row, when, today), "event"
+            entry = dict(entry, status="Went" if met else None)
+            extra.append("Its note is %s" % row.id)
+
         note_type = model.BY_NAME[kind]
         status = note_type.canonical_status(str(entry["status"])) if entry.get("status") is not None else None
         if entry.get("status") is not None and status is None:
             problems.append("%s is not a status for %s. Use one of: %s." % (
                 entry["status"], row.title, ", ".join(note_type.status_names())))
             continue
-        values, force, extra = {}, [], []
+        values, force = {}, []
         if status:
             values["status"] = status
             force.append("status")
         if kind == "group":
-            if entry.get("attended_on") or status == "Joined" and entry.get("attended"):
-                values["last_attended"] = str(entry.get("attended_on") or day)
+            if status == "Joined" and entry.get("attended_on"):
+                values["last_attended"] = str(entry["attended_on"])
                 force.append("last_attended")
         else:
+            if going and not status:
+                # Going? is theirs to tick. Saying "I am going" is the same as ticking it.
+                values["going"] = True
+                force.append("going")
+                if _event_status(row) == "New":
+                    values["status"] = "Want to go"
+                    force.append("status")
+                extra.append("Calendar is off, so add it to your calendar yourself")
             if status in ("Registered", "Speaking"):
                 values["going"] = True
                 force.append("going")
@@ -853,47 +1115,45 @@ def apply_updates(updates, store, profile, today=None):
             if status in ("Did not go", "Passed"):
                 values["going"] = False
                 force.append("going")
-            met = [str(name).strip() for name in entry.get("met") or [] if str(name).strip()] \
-                if isinstance(entry.get("met"), list) else []
-            met = [name for name in met if not any(scoring._contains_phrase(scoring._text(name), scoring._text(secret))
-                                                   for secret in names)]
             if met:
                 people = store.rows("person")
                 taken = []
                 links = list(row.values.get("people_met") or []) if isinstance(row.values.get("people_met"), list) else []
+                follow = (today + datetime.timedelta(days=FOLLOW_UP_AFTER_EVENT_DAYS)).isoformat()
                 for name in met:
                     existing = [person for person in people if scoring._text(person.title) == scoring._text(name)]
-                    if not existing:
+                    if existing:
+                        person_id = existing[0].id
+                    else:
                         person_id = merge.next_id(model.PERSON, people, taken)
                         taken.append(person_id)
                         store.upsert("person", person_id, name, {"met": row.title})
-                    link = store.link("person", existing[0].title if existing else name)
+                    person = store.get("person", person_id)
+                    if person is not None and not person.values.get("follow_up_by"):
+                        store.apply([{"type": "person", "id": person_id, "values": {"follow_up_by": follow},
+                                      "force": ["follow_up_by"]}])
+                    link = store.link("person", person.title if person is not None else name)
                     if link not in links:
                         links.append(link)
-                follow = (today + datetime.timedelta(days=FOLLOW_UP_AFTER_EVENT_DAYS)).isoformat()
-                for name in met:
-                    person = [p for p in store.rows("person") if scoring._text(p.title) == scoring._text(name)]
-                    if person and not person[0].values.get("follow_up_by"):
-                        store.apply([{"type": "person", "id": person[0].id, "values": {"follow_up_by": follow},
-                                      "force": ["follow_up_by"]}])
                 values.update({"people_met": links, "follow_up_by": follow})
                 force += ["people_met", "follow_up_by"]
                 extra.append("%d %s added to People, with a follow-up due %s" % (
                     len(met), "person" if len(met) == 1 else "people", follow))
                 host = merge.link_label(row.values.get("group"))
-                if host and status == "Went":
+                if host:
                     for group in store.rows("group"):
                         if scoring._text(group.title) == scoring._text(host):
-                            store.apply([{"type": "group", "id": group.id, "values": {"last_attended": day},
-                                          "force": ["last_attended"]}])
+                            held = scoring._date(row.values.get("date"))
+                            store.apply([{"type": "group", "id": group.id, "force": ["last_attended"],
+                                          "values": {"last_attended": (held if held and held <= today else today).isoformat()}}])
         if not force:
             problems.append("Nothing to change was given for %s." % row.title)
             continue
-        note = scoring.scrub_confidential(str(entry.get("note") or "").strip(), names)
-        what = "status set to %s" % status if status else "updated"
+        note = scoring.scrub_confidential(discreet(entry.get("note")), names)
+        what = "status set to %s" % values["status"] if "status" in values else "updated"
         store.apply([{"type": kind, "id": row.id, "values": values, "force": force,
                       "append": "%s: %s%s" % (day, what, ". " + note.rstrip(".") + "." if note else ".")}])
-        done.append("%s: %s.%s" % (row.title, "now %s" % status if status else "updated",
+        done.append("%s: %s.%s" % (row.title, "now %s" % values["status"] if "status" in values else "updated",
                                    " " + ". ".join(extra) + "." if extra else ""))
     return done, problems
 
@@ -902,68 +1162,63 @@ def apply_updates(updates, store, profile, today=None):
 # Event prep
 # --------------------------------------------------------------------------
 
-def write_prep(note_id, store, profile, today=None):
-    """Write a one-page brief into an event's note. Returns the line to say, never the people's names.
+def write_prep(note_id, store, profile, today=None, there=None):
+    """Write a short brief (ten lines at most) into an event's note. Returns the line to say.
 
-    The brief names people from the person's own notes, so it goes into the
-    note and not into the conversation.
+    `there` holds names research read on the group's public page (organisers,
+    speakers). People from the person's own notes are added here, which is why
+    the brief goes into the note and the conversation is told only that it exists.
     """
     today = today or datetime.date.today()
     names = scoring.confidential_names(profile)
-    row = _find(store, "event", str(note_id or ""))
+    wanted = str(note_id or "").strip().upper()
+    if wanted.startswith(model.GROUP.id_prefix):
+        group_row = _find(store, "group", wanted)
+        upcoming = scoring._date(group_row.values.get("next_meeting")) if group_row is not None else None
+        if group_row is None or upcoming is None or upcoming < today:
+            raise ValueError("That group has no next meeting on file to prepare for. Run the sweep to find its next date.")
+        row = meeting_event(store, group_row, upcoming, today)
+    else:
+        row = _find(store, "event", wanted)
     if row is None:
         raise ValueError("There is no event with the id %s. Run the list command to see the ids." % (note_id or "(none)"))
     net = _net(profile)
     host = merge.link_label(row.values.get("group"))
-    likely = []
-    for person in store.rows("person"):
+    people = store.rows("person")
+    known = []
+    for person in people:
         met = scoring._text(person.values.get("met"))
         company = scoring._text(merge.link_label(person.values.get("company")))
         if host and (scoring._text(host) in met or company == scoring._text(host)):
-            likely.append(person)
+            known.append(person)
     for other in store.rows("event"):
         if host and other.id != row.id and scoring._text(merge.link_label(other.values.get("group"))) == scoring._text(host):
             for link in other.values.get("people_met") or []:
-                label = merge.link_label(link)
-                for person in store.rows("person"):
-                    if scoring._text(person.title) == scoring._text(label) and person not in likely:
-                        likely.append(person)
-    when = row.values.get("date") or "date not set"
-    where = "online" if row.values.get("virtual") is True else (row.values.get("where") or "place not listed")
-    lines = ["**%s, %s%s, %s.**" % (row.title, when, " at %s" % row.values["time"] if row.values.get("time") else "", where)]
-    if row.values.get("cost") not in (None, ""):
-        lines.append("Cost: $%s." % row.values["cost"])
-    lines.append("")
-    lines.append("**Who may be there that you know**")
-    if likely:
-        for person in likely[:8]:
-            role = ", %s" % person.values["role"] if person.values.get("role") else ""
-            lines.append("- %s%s" % (store.link("person", person.title), role))
-    else:
-        lines.append("- No one in your People notes is tied to this group yet. Go to meet new people.")
+                for person in people:
+                    if scoring._text(person.title) == scoring._text(merge.link_label(link)) and person not in known:
+                        known.append(person)
+    public = [scoring.scrub_confidential(str(name).strip(), names) for name in (there if isinstance(there, list) else [])
+              if str(name).strip()][:3]
+    place = "online" if row.values.get("virtual") is True else (row.values.get("where") or "place not listed")
     who = list(net.get("who_to_meet") or [])
     topics = list(net.get("topics") or []) + list((net.get("speaking") or {}).get("talk_ideas") or [])
-    goals = list(net.get("goals") or [])
-    points = []
-    if who:
-        points.append("Look for %s. Ask what they are working on this quarter before saying what you do." % who[0].lower())
-    if topics:
-        points.append("Have one story ready about %s: the problem, what you did, the result." % topics[0].lower())
-    if goals:
-        points.append("Keep your aim in mind: %s." % goals[0].rstrip(".").lower())
-    while len(points) < 3:
-        points.append(["Ask each person who else here you should meet.",
-                       "Offer one useful thing (an introduction, an article, a tool) before asking for anything.",
-                       "Say in one sentence what you are looking for, so people can help."][len(points)])
-    lines += ["", "**Three talking points**"] + ["%d. %s" % (index, point) for index, point in enumerate(points[:3], start=1)]
-    lines += ["", "**Follow-up plan**",
-              "- Aim to leave with two names.",
-              "- The same evening, tell me who you met (\"I went to %s and met ...\"). They are added to People with a "
-              "follow-up date %d days out." % (row.id, FOLLOW_UP_AFTER_EVENT_DAYS),
-              "- Send each a short note within two days that mentions what you talked about.",
-              "", "Written %s. Nothing was registered or sent." % today.isoformat()]
+    lines = ["**%s, %s.** %s." % (when_text(row.values.get("date"), row.values.get("time")), place,
+                                  cost_text(row.values.get("cost"), None).capitalize())]
+    lines.append("**People you know who may be there:** %s." % (
+        ", ".join(store.link("person", person.title) for person in known[:3]) if known else "no one yet"))
+    if public:
+        lines.append("**From the group's public page:** %s." % "; ".join(public))
+    lines.append("**Opener 1:** \"What are you working on this quarter?\" Listen for %s."
+                 % (who[0].lower() if who else "people in your field"))
+    lines.append("**Opener 2:** %s" % ("Have one short story ready about %s: the problem, what you did, the result."
+                                      % topics[0].lower().rstrip(".") if topics else
+                                      "\"Who else here should I meet?\""))
+    lines.append("**Bring:** one sentence on what you do, and a way to swap details.")
+    lines.append("**After:** tell me who you met (\"I met ... at %s\"). Each gets a note and a follow-up date %d days "
+                 "out." % (row.id, FOLLOW_UP_AFTER_EVENT_DAYS))
+    lines.append("Written %s. Nothing was registered or sent." % today.isoformat())
     store.apply([{"type": "event", "id": row.id, "values": {}, "force": [],
-                  "part": (model.PART_PREP, scoring.scrub_confidential("\n".join(lines), names))}])
-    return _safe("Prep brief written into the note \"%s\": %d %s you know may be there, three talking points and a "
-                 "follow-up plan. Open the note to read it." % (
-                     row.title, len(likely), "person" if len(likely) == 1 else "people"), profile)
+                  "part": (model.PART_PREP, scoring.scrub_confidential(discreet_lines(lines), names))}])
+    return _safe("Prep brief written into the note \"%s\" (%s): %d %s you know may be there, two openers and what to "
+                 "bring. Open the note to read it." % (
+                     row.title, row.id, len(known), "person" if len(known) == 1 else "people"), profile)

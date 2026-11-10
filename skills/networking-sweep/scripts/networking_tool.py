@@ -9,9 +9,9 @@ through ONE fixed file, written with its Write tool:
 
 What goes in the hand-off file depends on the command that follows:
     intake   {"groups": [...], "events": [...], "rechecked": [...], "searches": 7, "not_covered": [...]}
-    update   {"updates": [{"id": "G-3", "status": "Joined"},
+    update   {"updates": [{"id": "G-3", "status": "Joined"}, {"id": "G-2", "going": true},
                           {"id": "E-4", "status": "Went", "met": ["Jane Doe", "Raj Patel"]}]}
-    prep     {"prep": "E-4"}
+    prep     {"prep": "E-4", "there": ["Organiser: Jane Doe"]}     (a group id works too: its next meeting)
 
 Commands (none takes an argument):
     start     tidy past events, and print who the person wants to meet and where to look
@@ -212,7 +212,7 @@ def prep(out=None, today=None):
     _needs_run()
     profile, store = _context()
     data = read_handoff()
-    print(networking.write_prep(data.get("prep"), store, profile, today), file=out)
+    print(networking.write_prep(data.get("prep"), store, profile, today, there=data.get("there")), file=out)
     return 0
 
 

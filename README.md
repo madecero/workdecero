@@ -82,12 +82,14 @@ Run **`/workdecero:networking-sweep`** to find where to show up, or just say "ru
 
 * **Groups and events are kept apart.** A group that meets every month is one note with its next meeting. An event gets its own note only when it is special: a conference, a speaker squarely in your field, a call for speakers.
 * **Only live groups.** A group needs a meeting in the last six months or one on the calendar. One that has gone quiet is marked Inactive with the evidence, unless you have joined it, in which case you are told.
-* **Follow-ups first.** Every digest leads with the follow-ups you owe people, overdue ones first.
+* **One question, a two-minute read.** Every digest leads with the follow-ups you owe people, then this month's picks: at most the number of events a month you asked for. A meeting at a time you said you cannot do is never a pick. It is listed under "Also coming up" so you can swap it in.
+* **Said plainly.** When no group exists for a kind of person you want to meet, the digest says so.
 * **Tidied by date.** An event you never planned to go to is marked Did not go once it has passed. One you registered for or were speaking at is never changed for you. The digest asks whether you went.
 * **Your spending limits stay private.** The assistant that reads the web is never told what you will pay. It records the price on the page, and the engine flags what is above your limit.
 * **Speaking angles.** For groups that take speakers, a draft talk idea from your topics goes in the note. A draft only.
-* **Tell it what you did.** "I joined the product meetup", "I registered for E-12", "I went to E-4 and met Jane and Raj". People you met get a note and a follow-up date.
-* **Prep.** "Prep me for E-4" writes a one-page brief into the event's note: who you know that may be there, three talking points, a follow-up plan.
+* **Tell it what you did.** "I'm going to the product meetup", "I registered for E-12", "I met Priya at the product meetup". People you met get a note and a follow-up date a week out.
+* **Prep.** "Prep me for E-4" writes a ten-line brief into the event's note: who you know that may be there, two openers, what to bring.
+* **Discreet.** Networking notes describe interests. They never say you are looking for work, and never name your employer.
 
 It never registers, RSVPs, joins, pays or sends anything. Calendar is off: you add events to your calendar yourself.
 
