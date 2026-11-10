@@ -617,6 +617,40 @@ class Tool(MapCase):
         self.assertIn("Searches used: 2 of 4.", again)
         self.assertEqual(sources.load()["built_on"], "2026-11-09")
 
+    def test_a_gig_board_lists_gigs_and_one_posting_is_not_a_map_entry(self):
+        # From a live build: single posting pages went into the map as gig boards and would be gone in weeks.
+        self.use_profile("freelance-designer-portland")
+        profile = wdprofile.load()[0]
+        original = sources_tool.harvest.board_leads
+        self.addCleanup(setattr, sources_tool.harvest, "board_leads", original)
+
+        def leads(count=0, failed=False):
+            def fake(boards, profile, fetcher, limit=3, matches=None):
+                found = [{"title": "Brand designer %d" % number, "url": "x", "board": "b"} for number in range(count)]
+                return found, [] if failed else ["b"], ["b"] if failed else []
+            sources_tool.harvest.board_leads = fake
+
+        def problem(url):
+            return sources_tool.board_problem({"name": "A board", "url": url, "kind": "gig-board"}, profile, None)
+        listing, posting = "https://board.example.com/jobs/contract", "https://board.example.com/jobs/3539441171-brand-designer"
+        leads(3)
+        self.assertIsNone(problem(listing))
+        self.assertIsNone(problem(posting))                            # it lists several matching gigs: it is a list
+        leads(1)
+        self.assertIsNone(problem(listing))                            # one match on a page that is plainly a list
+        self.assertIn("this is the page of one gig, not a page that lists gigs", problem(posting))
+        self.assertIn("It is a lead for a contract sweep", problem(posting))
+        leads(0)
+        self.assertIn("none of the gigs linked on this page matches what you sell", problem(listing))
+        leads(0, failed=True)
+        self.assertIn("its page has no list of gigs a sweep can read", problem(listing))
+        for url, single in (("https://www.example.com/job/brand-designer-3328279-i.html", True),
+                            ("https://example.com/remote-jobs/brand-identity", False),
+                            ("https://example.com/freelance-jobs/designers/brand", False),
+                            ("https://example.com/jobs/2026/design", False),
+                            ("https://example.com/jobs/view/12", True)):
+            self.assertEqual(sources_tool.one_posting(url), single, url)
+
     def test_an_employer_the_person_names_is_kept_whatever_it_has_open_today(self):
         # From the final run: "Add <employer>, their job board is <link>" was dropped because the employer had no
         # matching role that day, and "watch it anyway" could not be done.
@@ -693,22 +727,25 @@ class Tool(MapCase):
         profile = wdprofile.load()[0]
         searches = sources_tool.fixed_queries(profile)
         self.assertEqual(searches, sources_tool.fixed_queries(profile))               # the same list, every time
-        # Dealt out in turn, so every section gets its first searches early and none is left to the leftovers.
-        self.assertEqual(searches[:6], [
+        # Dealt out in turn, two for jobs and one each for contract work and networking, so every section gets
+        # its first searches early and jobs, the core of the map, get the most.
+        self.assertEqual(searches[:8], [
             ("JOBS", "largest B2B software employers in Denver"),
+            ("JOBS", "VP of Product jobs in Denver"),                                 # the field board, second for jobs
             ("CONTRACT WORK", "fractional CPO jobs open roles"),
             ("NETWORKING", "site:meetup.com product Denver"),
-            ("JOBS", "VP of Product jobs in Denver"),                                 # the field board, second for jobs
+            ("JOBS", "CO state workforce job board"),
+            ("JOBS", "remote VP of Product jobs board"),                              # one remote board for the field
             ("CONTRACT WORK", "VP of Product contract jobs remote"),
             ("NETWORKING", "site:meetup.com AI Denver")])
         texts = [query for _, query in searches]
-        self.assertIn("CO state workforce job board", texts)
-        self.assertIn("Denver chamber of commerce events", texts)
+        self.assertIn("companies hiring VP of Product in Denver", texts)
         self.assertIn("head of product freelance jobs board", texts)                  # gig boards before places to join
         self.assertLess(texts.index("head of product freelance jobs board"),
                         texts.index("Fractional CPO talent network apply as talent"))
-        for section in ("JOBS", "CONTRACT WORK", "NETWORKING"):
-            self.assertEqual(len([one for one, _ in searches if one == section]), 4, section)   # an equal share each
+        shares = dict((section, len([one for one, _ in searches if one == section]))
+                      for section in ("JOBS", "CONTRACT WORK", "NETWORKING"))
+        self.assertEqual(shares, {"JOBS": 5, "CONTRACT WORK": 4, "NETWORKING": 3})    # every job search, inside Lite
         self.assertLessEqual(len(searches), 12)                                        # inside the Lite budget
         self.assertLessEqual(len(sources_tool.fixed_queries(profile, refresh=True)), 4)
         _, plan = self.run_tool(sources_tool.plan, today=TODAY)

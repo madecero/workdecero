@@ -42,7 +42,9 @@ Standard library only, Python 3.9+.
 import datetime
 import json
 import os
+import re
 import sys
+import urllib.parse
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 sys.path.insert(0, os.path.join(_ROOT, "engine"))
@@ -288,6 +290,10 @@ def board_problem(entry, profile, fetcher):
         if not leads:
             return ("none of the gigs linked on this page matches what you sell. Add the page that lists gigs in your "
                     "field, such as a board's contract or fractional filter")
+        if len(leads) < 2 and one_posting(entry.get("url")):
+            return ("this is the page of one gig, not a page that lists gigs, so it is not kept in the map: it would "
+                    "be gone in a few weeks. It is a lead for a contract sweep, where it is read and judged like "
+                    "any other gig. For the map, add the board's page that lists gigs in the field")
         return None
     leads, read, failed = harvest.board_leads([entry], profile, fetcher, limit=3)
     where = _area(profile) or "your area"
@@ -300,6 +306,19 @@ def board_problem(entry, profile, fetcher):
         return ("this looks like the board's home page, or a list with nothing in your field: none of the postings "
                 "linked on it matches your titles. Add the page that lists %s jobs in %s" % (_field(profile), where))
     return None
+
+
+_ONE_POSTING = re.compile(r"/(jobs?|gigs?|postings?|positions?|vacanc(?:y|ies)|projects?|listings?|opportunit(?:y|ies))/"
+                          r"[^/?#]*\d{4,}[^/?#]*/?$|\d{5,}[^/]*$|/view/", re.I)
+
+
+def one_posting(url):
+    """True when a link looks like the page of a single posting: its last part carries a posting's number."""
+    try:
+        path = urllib.parse.urlsplit(str(url or "")).path
+    except ValueError:
+        return False
+    return bool(_ONE_POSTING.search(path))
 
 
 BY_HAND_NAME = "sources-by-hand"
@@ -521,8 +540,9 @@ def fixed_queries(profile, refresh=False):
     words = field_words(profile, 2)
     first = words[0] if words else ""
     title = scoring.scrub_confidential(((jobs.get("titles") or [""])[0]), names, "").strip()
-    # Each sweep's searches, most valuable first. They are then dealt out in turn, so every section gets its
-    # first searches early and none is left to whatever the budget has over at the end. Two builds of the same
+    # Each sweep's searches, most valuable first. They are then dealt out in turn (two for jobs, one for contract
+    # work, one for networking), so every section gets its first searches early and none is left to whatever the
+    # budget has over at the end. Two builds of the same
     # profile then agree on boards, gig sources and groups as well as on employers.
     by_track = {"JOBS": [], "CONTRACT WORK": [], "NETWORKING": []}
 
@@ -536,8 +556,8 @@ def fixed_queries(profile, refresh=False):
         add("JOBS", "largest %s employers in %s" % (industry, city))
         add("JOBS", "%s jobs in %s" % (title or first, city))                # a field board's results page for the area
         add("JOBS", "%s state workforce job board" % (state or city))
-        add("JOBS", "companies hiring %s in %s" % (title or first, city))
         add("JOBS", "remote %s jobs board" % (title or first))               # one remote board for the field
+        add("JOBS", "companies hiring %s in %s" % (title or first, city))
     if tracks.get("contracts"):
         taken = contracts.get("engagement_types") or []
         service = scoring.scrub_confidential(((contracts.get("services") or [first])[0]), names, "").strip()
@@ -568,7 +588,8 @@ def fixed_queries(profile, refresh=False):
         for word in groups[2:]:                    # who they want to meet, with whatever budget is left
             add("NETWORKING", "site:meetup.com %s %s" % (word, city))
     found = []
-    order = [track for track in ("JOBS", "CONTRACT WORK", "NETWORKING") if by_track[track]]
+    # Jobs are the core of the map, so they take the first two turns of every round.
+    order = [track for track in ("JOBS", "JOBS", "CONTRACT WORK", "NETWORKING") if by_track[track]]
     turn = 0
     while any(by_track[track] for track in order):
         track = order[turn % len(order)]

@@ -401,6 +401,16 @@ class Intake(ContractCase):
         self.assertEqual(merge._mode_shown({"work_mode": "remote"}, unclear), "Remote")
         self.assertIsNone(merge._mode_shown({}, unclear))
 
+    def test_nothing_found_and_six_searches_unused_gets_the_nudge_once(self):
+        # From a live run: a sweep stopped at 4 of 10 searches with nothing that fits.
+        self.start()
+        _, first = self.intake([], searches=4)
+        self.assertIn("BEFORE YOU FINISH: 6 of 10 searches are unused and nothing that fits has been found yet.", first)
+        self.assertIn("A search result you have not opened is worth nothing to the person.", first)
+        _, second = self.intake([], searches=5)
+        self.assertNotIn("BEFORE YOU FINISH", second)                  # said once, so a sweep can never loop on it
+        self.assertIn("Run the finish command next.", second)
+
     def test_an_empty_week_is_told_as_it_is_and_points_at_the_channels(self):
         # From the final run: three sweeps in a row said only "Nothing new that fits this time".
         self.start()
@@ -699,7 +709,7 @@ class Platforms(ContractCase):
         data["contracts"] = [
             {"name": "Fractional Example", "url": PLATFORM + "/gigs", "kind": "gig-board", "how": "page",
              "verified_on": "2026-11-09"},
-            {"name": "Browser Built Network", "url": "https://unreadable.example.org/gigs", "kind": "marketplace",
+            {"name": "Browser Built Network", "url": "https://unreadable.example.org/gigs", "kind": "gig-board",
              "how": "page", "verified_on": "2026-11-09"},
         ]
         sources.save(data)
@@ -716,6 +726,9 @@ class Platforms(ContractCase):
         self.assertNotIn("Full Stack Engineer", report)
         self.assertNotIn("Bookkeeper", report)
         self.assertIn("Browser Built Network (its listing page could not be read)", report)
+        self.finish()                                                  # and the digest names the gig board it could not read
+        self.assertIn("Browser Built Network (its listing page could not be read)",
+                      self.digest().section.split("## Not covered")[1])
         self.assertNotIn("$", report.split("GIGS TO READ AND JUDGE")[0])
 
     def sweep(self, judgements):
