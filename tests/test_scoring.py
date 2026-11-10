@@ -213,6 +213,36 @@ class JobRules(unittest.TestCase):
         self.assertEqual(self.score(work_mode="hybrid", location="Somewhere", distance_miles=10).parts["location"], 14)
         self.assertEqual(self.score(work_mode="hybrid", location="Denver, CO", distance_miles=80).parts["location"], 0)
 
+    def test_onsite_or_hybrid_elsewhere_is_kept_only_where_the_person_said_they_would_go(self):
+        # Boulder is listed as also in reach, Seattle as a place they would move to. Boston is neither.
+        boulder = self.score(work_mode="onsite", location="Boulder, CO", distance_miles=42)
+        self.assertIsNone(boulder.dropped)
+        seattle = self.score(work_mode="hybrid", location="Seattle, WA", distance_miles=1300)
+        self.assertIsNone(seattle.dropped)
+        self.assertIn("Would mean relocating", seattle.caveats)
+        boston = self.score(work_mode="onsite", location="Boston, MA", distance_miles=1770)
+        self.assertEqual(boston.dropped, "it is onsite work in a place outside your area")
+        hybrid = self.score(work_mode="hybrid", location="Boston, MA")
+        self.assertEqual(hybrid.dropped, "it is hybrid work in a place outside your area")
+        self.assertIsNone(self.score(work_mode="remote", location="Boston, MA").dropped)
+        # Someone not open to moving does not get the relocation exception.
+        fixed = dict(self.profile, location=dict(self.profile["location"], open_to_relocation=False))
+        self.assertTrue(scoring.score_job(dict(self.base, work_mode="hybrid", location="Seattle, WA"), fixed,
+                                          TODAY).dropped)
+
+    def test_a_role_still_open_on_the_employers_own_list_is_kept_whatever_its_age(self):
+        old = (TODAY - datetime.timedelta(days=40)).isoformat()
+        limit = self.profile["jobs"]["max_posting_age_days"]
+        from_board = self.score(posted=old)
+        self.assertEqual(from_board.dropped, "posted 40 days ago, older than the %d days your profile allows" % limit)
+        live = self.score(posted=old, live_list=True)
+        self.assertIsNone(live.dropped)
+        self.assertEqual(live.parts["freshness"], 0)
+        self.assertIn("Posted 40 days ago, still open on the employer's site", live.caveats)
+        fresh = self.score(posted=(TODAY - datetime.timedelta(days=3)).isoformat(), live_list=True)
+        self.assertEqual(fresh.parts["freshness"], 10)
+        self.assertNotIn("still open", " ".join(fresh.caveats))
+
     def test_missing_assessment_gets_half_marks_and_a_caveat(self):
         result = self.score(fit_assessment=None)
         self.assertEqual(result.parts["fit"], 20)

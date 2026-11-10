@@ -529,7 +529,7 @@
         },
         "max_posting_age_days": {
           "type": "integer",
-          "description": "Ignore postings older than this many days.",
+          "description": "Ignore postings older than this many days when they were found on a job board or by a search, where old postings are often dead. A role still open on an employer's own job list is kept whatever its age, with no points for freshness and a note of how old it is.",
           "minimum": 1,
           "default": 30,
           "examples": [

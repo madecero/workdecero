@@ -222,16 +222,19 @@ def _level_points(item, wanted, full):
 
 def _in_area(item, location):
     """True, False or None (cannot tell) for whether the posting's place is within reach."""
+    place = _text(item.get("location"))
+    # A place the person named as also in reach is in reach, however many miles it is.
+    also = [_text(area.split(",")[0]) for area in location.get("other_areas") or []]
+    if place and any(name and _contains_phrase(place, name) for name in also):
+        return True
     miles = _number(item.get("distance_miles"))
     radius = _number(location.get("radius_miles"))
     if miles is not None and radius is not None:
         return miles <= radius
-    place = _text(item.get("location"))
     if not place:
         return None
     town = _text((location.get("home_base") or "").split(",")[0])
-    near = [town, _text(location.get("metro"))] + [_text(area.split(",")[0]) for area in location.get("other_areas") or []]
-    if any(name and _contains_phrase(place, name) for name in near):
+    if any(name and _contains_phrase(place, name) for name in (town, _text(location.get("metro")))):
         return True
     return False
 
@@ -284,6 +287,10 @@ def _freshness_points(item, today, bands, full, max_age, result):
         return int(round(_UNDATED_POINTS * full / 10.0))
     age = (today - posted).days
     if max_age and age > max_age:
+        if item.get("live_list") is True:
+            # Read a moment ago from the employer's own job list, so it is open whatever its age.
+            result.caveats.append("Posted %d days ago, still open on the employer's site" % age)
+            return 0
         result.dropped = "posted %d days ago, older than the %d days your profile allows" % (age, max_age)
         return 0
     for limit, points in bands:

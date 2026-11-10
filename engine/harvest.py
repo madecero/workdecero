@@ -7,7 +7,7 @@ what the person is looking for.
 
 It returns "finds" in the shape the merge and scoring steps take:
     {"title", "company", "url", "req_id", "location", "work_mode", "posted",
-     "source": "Company site", "link_verified": True}
+     "source": "Company site", "link_verified": True, "live_list": True}
 
 A find from here is real by construction: it came from the employer's own
 list a moment ago. What it lacks is a judgement of fit, which the research
@@ -124,7 +124,8 @@ def _mode(location_text):
 
 
 def _find(company, title, url, location, posted, req_id=None):
-    find = {"title": title.strip(), "company": company, "url": url, "source": "Company site", "link_verified": True}
+    find = {"title": title.strip(), "company": company, "url": url, "source": "Company site", "link_verified": True,
+            "live_list": True}     # still open on the employer's own list, whatever its age
     if location:
         find["location"] = location.strip()
         mode = _mode(location)
