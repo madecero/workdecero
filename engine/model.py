@@ -153,6 +153,10 @@ JOB = NoteType(
         Field("company", LINK, "Company"),
         Field("contact_first", TEXT, "Contact first"),
         Field("warm_path", LINKS, "Warm path"),
+        # A near miss is written and kept out of the digest's top list: the background is thin, or the
+        # posting requires something the person does not have.
+        Field("near_miss", CHECKBOX, "Near miss"),
+        Field("near_reason", TEXT, "Why a near miss"),
         Field("role", TEXT, "Role title"),
         Field("work_mode", TEXT, "Work mode"),
         Field("distance_miles", NUMBER, "Miles from home"),
@@ -162,6 +166,10 @@ JOB = NoteType(
     ] + _pursuit_fields() + _bookkeeping_fields() + [
         Field("source", TEXT, "Found on"),
         Field("req_id", TEXT, "Posting ID"),
+        # Kept so a tracked role is not re-judged on a whim: the background score stands until the
+        # posting's words change.
+        Field("fit_background", NUMBER, "Background fit"),
+        Field("text_hash", TEXT, "Posting text check"),
     ],
     [
         Status("New", "1 New", "new"),

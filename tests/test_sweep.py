@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.join(_paths.REPO_ROOT, "skills", "job-sweep", "script
 import harvest  # noqa: E402
 import liveness  # noqa: E402
 import miniyaml  # noqa: E402
+import scoring  # noqa: E402
 import sources  # noqa: E402
 import sweep  # noqa: E402
 import sweep_tool  # noqa: E402
@@ -255,7 +256,7 @@ class TesterFindings(SweepCase):
              "why": "Leads messaging product.", "work_mode": "remote", "pay_min": 233000, "pay_max": 259000},
             {"id": ids["Director of Product Management, Compliance | Cedar Ridge Payroll"], "fit_assessment": 26,
              "why": "Compliance product.", "work_mode": "hybrid", "distance_miles": 4,
-             "missing_credential": "an active CPA licence"},
+             "missing_requirements": ["an active CPA licence"]},
         ]
         finds = [
             {"title": "VP of Product", "company": "Low Pay Labs", "url": "https://jobs.example.com/lowpay/1",
@@ -276,8 +277,9 @@ class TesterFindings(SweepCase):
             "VP of Product, Onsite Nearby Co"])
         # A required credential they do not hold marks the role down, and the note says which.
         cpa = jobs["Director of Product Management, Compliance, Cedar Ridge Payroll"].section
-        self.assertIn("minus 10 (asks for a credential you do not hold)", cpa)
-        self.assertIn("Asks for an active CPA licence, which your profile says you do not hold.", cpa)
+        self.assertIn("minus 10 (requires something you do not have)", cpa)
+        self.assertIn("Requires an active CPA licence, which you do not have.", cpa)
+        self.assertIn("**Near miss:** Requires an active CPA licence.", cpa)
         # Every new note says who to contact first, also the ones no contact was looked up for.
         for row in jobs.values():
             self.assertEqual(row.values["contact_first"], sweep.NO_CONTACT_YET)
@@ -294,6 +296,133 @@ class TesterFindings(SweepCase):
             for private in ("210000", "210,000", "under your floor", "outside your area", "Low Pay Labs"):
                 self.assertNotIn(private, text)
         self.assertIn("Left out by the profile: 3.", intake)
+
+
+class FitQuality(SweepCase):
+    """From the tester's fit check: what looks like a fit and is not must not rank as one."""
+
+    def setUp(self):
+        super(FitQuality, self).setUp()
+        data = sources.empty_map()
+        data["jobs"] = [employer("Cedar Ridge Payroll", "greenhouse", board="cedarridgepayroll")]
+        sources.save(data)
+
+    def judge(self, report, **by_title):
+        ids = self.candidates(report)
+        assessed = []
+        for label, candidate in ids.items():
+            entry = {"id": candidate, "fit_assessment": 32, "why": "Matches their last two roles.", "work_mode": "remote",
+                     "pay_max": 240000}
+            for key, extra in by_title.items():
+                if key in label:
+                    entry.update(extra)
+            assessed.append(entry)
+        return assessed
+
+    def sweep(self, today=TODAY, **by_title):
+        _, report = self.start(today=today)
+        self.hand_off({"assessed": self.judge(report, **by_title), "searches": 9})
+        _, intake = self.run_step(sweep_tool.intake, fetcher=self.fetcher, today=today)
+        _, done = self.run_step(sweep_tool.finish, today=today)
+        return report, intake, done
+
+    def test_a_thin_background_is_a_near_miss_and_never_in_the_top_list(self):
+        _, intake, done = self.sweep(**{"Payroll Platform": {"fit_assessment": 14,
+                                                             "why": "Payroll platform work, outside their AI focus."}})
+        jobs = self.jobs()
+        near = jobs["Principal Product Manager, Payroll Platform, Cedar Ridge Payroll"]
+        self.assertEqual((near.values["near_miss"], near.values["status"]), (True, "New"))      # written, and still theirs
+        self.assertEqual(near.values["near_reason"],
+                         "the background fit is 14 of 40, under the 20 that counts as a fit")
+        self.assertIn("**Near miss:** The background fit is 14 of 40", near.section)
+        self.assertEqual(jobs["Sr Principal Product Manager, Messaging, Cedar Ridge Payroll"].values["near_miss"], False)
+        section = self.digest().section
+        top = section.split("## New this sweep")[1].split("##")[0]
+        self.assertNotIn("Payroll Platform", top)
+        self.assertIn("Messaging", top)
+        misses = section.split("## Near misses")[1].split("##")[0]
+        self.assertIn("Principal Product Manager, Payroll Platform, Cedar Ridge Payroll]]: the background fit is 14 of 40",
+                      misses)
+        self.assertIn("Each is in the Decide or drop view.", misses)
+        self.assertIn("New roles that fit: 2. Near misses: 1.", done)
+        self.assertNotIn("Payroll Platform", done.split("TOP")[1])
+        self.assertNotIn("Payroll Platform", intake.split("WARM PATHS")[1])           # no contact research on a near miss
+        # A score of exactly 20 is a fit.
+        self.assertIsNone(scoring.score_job({"title": "VP of Product", "fit_assessment": 20, "work_mode": "remote"},
+                                            self.profile, TODAY).near)
+
+    def test_a_language_the_person_lacks_makes_a_strong_looking_role_a_near_miss(self):
+        _, _, done = self.sweep(Messaging={"fit_assessment": 36, "missing_requirements": ["fluent Russian"]})
+        role = self.jobs()["Sr Principal Product Manager, Messaging, Cedar Ridge Payroll"]
+        self.assertEqual((role.values["near_miss"], role.values["near_reason"]), (True, "requires fluent Russian"))
+        self.assertIn("Requires fluent Russian, which you do not have.", role.section)
+        self.assertIn("minus 10 (requires something you do not have)", role.section)
+        section = self.digest().section
+        self.assertNotIn("Messaging", section.split("## New this sweep")[1].split("##")[0])
+        self.assertIn("Messaging, Cedar Ridge Payroll]]: requires fluent Russian.", section.split("## Near misses")[1])
+        # Two must-haves are both named.
+        both = scoring.score_job({"title": "VP of Product", "fit_assessment": 35, "work_mode": "remote",
+                                  "missing_requirements": ["fluent Russian", "an active security clearance"]},
+                                 self.profile, TODAY)
+        self.assertEqual(both.near, "requires fluent Russian and an active security clearance")
+        self.assertEqual(len([c for c in both.caveats if c.startswith("Requires ")]), 2)
+
+    def test_the_views_keep_near_misses_out_of_new_this_week(self):
+        import bases
+        views = dict((view["name"], view) for view in bases.jobs_base("workdecero")["views"])
+        self.assertIn("wd_near_miss != true", json.dumps(views["New this week"]["filters"]))
+        self.assertIn("wd_near_miss == true", json.dumps(views["Decide or drop"]["filters"]))
+        self.assertIn("wd_near_reason", json.dumps(views["Decide or drop"]))
+
+    def test_a_tracked_role_keeps_its_background_score_until_the_posting_changes(self):
+        self.sweep(Messaging={"fit_assessment": 31})
+        title = "Sr Principal Product Manager, Messaging, Cedar Ridge Payroll"
+        first = self.jobs()[title]
+        self.assertEqual(first.values["fit_background"], 31)
+        self.assertEqual(len(first.values["text_hash"]), 16)
+        again = {"title": "Sr Principal Product Manager, Messaging", "company": "Cedar Ridge Payroll",
+                 "url": first.values["apply_url"], "work_mode": "remote", "pay_max": 240000}
+        # Research finds the same posting by search a week later and judges it differently. The score stands.
+        later = datetime.date(2026, 11, 16)
+        self.start(today=later)
+        self.hand_off({"finds": [dict(again, fit_assessment=22)], "searches": 9})
+        self.run_step(sweep_tool.intake, fetcher=self.fetcher, today=later)
+        self.run_step(sweep_tool.finish, today=later)
+        same = self.jobs()[title]
+        self.assertEqual(same.values["fit_background"], 31)
+        self.assertIn("background 31/40", same.section)
+        # When the employer rewrites the posting, it comes back to be judged again, and the new judgement is taken.
+        detail = "https://boards-api.greenhouse.io/v1/boards/cedarridgepayroll/jobs/8002"
+        self.fetcher.answers[detail] = dict(self.fetcher.answers[detail], json={
+            "id": 8002, "title": "Sr Principal Product Manager, Messaging",
+            "content": "&lt;p&gt;Now an individual contributor role on the billing team.&lt;/p&gt;"})
+        latest = datetime.date(2026, 11, 23)
+        _, report = self.start(today=latest)
+        self.assertIn("The posting's words have changed since it was judged, so judge it again.", report)
+        self.assertIn("Now an individual contributor role on the billing team.", report)
+        self.hand_off({"assessed": [{"id": self.candidates(report)["Sr Principal Product Manager, Messaging | Cedar "
+                                                                   "Ridge Payroll"], "fit_assessment": 16,
+                                     "why": "Rewritten as an individual contributor role."}], "searches": 9})
+        self.run_step(sweep_tool.intake, fetcher=self.fetcher, today=latest)
+        self.run_step(sweep_tool.finish, today=latest)
+        changed = self.jobs()[title]
+        self.assertEqual((changed.values["fit_background"], changed.values["near_miss"]), (16, True))
+        self.assertNotEqual(changed.values["text_hash"], first.values["text_hash"])
+        self.assertEqual(len(self.jobs()), 3)                         # the same note, not a second one
+        self.assertEqual(sweep.text_hash("Same  words\nhere"), sweep.text_hash("same words here"))
+
+    def test_left_out_lists_each_role_once(self):
+        _, report = self.start()
+        dupe = {"title": "VP of Product", "company": "Low Pay Labs", "url": "https://jobs.example.com/lowpay/1",
+                "fit_assessment": 30, "work_mode": "remote", "pay_min": 150000, "pay_max": 190000}
+        self.hand_off({"assessed": self.judge(report), "finds": [dupe], "searches": 5})
+        self.run_step(sweep_tool.intake, fetcher=self.fetcher, today=TODAY)
+        self.hand_off({"finds": [dict(dupe, url="https://boards.example.org/copy/of/lowpay")], "searches": 9})
+        _, intake = self.run_step(sweep_tool.intake, fetcher=self.fetcher, today=TODAY)
+        self.run_step(sweep_tool.finish, today=TODAY)
+        why = self.digest().section.split("## Left out, and why")[1].split("##")[0]
+        self.assertEqual(why.count("VP of Product, Low Pay Labs"), 1)
+        self.assertIn("Left out by the profile: 2.", intake)          # the onsite role in Boston, and this one, once
 
 
 class Boards(SweepCase):

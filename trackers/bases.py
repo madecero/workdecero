@@ -167,7 +167,9 @@ def jobs_base(folder):
                 "days_since_touch": "Days since last touch", "days_waiting": "Days waiting"}
     views = [
         _view("New this week",
-              {"and": [_status_is("New"), "%s >= today() - '7d'" % _key("first_seen")]},
+              # A near miss is written, and waits in Decide or drop. It does not belong among the week's fits.
+              {"and": [_status_is("New"), "%s >= today() - '7d'" % _key("first_seen"),
+                       "%s != true" % _key("near_miss")]},
               # Fit and pay come right after the role so they stay in sight in a narrow pane.
               _columns(job, "formula.role", "fit", "formula.pay_top_k", "status", "company", "formula.work",
                        "apply_url", "warm_path"),
@@ -191,10 +193,12 @@ def jobs_base(folder):
         _view("Decide or drop",
               {"or": [
                   {"and": [_status_is("New"), "%s < today() - '14d'" % _key("first_seen")]},
+                  {"and": [_status_is("New"), "%s == true" % _key("near_miss")]},
                   {"and": ["!" + _status_in(done), "%s >= today()" % _key("closes"),
                            "%s <= today() + '7d'" % _key("closes")]},
               ]},
-              _columns(job, "formula.role", "fit", "formula.pay_top_k", "status", "company", "closes", "apply_url"),
+              _columns(job, "formula.role", "fit", "formula.pay_top_k", "status", "company", "near_reason", "closes",
+                       "apply_url"),
               _sort(job, ("closes", "ASC"))),
         _view("Archive",
               {"and": [_status_in(done)]},

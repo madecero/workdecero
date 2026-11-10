@@ -53,6 +53,7 @@ PENALTY_UNVERIFIED_LINK = 3
 PENALTY_FLAGGED = 10
 PENALTY_ONSITE_OUTSIDE_AREA = 4      # kept for older notes: such a role is now left out
 PENALTY_MISSING_CREDENTIAL = 10
+NEAR_MISS_BELOW = 20          # a background fit under this, out of 40, is a near miss
 PENALTY_HOURS_OUTSIDE_RANGE = 4
 
 LEVELS = ["entry", "mid", "senior", "lead", "manager", "director", "vp", "executive"]
@@ -101,6 +102,7 @@ class ScoreResult(object):
         self.penalties = []    # (points, reason)
         self.caveats = []      # sentences for the note
         self.dropped = None    # a reason, when the posting is ruled out
+        self.near = None       # a reason, when it is written as a near miss and kept out of the top list
 
     @property
     def total(self):
@@ -307,6 +309,20 @@ def _fit_points(item, full, result):
     return int(max(0, min(full, round(assessed))))
 
 
+def missing_requirements(item):
+    """Must-haves a posting states that the person lacks: a language, a licence, a clearance, a degree, a domain."""
+    given = item.get("missing_requirements")
+    found = list(given) if isinstance(given, (list, tuple)) else ([given] if given else [])
+    if item.get("missing_credential"):
+        found.append(item["missing_credential"])
+    clean = []
+    for entry in found:
+        text = str(entry).strip().rstrip(".")
+        if text and text.lower() not in [other.lower() for other in clean]:
+            clean.append(text)
+    return clean
+
+
 def _common_checks(item, owner, profile, today, result):
     """Exclusions, confidential names, link check and deal breakers. Sets result.dropped when ruled out."""
     if any(_same_company(owner, name) for name in confidential_names(profile)):
@@ -324,10 +340,13 @@ def _common_checks(item, owner, profile, today, result):
     if item.get("deal_breaker"):
         result.dropped = "hits a deal breaker in your profile (%s)" % item["deal_breaker"]
         return
-    if item.get("missing_credential"):
-        needed = str(item["missing_credential"]).strip().rstrip(".")
-        result.penalties.append((PENALTY_MISSING_CREDENTIAL, "asks for a credential you do not hold"))
-        result.caveats.append("Asks for %s, which your profile says you do not hold" % needed)
+    missing = missing_requirements(item)
+    if missing:
+        # A must-have the person lacks: the role is kept, marked down, and never ranked as a fit.
+        result.penalties.append((PENALTY_MISSING_CREDENTIAL, "requires something you do not have"))
+        for needed in missing:
+            result.caveats.append("Requires %s, which you do not have" % needed)
+        result.near = "requires %s" % " and ".join(missing)
     if item.get("link_verified") is False:
         result.penalties.append((PENALTY_UNVERIFIED_LINK, "link not verified"))
         result.caveats.append("The link could not be verified. Confirm the posting is real before applying")
@@ -363,6 +382,10 @@ def score_job(item, profile, today=None):
             result.caveats.append("Only a starting pay of %d is listed, under your floor of %d" % (pay_min, floor))
 
     result.parts["fit"] = _fit_points(item, JOB_WEIGHTS["fit"], result)
+    assessed = _number(item.get("fit_assessment"))
+    if result.near is None and assessed is not None and assessed < NEAR_MISS_BELOW:
+        result.near = "the background fit is %d of %d, under the %d that counts as a fit" % (
+            round(assessed), JOB_WEIGHTS["fit"], NEAR_MISS_BELOW)
     result.parts["level"] = _level_points(item, jobs.get("levels") or [], JOB_WEIGHTS["level"])
     preferred = jobs.get("preferred_industries") or []
     industry = item.get("industry")

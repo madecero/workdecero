@@ -67,19 +67,23 @@ Judge each candidate against the description of the person and record:
 | `level` | One of `entry`, `mid`, `senior`, `lead`, `manager`, `director`, `vp`, `executive` |
 | `industry` | The employer's industry in a few words |
 | `deal_breaker` | Only if the posting clearly hits one of the deal breakers the helper listed in their words. Say which, in a few words |
-| `missing_credential` | Only if the posting **requires** a credential on the list of ones they do not hold. Name the credential. The role is kept, marked down, and the note says which credential it asks for |
+| `missing_requirements` | A list of must-haves the posting requires and the person lacks: a language, a licence, a clearance, a degree, a domain. See below. A credential on their not-held list goes here too |
 | `closes` | The application deadline as YEAR-MONTH-DAY, only if stated |
 | `link_verified` | Only for postings you found yourself: `false` if the page would not load or showed a different job. Candidates from the helper are already verified |
 
-**The fit scale.** Be strict. Most postings that merely share a title are 15 to 25.
+**The fit rubric.** `fit_assessment` is one number from 0 to 40 for how well the role matches the person's background. Use the anchors below, so that the same posting gets the same number every time. Pick the anchor that fits best, then move at most 4 points either way. Judge the work described, never the title alone.
 
-| Score | Meaning |
-| --- | --- |
-| 34 to 40 | Reads as if written for them: same kind of work, same scope, and their strongest skills are the core of the job |
-| 26 to 33 | A strong match with one real gap (an industry they have not worked in, a tool, a slightly different scope) |
-| 16 to 25 | A plausible match on title, but the day-to-day work or the scope differs from what they have done |
-| 6 to 15 | A stretch: related field, mostly different work |
-| 0 to 5 | Not really their kind of role |
+| Score | Anchor | Example for a product leader with B2B and AI experience |
+| --- | --- | --- |
+| 40 | Written for them. The same kind of work, at their scope, in a setting they have worked in, and their strongest skills are the core of the job | "VP of Product for a B2B platform, leads 15 product managers, owns AI features and pricing" |
+| 30 | A strong match with one real gap: an industry they have not worked in, a tool, or a slightly smaller or larger scope | "Head of Product at a consumer app, team of 10, AI roadmap". The work matches, the market is new to them |
+| 20 | The function matches and the day-to-day work is different: another specialty, or hands-on work where they have been leading | "Principal Product Manager, payroll platform, no reports". Product work, but outside their AI focus and without a team |
+| 10 | A neighbouring field that shares a word in the title | "Director of Product Design", "Technical Program Manager", "Product Marketing Lead" |
+| 0 | Not their kind of work | "Product Support Specialist", "Production Manager" |
+
+A score under 20 means the role is written as a **near miss**: kept in the tracker, left out of the digest's top list. That is the right outcome for a role that only looks like a fit. Do not round a weak match up to 20.
+
+**Must-haves they lack.** Read each posting for hard requirements: a language ("fluent Russian required"), a licence or certification, a security clearance, a degree, or deep experience in a domain the person's background does not show. For each one the posting **requires** and the person does not have, add a short phrase to `missing_requirements`, such as `["fluent Russian"]`. "Preferred" and "nice to have" do not count. A role with any missing must-have is a near miss, and its note names each one. This is separate from `fit_assessment`: score the rest of the match as it is.
 
 If you have neither posting text nor a page that loads, give your best `fit_assessment` from the title alone (no higher than 20) and say so in `why`. For a posting you found yourself, also set `link_verified` to `false`.
 

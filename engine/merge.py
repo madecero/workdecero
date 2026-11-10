@@ -239,6 +239,10 @@ def _note_title(kind, item):
 
 def _section(kind, item, result, names):
     lines = ["**%s %d**: %s." % ("Fit" if kind == JOB else "Win odds", result.total, result.breakdown())]
+    if getattr(result, "near", None):
+        reason = result.near
+        lines.append("**Near miss:** %s. It is kept here in case you see it differently, and left out of the "
+                     "digest's top list." % (reason[:1].upper() + reason[1:]))
     if item.get("why"):
         lines.append("**Why it fits:** %s" % item["why"].strip())
     if result.caveats:
@@ -259,6 +263,8 @@ def _values(kind, item, result, store, today, names):
             "distance_miles": item.get("distance_miles"), "location": item.get("location"),
             "posted": item.get("posted"), "closes": item.get("closes"), "apply_url": item.get("url"),
             "source": item.get("source"), "req_id": item.get("req_id"),
+            "near_miss": bool(result.near), "near_reason": (result.near or None),
+            "fit_background": item.get("fit_assessment"), "text_hash": item.get("text_hash"),
         }
     else:
         values = {

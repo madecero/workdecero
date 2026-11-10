@@ -113,6 +113,9 @@ def build(target, folder="workdecero", today=None, backup_dir=None):
         summary = None if store.get("job", note_id) else (
             "**Why it fits:** matches your target level and AI product focus.\n\n**Caveats:** none found.")
         store.upsert("job", note_id, title, values, section=summary)
+    # One role that only looks like a fit, to show where a near miss goes.
+    store.upsert("job", "J-3", "", {"near_miss": True,
+                                    "near_reason": "the background fit is 9 of 40, under the 20 that counts as a fit"})
     store.upsert("job", "J-2", "", {
         "warm_path": ["[[%s/People/Jonas Albrecht|Jonas Albrecht (2nd)]]" % folder],
         "contact_first": "Jonas Albrecht (2nd), through a shared connection. Works there."})
