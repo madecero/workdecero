@@ -1232,11 +1232,28 @@ def apply_updates(updates, store, profile, today=None):
         # "I am going to (a group)" or "I met someone at (a group)" is about one meeting of it.
         if kind == "group" and (going or met):
             upcoming = scoring._date(row.values.get("next_meeting"))
-            if going and (upcoming is None or upcoming < today):
+            said = scoring._date(entry.get("date"))
+            if going and said is not None:
+                # They named a day. Only that day will do: the group's next meeting on file is not a stand-in for it.
+                on_file = [other for other in store.rows("event")
+                           if scoring._text(merge.link_label(other.values.get("group"))) == scoring._text(row.title)
+                           and scoring._date(other.values.get("date")) == said]
+                if said != upcoming and not on_file:
+                    known = sorted(set([upcoming] if upcoming and upcoming >= today else []) | set(
+                        scoring._date(other.values.get("date")) for other in store.rows("event")
+                        if scoring._text(merge.link_label(other.values.get("group"))) == scoring._text(row.title)
+                        and scoring._date(other.values.get("date")) and scoring._date(other.values.get("date")) >= today))
+                    problems.append("%s has nothing on file for %s. %s Nothing was changed. Ask the person which they "
+                                    "mean, or run the sweep to look for that date." % (
+                                        row.title, when_text(said),
+                                        "On file: %s." % ", ".join(when_text(day) for day in known) if known
+                                        else "No coming meeting is on file."))
+                    continue
+            elif going and (upcoming is None or upcoming < today):
                 problems.append("%s has no next meeting on file, so there is nothing to mark as going. Run the sweep "
                                 "to find its next date." % row.title)
                 continue
-            when = upcoming if going else (scoring._date(entry.get("date")) or today)
+            when = (said or upcoming) if going else (said or today)
             if entry.get("status") is not None and model.GROUP.canonical_status(str(entry["status"])):
                 store.apply([{"type": "group", "id": row.id, "force": ["status"],
                               "values": {"status": model.GROUP.canonical_status(str(entry["status"]))}}])

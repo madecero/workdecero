@@ -353,6 +353,37 @@ class Events(NetCase):
         self.assertEqual(len(self.events()), 5)                       # all are in the tracker
 
 
+class GoingOnAStatedDay(NetCase):
+    """From the tester's run: "I'm going on Nov 18" marked the group's Nov 11 meeting and queued a calendar check for it."""
+
+    def setUp(self):
+        super(GoingOnAStatedDay, self).setUp()
+        self.sweep([group("a", "Portland Brand Meetup", next_meeting="2026-11-11", weekday="Wednesday")],
+                   [event("later", "Brand Meetup winter social", "2026-11-18", group="Portland Brand Meetup")])
+        self.group_id = self.groups()["Portland Brand Meetup"].id
+
+    def test_the_day_they_said_is_the_one_marked(self):
+        code, out, _ = self.update({"id": self.group_id, "going": True, "date": "2026-11-18"})
+        self.assertEqual(code, 0, out)
+        events = self.events()
+        self.assertEqual((events["Brand Meetup winter social"].values["status"],
+                          events["Brand Meetup winter social"].values["going"]), ("Going", True))
+        self.assertNotIn("Portland Brand Meetup, Wed Nov 11", events)  # the earlier meeting was not touched or made
+        self.assertNotIn("Nov 11", out)
+
+    def test_a_day_with_nothing_on_file_changes_nothing_and_asks(self):
+        before = sorted(self.events())
+        code, out, _ = self.update({"id": self.group_id, "going": True, "date": "2026-11-25"})
+        self.assertIn("NOT DONE  Portland Brand Meetup has nothing on file for Wed Nov 25. On file: Wed Nov 11, Wed Nov 18. "
+                      "Nothing was changed. Ask the person which they mean", out)
+        self.assertEqual(sorted(self.events()), before)
+        self.assertNotIn("CALENDAR", out)
+
+    def test_with_no_day_said_it_is_the_next_meeting_and_the_answer_names_the_date(self):
+        code, out, _ = self.update({"id": self.group_id, "going": True})
+        self.assertIn("Portland Brand Meetup, Wed Nov 11: now Going.", out)
+
+
 class OneAnEvening(NetCase):
     def test_two_events_on_the_same_evening_take_one_pick_between_them(self):
         # From the tester's run: both picks were on one evening, half an hour apart, and the month's limit was spent.
