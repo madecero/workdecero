@@ -48,6 +48,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.
 sys.path.insert(0, os.path.join(_ROOT, "engine"))
 
 import handoff  # noqa: E402
+import contracts as contract_engine  # noqa: E402
 import harvest  # noqa: E402
 import liveness  # noqa: E402
 import merge  # noqa: E402
@@ -219,10 +220,17 @@ def plan(refresh=False, out=None, today=None):
             print("  %d. JOBS: %s" % (step, text), file=out)
     if "contracts" in tracks:
         for text in (
-            "Marketplaces and talent networks that carry this kind of work (1 to %d searches). For each one, pass "
-            "the page a freelancer uses to find work or to join, never the page a client uses to hire." % max(1, share),
-            "Staffing or placement agencies for this field in the area, and expert networks if they sell advice "
-            "(1 to %d searches)." % max(1, share),
+            "GIG BOARDS FIRST: pages that LIST open contract, freelance or fractional gigs in this field, which a "
+            "sweep can read (%d or more). Pass each as kind gig-board, with the address of the page that lists the "
+            "gigs, never a home page. Three places to find them: (a) the contract or freelance filter of every job "
+            "board already going into the map (open the board, apply its contract filter, pass that address: this "
+            "costs no search); (b) a general public job search filtered to contract work for their title; (c) "
+            "fractional and freelance boards for the field. The helper opens each page and refuses one with no gig "
+            "that matches what the person sells." % max(2, share),
+            "Then the places where the person needs a profile before work is shown to them: marketplaces, talent "
+            "networks, staffing agencies in the area, and expert networks if they sell advice (1 to %d searches). "
+            "These are NOT read for gigs. They go on the person's Channels list to set up. Pass the page a "
+            "freelancer uses to join, never the page a client uses to hire." % max(1, share),
         ):
             step += 1
             print("  %d. CONTRACT WORK: %s" % (step, text), file=out)
@@ -270,6 +278,17 @@ def board_problem(entry, profile, fetcher):
     postings whose titles match. A board's home page, or a page of postings in
     another field, gives it nothing.
     """
+    if entry.get("kind") == "gig-board":
+        leads, read, failed = harvest.board_leads([entry], profile, fetcher, limit=3,
+                                                  matches=lambda title: contract_engine.gig_title_matches(title, profile))
+        if failed:
+            return ("its page has no list of gigs a sweep can read. A gig board is the page that LISTS open contract, "
+                    "freelance or fractional gigs (a search results or category page). A place where you need a profile "
+                    "to be shown work is a marketplace or a talent network, not a gig board")
+        if not leads:
+            return ("none of the gigs linked on this page matches what you sell. Add the page that lists gigs in your "
+                    "field, such as a board's contract or fractional filter")
+        return None
     leads, read, failed = harvest.board_leads([entry], profile, fetcher, limit=3)
     where = _area(profile) or "your area"
     if failed:
@@ -283,16 +302,38 @@ def board_problem(entry, profile, fetcher):
     return None
 
 
+BY_HAND_NAME = "sources-by-hand"
+
+
+def _by_hand(mark=None):
+    """Whether the open run is one the person started to add or remove a source themselves.
+
+    `open` sets it and `close` clears it. A plan (a build or a refresh) never
+    sets it, so what research finds on its own is still held to the rules.
+    """
+    path = os.path.join(handoff.folder(), BY_HAND_NAME)
+    if mark is True:
+        handoff.ensure_folder()
+        handle = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        os.close(handle)
+    elif mark is False:
+        if os.path.isfile(path) and not os.path.islink(path):
+            os.remove(path)
+    return os.path.isfile(path) and not os.path.islink(path)
+
+
 def has_matching_role(entry, profile, fetcher, today):
     """None when a new employer has an open role that matches the person's titles, else why it is left out."""
     if entry.get("how") != "api" or not isinstance(entry.get("ats"), dict):
-        return "its job list could not be read, so no matching open role could be confirmed. Add it by name if you want it"
+        return ("its job list could not be read, so no matching open role could be confirmed. If the person wants it "
+                "watched anyway, they can say \"add NAME\" and give its careers page")
     found = harvest.harvest({"jobs": [entry]}, profile, fetcher, today)
     if found.finds:
         return None
     if found.failed:
         return "its job list did not answer, so no matching open role could be confirmed"
-    return "it has no open role that matches your titles right now"
+    return ("it has no open role that matches your titles right now. That only matters for employers research found "
+            "on its own. If the person wants it watched, they say \"add NAME\" and it is kept")
 
 
 def add(text, out=None, fetcher=None, today=None):
@@ -319,6 +360,14 @@ def add(text, out=None, fetcher=None, today=None):
                 kept.append(entry)
         proposals[track] = kept
     source_map = sources.load()
+    # An employer the person asked for is kept whenever its job list reads, whatever it has open today.
+    # "No matching role right now" is the normal state of an employer you watch, and the reason to watch it.
+    watched = set(merge.normalize_company(name) for name in (profile.get("jobs") or {}).get("watch_employers") or [])
+    by_hand = _by_hand()
+    for track in sources.TRACKS:
+        for entry in proposals.get(track) or []:
+            if isinstance(entry, dict) and (by_hand or merge.normalize_company(entry.get("name")) in watched):
+                entry["added_by"] = "user"
     keep = None
     if source_map.get("built_on"):
         # A refresh. The map grows only by employers that have something for this person right now.
@@ -326,8 +375,7 @@ def add(text, out=None, fetcher=None, today=None):
             return has_matching_role(entry, profile, fetcher or liveness.HttpFetcher(), today)
     live = fetcher or liveness.HttpFetcher()
     result = sources.add_entries(source_map, proposals, fetcher=fetcher, today=today, keep_new_employer=keep,
-                                 check_board=(lambda entry: board_problem(entry, profile, live))
-                                 if (profile.get("tracks") or {}).get("jobs") else None)
+                                 check_board=lambda entry: board_problem(entry, profile, live))
     if result.added or result.updated:
         sources.save(source_map)
     _print_result(result, out)
@@ -473,26 +521,38 @@ def fixed_queries(profile, refresh=False):
     words = field_words(profile, 2)
     first = words[0] if words else ""
     title = scoring.scrub_confidential(((jobs.get("titles") or [""])[0]), names, "").strip()
-    found = []
+    # Each sweep's searches, most valuable first. They are then dealt out in turn, so every section gets its
+    # first searches early and none is left to whatever the budget has over at the end. Two builds of the same
+    # profile then agree on boards, gig sources and groups as well as on employers.
+    by_track = {"JOBS": [], "CONTRACT WORK": [], "NETWORKING": []}
 
     def add(track, text):
         text = " ".join(scoring.scrub_confidential(text, names, "").split())
-        if text and (track, text) not in found:
-            found.append((track, text))
+        if text and text not in by_track[track]:
+            by_track[track].append(text)
 
     if tracks.get("jobs"):
         industry = scoring.scrub_confidential(((jobs.get("preferred_industries") or [first])[0]), names, "").strip()
         add("JOBS", "largest %s employers in %s" % (industry, city))
-        add("JOBS", "companies hiring %s in %s" % (title or first, city))
+        add("JOBS", "%s jobs in %s" % (title or first, city))                # a field board's results page for the area
         add("JOBS", "%s state workforce job board" % (state or city))
-        add("JOBS", "%s jobs %s job board" % (title or first, city))
+        add("JOBS", "companies hiring %s in %s" % (title or first, city))
+        add("JOBS", "remote %s jobs board" % (title or first))               # one remote board for the field
     if tracks.get("contracts"):
         taken = contracts.get("engagement_types") or []
         service = scoring.scrub_confidential(((contracts.get("services") or [first])[0]), names, "").strip()
         gig_title = scoring.scrub_confidential(((contracts.get("titles") or [service])[0]), names, "").strip()
-        add("CONTRACT WORK", "%s freelance marketplace for freelancers" % service)
+        # Pages that LIST open gigs come first: they are what a sweep can read.
+        plain = lambda text: " ".join(word for word in text.split() if word.lower() != "fractional")   # noqa: E731
+        if "fractional" in taken:
+            add("CONTRACT WORK", "fractional %s jobs open roles" % plain(gig_title))
+        add("CONTRACT WORK", "%s contract jobs remote" % (title or plain(gig_title)))
+        add("CONTRACT WORK", "%s freelance jobs board" % plain(service))
+        # Then the places to have a profile: they go on the Channels list.
         if any(kind in taken for kind in ("fractional", "retainer")):
             add("CONTRACT WORK", "%s talent network apply as talent" % gig_title)
+        else:
+            add("CONTRACT WORK", "%s freelance marketplace for freelancers" % service)
         if any(kind in taken for kind in ("independent-1099", "corp-to-corp", "w2-contract")):
             add("CONTRACT WORK", "%s contract staffing agency %s" % (first, city))
         if "expert-call" in taken:
@@ -507,6 +567,14 @@ def fixed_queries(profile, refresh=False):
         add("NETWORKING", "%s chamber of commerce events" % city)
         for word in groups[2:]:                    # who they want to meet, with whatever budget is left
             add("NETWORKING", "site:meetup.com %s %s" % (word, city))
+    found = []
+    order = [track for track in ("JOBS", "CONTRACT WORK", "NETWORKING") if by_track[track]]
+    turn = 0
+    while any(by_track[track] for track in order):
+        track = order[turn % len(order)]
+        turn += 1
+        if by_track[track]:
+            found.append((track, by_track[track].pop(0)))
     limit = sources.budget(profile, refresh)
     return found[:limit]
 
@@ -540,6 +608,9 @@ def coverage_gaps(source_map, profile):
             gaps.append("no job board for the field yet")
     if tracks.get("contracts"):
         taken = (profile.get("contracts") or {}).get("engagement_types") or []
+        if not count("contracts", "gig-board"):
+            gaps.append("no gig board yet: a page that lists open contract, freelance or fractional gigs in the field. "
+                        "Try the contract filter of a job board already in the map")
         if not count("contracts", "marketplace", "talent-network"):
             gaps.append("no marketplaces or talent networks yet")
         if any(kind in taken for kind in ("independent-1099", "corp-to-corp", "w2-contract")) and \
@@ -649,13 +720,16 @@ def _dispatch(argv=None):
             code = plan(refresh=command == "plan-refresh")
             if code == 0:
                 handoff.open_run(RUN)
+                _by_hand(False)
             return code
         if command == "open":
             _profile()
             handoff.open_run(RUN)
+            _by_hand(True)                  # what is added now is the person's own choice
             print("Ready. Write the hand-off file, run `add` or `remove`, then run `close`.")
             return 0
         if command == "close":
+            _by_hand(False)
             handoff.close_run(RUN)
             print("Closed.")
             return 0
@@ -675,6 +749,7 @@ def _dispatch(argv=None):
                 raise ValueError('Write {"searches": <number>, "skipped": [...]} to the hand-off file first.')
             code = finish(searches, data.get("skipped") or [])
             if code == 0:
+                _by_hand(False)
                 handoff.close_run(RUN)      # a coverage reminder leaves the run open for one more pass
             return code
         if command == "show":

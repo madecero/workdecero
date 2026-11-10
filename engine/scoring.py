@@ -328,6 +328,24 @@ def _fit_points(item, full, result):
     return int(max(0, min(full, round(assessed))))
 
 
+def requirement_sentence(missing):
+    """Why a role is a near miss, as a sentence. "requires not open to C2C" was not one."""
+    needs, says = [], []
+    for phrase in missing:
+        text = str(phrase).strip().rstrip(".")
+        low = text.lower()
+        if low.startswith(("not ", "no ", "does not", "doesn't", "cannot", "can't", "only ", "must ", "w2 only", "w-2 only")):
+            says.append(text[:1].lower() + text[1:] if not text[:2].isupper() else text)
+        else:
+            needs.append(text)
+    parts = []
+    if needs:
+        parts.append("requires %s" % " and ".join(needs))
+    if says:
+        parts.append("the posting says: %s" % "; ".join(says))
+    return ", and ".join(parts)
+
+
 def missing_requirements(item):
     """Must-haves a posting states that the person lacks: a language, a licence, a clearance, a degree, a domain."""
     given = item.get("missing_requirements")
@@ -370,7 +388,7 @@ def _common_checks(item, owner, profile, today, result):
         result.penalties.append((PENALTY_MISSING_CREDENTIAL, "requires something you do not have"))
         for needed in missing:
             result.caveats.append("Requires %s, which you do not have" % needed)
-        result.near = "requires %s" % " and ".join(missing)
+        result.near = requirement_sentence(missing)
     if item.get("link_verified") is False:
         result.penalties.append((PENALTY_UNVERIFIED_LINK, "link not verified"))
         result.caveats.append("The link could not be verified. Confirm the posting is real before applying")

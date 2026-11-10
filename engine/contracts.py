@@ -61,17 +61,18 @@ ENGAGEMENT_PLAIN = {
     "public-bid": "public bids and requests for proposals",
 }
 # Map kinds that are places to look, in the order research should work through them.
-PLACE_KINDS = ("marketplace", "talent-network", "agency", "expert-network", "bid-portal")
-PLACE_WORDS = {"marketplace": "Marketplaces", "talent-network": "Talent networks", "agency": "Agencies",
+PLACE_KINDS = ("gig-board", "marketplace", "talent-network", "agency", "expert-network", "bid-portal")
+PLACE_WORDS = {"gig-board": "Gig boards (pages that list open gigs)", "marketplace": "Marketplaces", "talent-network": "Talent networks", "agency": "Agencies",
                "expert-network": "Expert networks", "bid-portal": "Public-bid portals"}
 # Places that only pay off once the person has a profile there.
-CHANNEL_KINDS = ("marketplace", "talent-network", "expert-network")
+CHANNEL_KINDS = ("marketplace", "talent-network", "agency", "expert-network")
 CHANNEL_STATUS = {"not-started": "Not started", "in-progress": "In progress", "submitted": "In progress",
                   "vetting": "In progress", "active": "Live", "skip": "Skip"}
 CHANNEL_DONE = ("Live", "Skip")
 
-# Platforms and agencies whose own listing page the engine reads every sweep, with no search spent.
-READ_KINDS = ("marketplace", "talent-network", "agency", "expert-network")
+# Pages that list open gigs, which the engine reads every sweep with no search spent. A talent network or an
+# agency is not one: it shows gigs to people with a profile, so it is a channel to set up, not a list to read.
+READ_KINDS = ("gig-board", "marketplace")
 ASSESSMENT_KEYS = ("closed", "fit_assessment", "why", "client", "engagement", "rate_min", "rate_max", "rate_text", "fixed_price",
                    "retainer_monthly", "hours_per_week", "length_weeks", "remote", "work_mode", "location",
                    "distance_miles", "posted", "closes", "deal_breaker", "missing_requirements", "industry", "poster")
@@ -815,6 +816,7 @@ def write_digest(state, profile, store, problems, today=None):
             " Contact first: %s" % entry["contact_first"] if entry.get("contact_first") else ""))
     if not featured:
         lines.append("Nothing new that fits this time.")
+        lines += thin_lines(state, pending_channels(store))
     if more:
         lines += ["", "%d more %s in your tracker, in the New this week view." % (more, "is" if more == 1 else "are")]
 
@@ -900,6 +902,33 @@ def write_digest(state, profile, store, problems, today=None):
     return title, featured, more, pending
 
 
+def thin_lines(state, pending):
+    """What to say, up front, when a sweep found nothing that fits. An empty week is told as it is.
+
+    Much contract work is never listed in public: it goes to people with a
+    profile on a platform, or through someone they know. Saying so, and
+    pointing at the channels, is worth more than a bare "nothing".
+    """
+    boards = [name for kind, name, _ in state.get("places") or [] if kind == "gig-board"]
+    lines = [""]
+    if boards:
+        lines.append("**Public listings were thin this week.** The gig boards in your map (%s) had nothing open that "
+                     "fits what you sell." % ", ".join(boards))
+    else:
+        lines.append("**Your map has no page that lists open gigs in your field,** so this sweep had only web search "
+                     "to go on. Say \"refresh my sources\" to look for gig boards: the contract filter of a job board "
+                     "in your field, or a fractional or freelance board.")
+    lines.append("Much of this kind of work is never posted in public. It goes to people who already have a profile "
+                 "on a platform, or through someone they know.")
+    if pending:
+        lines.append("The most useful next step is under **Channels to set up** below: %d platform%s where a live "
+                     "profile puts you in front of work that is not listed." % (len(pending), "" if len(pending) == 1 else "s"))
+    else:
+        lines.append("Your channels are all set up, so a quiet week is a quiet week. A note to two people who hire "
+                     "for this work is worth more than another search.")
+    return lines
+
+
 def finish_report(state, profile, title, featured, more, pending, due, problems):
     """The short version for the conversation. No rates and no prices."""
     lines = ["CONTRACT SWEEP DONE", ""]
@@ -919,6 +948,10 @@ def finish_report(state, profile, title, featured, more, pending, due, problems)
         lines.append("  %d more %s in the tracker." % (more, "is" if more == 1 else "are"))
     if featured:
         lines.append("  The code before each one is its note's id. Use only these ids. Never make one up.")
+    if not featured:
+        lines += ["", "NOTHING THAT FITS THIS TIME. Say so plainly, then give the person the digest's own explanation: "
+                      "public listings for this kind of work are thin, most of it goes through platform profiles and "
+                      "people they know, and the channels below are the next step. Do not apologise and do not pad."]
     if pending:
         lines += ["", "CHANNELS TO SET UP (%d): %s." % (len(pending), ", ".join(
             "%s (%s)" % (name, status.lower()) for name, status, _ in pending))]

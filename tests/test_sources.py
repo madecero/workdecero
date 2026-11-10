@@ -506,7 +506,8 @@ class Tool(MapCase):
         _, designer = self.run_tool(sources_tool.plan, today=TODAY)
         self.assertIn("Area: Portland, OR.", designer)
         self.assertNotIn("JOBS:", designer)
-        self.assertIn("CONTRACT WORK: Marketplaces and talent networks", designer)
+        self.assertIn("CONTRACT WORK: GIG BOARDS FIRST: pages that LIST open contract, freelance or fractional gigs", designer)
+        self.assertIn("These are NOT read for gigs. They go on the person's Channels list to set up.", designer)
         self.assertIn("Public bids: no, skip bid portals.", designer)
         self.assertNotIn("public-bid portals (1 search)", designer)
         self.assertIn("NETWORKING: Meetups and user groups", designer)
@@ -616,6 +617,54 @@ class Tool(MapCase):
         self.assertIn("Searches used: 2 of 4.", again)
         self.assertEqual(sources.load()["built_on"], "2026-11-09")
 
+    def test_an_employer_the_person_names_is_kept_whatever_it_has_open_today(self):
+        # From the final run: "Add <employer>, their job board is <link>" was dropped because the employer had no
+        # matching role that day, and "watch it anyway" could not be done.
+        self.use_profile("product-leader-denver")
+        other = employer("Other Co", "https://job-boards.greenhouse.io/otherco")          # only an engineer role open
+        saved = sources.load()
+        saved["built_on"] = "2026-10-01"
+        sources.save(saved)
+        # Found by research during a refresh: still held to the rule.
+        self.command("plan-refresh")
+        code, out = self.run_tool(sources_tool.add, {"jobs": [dict(other)]}, fetcher=self.fetcher, today=TODAY)
+        self.assertIn("Other Co: it has no open role that matches your titles right now", out)
+        self.assertIn('they say "add NAME" and it is kept', out)
+        self.assertEqual([entry["name"] for entry in sources.load()["jobs"]], [])
+        self.hand_off({"searches": 1, "skipped": []})
+        self.command("finish")
+        # Named by the person: kept, with no flag needed from the assistant.
+        self.assertEqual(self.command("open")[0], 0)
+        code, out = self.run_tool(sources_tool.add, {"jobs": [dict(other)]}, fetcher=self.fetcher, today=TODAY)
+        self.assertEqual(code, 0, out)
+        self.assertIn("Added (1): Other Co", out)
+        entry = sources.load()["jobs"][0]
+        self.assertEqual((entry["name"], entry["how"], entry["added_by"]), ("Other Co", "api", "user"))
+        self.command("close")
+        self.assertFalse(sources_tool._by_hand())
+        # And a later refresh never drops it for having nothing that day.
+        self.command("plan-refresh")
+        code, out = self.run_tool(sources_tool.add, {"jobs": [dict(other)]}, fetcher=self.fetcher, today=TODAY)
+        self.assertNotIn("Dropped", out)
+        self.assertEqual([entry["name"] for entry in sources.load()["jobs"]], ["Other Co"])
+
+    def test_an_employer_on_their_watch_list_is_always_kept(self):
+        self.use_profile("product-leader-denver")
+        with open(wdprofile.profile_path(), encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("watch_employers:", text)
+        text = text.replace("watch_employers:\n", "watch_employers:\n    - Other Co\n", 1)
+        with open(wdprofile.profile_path(), "w", encoding="utf-8") as handle:
+            handle.write(text)
+        saved = sources.load()
+        saved["built_on"] = "2026-10-01"
+        sources.save(saved)
+        self.command("plan-refresh")
+        other = employer("Other Co", "https://job-boards.greenhouse.io/otherco")
+        code, out = self.run_tool(sources_tool.add, {"jobs": [other]}, fetcher=self.fetcher, today=TODAY)
+        self.assertIn("Added (1): Other Co", out)
+        self.assertEqual(sources.load()["jobs"][0].get("added_by"), "user")
+
     def test_a_refresh_adds_an_employer_only_when_it_has_a_role_for_this_person(self):
         self.use_profile("product-leader-denver")
         robotics = employer("Front Range Robotics", "https://job-boards.greenhouse.io/frontrangerobotics")
@@ -644,14 +693,22 @@ class Tool(MapCase):
         profile = wdprofile.load()[0]
         searches = sources_tool.fixed_queries(profile)
         self.assertEqual(searches, sources_tool.fixed_queries(profile))               # the same list, every time
-        self.assertEqual(searches[:4], [
-            ("JOBS", "largest B2B software employers in Denver"), ("JOBS", "companies hiring VP of Product in Denver"),
-            ("JOBS", "CO state workforce job board"), ("JOBS", "VP of Product jobs Denver job board")])
+        # Dealt out in turn, so every section gets its first searches early and none is left to the leftovers.
+        self.assertEqual(searches[:6], [
+            ("JOBS", "largest B2B software employers in Denver"),
+            ("CONTRACT WORK", "fractional CPO jobs open roles"),
+            ("NETWORKING", "site:meetup.com product Denver"),
+            ("JOBS", "VP of Product jobs in Denver"),                                 # the field board, second for jobs
+            ("CONTRACT WORK", "VP of Product contract jobs remote"),
+            ("NETWORKING", "site:meetup.com AI Denver")])
         texts = [query for _, query in searches]
-        self.assertIn("site:meetup.com product Denver", texts)
-        self.assertIn("site:meetup.com AI Denver", texts)                             # one search for each field word
+        self.assertIn("CO state workforce job board", texts)
         self.assertIn("Denver chamber of commerce events", texts)
-        self.assertIn("expert network product become an expert", texts)               # this person takes expert calls
+        self.assertIn("head of product freelance jobs board", texts)                  # gig boards before places to join
+        self.assertLess(texts.index("head of product freelance jobs board"),
+                        texts.index("Fractional CPO talent network apply as talent"))
+        for section in ("JOBS", "CONTRACT WORK", "NETWORKING"):
+            self.assertEqual(len([one for one, _ in searches if one == section]), 4, section)   # an equal share each
         self.assertLessEqual(len(searches), 12)                                        # inside the Lite budget
         self.assertLessEqual(len(sources_tool.fixed_queries(profile, refresh=True)), 4)
         _, plan = self.run_tool(sources_tool.plan, today=TODAY)
@@ -731,11 +788,14 @@ class Tool(MapCase):
         code, out, _ = self.command("finish")
         self.assertEqual(code, 0)
         self.assertNotIn("COVERAGE CHECK", out)
-        self.assertIn("Not covered: no marketplaces or talent networks yet", out)
+        self.assertIn("Not covered: no gig board yet", out)
+        self.assertIn("no marketplaces or talent networks yet", out)
         full = {"jobs": [{"kind": "employer"}] * 12 + [{"kind": "job-board"}, {"kind": "field-board"}],
-                "contracts": [{"kind": "marketplace"}, {"kind": "agency"}, {"kind": "expert-network"}],
+                "contracts": [{"kind": "gig-board"}, {"kind": "marketplace"}, {"kind": "agency"}, {"kind": "expert-network"}],
                 "networking": [{"kind": "meetup"}, {"kind": "user-group"}, {"kind": "chamber"}]}
         self.assertEqual(sources_tool.coverage_gaps(full, wdprofile.load()[0]), [])
+        full["contracts"].pop(0)                                       # with nothing a sweep can read for gigs
+        self.assertTrue(sources_tool.coverage_gaps(full, wdprofile.load()[0])[0].startswith("no gig board yet"))
 
     def test_field_words_name_the_field_and_never_a_confidential_name(self):
         self.use_profile("product-leader-denver")

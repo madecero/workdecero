@@ -75,7 +75,7 @@ Each entry has:
 | --- | --- |
 | `name` | The employer, board, platform or group |
 | `url` | Where its postings or events are. For an employer, a page on **its own website** (see below) |
-| `kind` | jobs: `employer`, `job-board`, `field-board`, `state-board` (the state's workforce board when it is only a search form). contracts: `marketplace`, `talent-network`, `agency`, `expert-network`, `bid-portal`. networking: `chamber`, `meetup`, `user-group`, `association`, `conference` |
+| `kind` | jobs: `employer`, `job-board`, `field-board`, `state-board` (the state's workforce board when it is only a search form). contracts: `gig-board` (a page that LISTS open contract, freelance or fractional gigs, which a sweep reads), `marketplace`, `talent-network`, `agency`, `expert-network` (places to have a profile: they go on the Channels list and are not read for gigs), `bid-portal`. networking: `chamber`, `meetup`, `user-group`, `association`, `conference` |
 | `notes` | One short line on why it fits this person |
 | `last_active` | For a `meetup` or `user-group`: the date of its most recent event or post, as YEAR-MONTH-DAY. Required for those two kinds |
 | `how` | Optional. `rss` if you found a feed. Otherwise leave it out and the helper decides |
@@ -125,7 +125,7 @@ Sweeps call this every few weeks, and the person can ask for it.
 
 ## Adding and removing by hand
 
-* "Add X to my sources": find its link (one search at most), run `TOOL open`, write the entry with `"added_by": "user"` to the hand-off file, run `TOOL add`, then `TOOL close`. An entry the person added is never dropped by a refresh.
+* "Add X to my sources", or "add X, their job board is LINK": use the link they gave, or find one (one search at most). Run `TOOL open`, write the entry to the hand-off file, run `TOOL add`, then `TOOL close`. **Whatever the person names is kept, as long as its page reads.** An employer with no matching role today is still added: that is the normal state of an employer you watch, and the reason to watch it. It is never dropped by a later refresh for having nothing open. Never tell the person an employer they named was left out for having no matching role, and never offer to edit a file by hand.
 * "Remove X": run `TOOL open`, write `{"remove": "X"}` to the hand-off file, run `TOOL remove`, then `TOOL close`.
 * "Show my sources" or "what do my sweeps look at": `TOOL show`.
 

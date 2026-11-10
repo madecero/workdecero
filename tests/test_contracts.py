@@ -207,13 +207,13 @@ class Start(ContractCase):
 class Channels(ContractCase):
     def test_channels_come_from_setup_and_from_the_map(self):
         _, report = self.start()
-        self.assertIn("Platforms added to the Channels list: 6.", report)
+        self.assertIn("Platforms added to the Channels list: 7.", report)
         self.assertEqual(self.channels(), {
             "Upwork": "Live", "Dribbble": "In progress", "Local creative staffing agency": "Not started",
             "Design marketplace": "Not started", "Creative talent network": "Not started",
-            "Members-only gig board": "Not started"})
-        # Agencies and bid portals need no profile.
-        self.assertNotIn("Rose City Creative Staffing", self.channels())
+            "Members-only gig board": "Not started", "Rose City Creative Staffing": "Not started"})
+        # An agency places people it has on file, so it is a channel to set up. A bid portal needs no profile.
+        self.assertFalse([name for name in self.channels() if "bid" in name.lower() and "gig board" not in name.lower()])
 
     def test_the_persons_own_status_is_never_overwritten(self):
         self.start()
@@ -235,7 +235,7 @@ class Channels(ContractCase):
         self.assertIn("Design marketplace|Design marketplace]]: Not started. Brand and packaging projects for small "
                       "companies.", section)
         self.assertNotIn("Upwork", section)                           # already live
-        self.assertIn("CHANNELS TO SET UP (5): Dribbble (in progress)", summary)
+        self.assertIn("CHANNELS TO SET UP (6): Dribbble (in progress)", summary)
         # The person finishes them all: the list goes quiet.
         store = self.store()
         for row in store.rows("channel"):
@@ -400,6 +400,44 @@ class Intake(ContractCase):
         self.assertEqual(merge._mode_shown({"work_mode": "hybrid"}, Result([])), "Hybrid")
         self.assertEqual(merge._mode_shown({"work_mode": "remote"}, unclear), "Remote")
         self.assertIsNone(merge._mode_shown({}, unclear))
+
+    def test_an_empty_week_is_told_as_it_is_and_points_at_the_channels(self):
+        # From the final run: three sweeps in a row said only "Nothing new that fits this time".
+        self.start()
+        self.intake([])
+        _, done = self.finish()
+        digest = self.digest().section
+        lead = digest.split("## New this sweep")[1].split("##")[0]
+        self.assertIn("Nothing new that fits this time.", lead)
+        self.assertIn("Much of this kind of work is never posted in public.", lead)
+        self.assertIn("The most useful next step is under **Channels to set up** below", lead)
+        self.assertIn("**Your map has no page that lists open gigs in your field,**", lead)   # this map has no gig board
+        self.assertIn("NOTHING THAT FITS THIS TIME. Say so plainly", done)
+        self.assertIn("Do not apologise and do not pad.", done)
+
+    def test_a_week_with_a_fit_says_none_of_that(self):
+        self.start()
+        self.intake([gig("ok", "Identity for a cafe group", engagement="1099", posted="2026-11-05")])
+        _, done = self.finish()
+        self.assertNotIn("never posted in public", self.digest().section)
+        self.assertNotIn("NOTHING THAT FITS", done)
+
+    def test_a_near_miss_reason_is_a_sentence(self):
+        # From the final run: "requires not open to C2C".
+        self.assertEqual(scoring.requirement_sentence(["not open to C2C"]), "the posting says: not open to C2C")
+        self.assertEqual(scoring.requirement_sentence(["a medical licence"]), "requires a medical licence")
+        self.assertEqual(scoring.requirement_sentence(["a clearance", "W2 only"]),
+                         "requires a clearance, and the posting says: W2 only")
+        self.assertEqual(scoring.requirement_sentence(["fluent German", "a PMP certificate"]),
+                         "requires fluent German and a PMP certificate")
+
+    def test_talent_networks_and_agencies_are_channels_and_only_gig_boards_are_read(self):
+        self.assertEqual(contracts.READ_KINDS, ("gig-board", "marketplace"))
+        for kind in ("talent-network", "agency", "expert-network"):
+            self.assertIn(kind, contracts.CHANNEL_KINDS)
+            self.assertNotIn(kind, contracts.READ_KINDS)
+        self.assertNotIn("gig-board", contracts.CHANNEL_KINDS)         # a list to read needs no profile
+        self.assertEqual(contracts.PLACE_KINDS[0], "gig-board")        # and it is the first place research is sent
 
     def test_a_place_is_listed_once_under_not_covered(self):
         # From the tester's run: one marketplace appeared twice, once from the engine and once from research.
@@ -659,7 +697,7 @@ class Platforms(ContractCase):
         super(Platforms, self).setUp()
         data = sources.empty_map()
         data["contracts"] = [
-            {"name": "Fractional Example", "url": PLATFORM + "/gigs", "kind": "talent-network", "how": "page",
+            {"name": "Fractional Example", "url": PLATFORM + "/gigs", "kind": "gig-board", "how": "page",
              "verified_on": "2026-11-09"},
             {"name": "Browser Built Network", "url": "https://unreadable.example.org/gigs", "kind": "marketplace",
              "how": "page", "verified_on": "2026-11-09"},
@@ -939,7 +977,8 @@ class ProductLeader(ContractCase):
         self.assertEqual(self.channels(), {"Fractional executive marketplace": "In progress", "Expert network": "Live",
                                            "Design marketplace": "Not started",
                                            "Creative talent network": "Not started",
-                                           "Members-only gig board": "Not started"})
+                                           "Members-only gig board": "Not started",
+                                           "Rose City Creative Staffing": "Not started"})
 
 
 class SkillText(unittest.TestCase):

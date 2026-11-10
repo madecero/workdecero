@@ -49,7 +49,9 @@ KINDS = {
     # A state-board is the state's public workforce board when it is only a search form: kept in the map
     # for the person to check by hand, never read by a sweep.
     "jobs": ("employer", "job-board", "field-board", "state-board"),
-    "contracts": ("marketplace", "talent-network", "agency", "expert-network", "bid-portal"),
+    # A gig-board is a page that LISTS open gigs (a board's contract filter, a fractional or freelance board).
+    # A sweep reads it. Marketplaces, talent networks and agencies are places to have a profile, not lists.
+    "contracts": ("gig-board", "marketplace", "talent-network", "agency", "expert-network", "bid-portal"),
     "networking": ("chamber", "meetup", "user-group", "association", "conference"),
 }
 HOWS = ("api", "rss", "page", "browser")
@@ -552,7 +554,7 @@ class AddResult(object):
         self.dropped = []    # (track, name, reason)
 
 
-BOARD_KINDS = ("job-board", "field-board")
+BOARD_KINDS = ("job-board", "field-board", "gig-board")
 
 
 def add_entries(source_map, proposals, fetcher=None, today=None, keep_new_employer=None, check_board=None):
