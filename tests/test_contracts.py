@@ -372,6 +372,14 @@ class Intake(ContractCase):
         _, again = self.intake([gig("two", "Menu design for a brewery", engagement="1099", posted="2026-11-06")], searches=4)
         self.assertNotIn("BEFORE YOU FINISH", again)                   # said once
 
+    def test_the_closing_report_points_at_the_reasons_and_never_says_there_are_none(self):
+        self.start()
+        self.intake([gig("shut", "Packaging for a tea company", engagement="1099", closed=True)])
+        _, done = self.finish()
+        self.assertIn("LEFT OUT BY THEIR PROFILE: 1. The digest note names each one and gives the reason", done)
+        self.assertIn("Never say that no reason was given.", done)
+        self.assertNotIn("closed or filled", done)                     # the reason itself stays in the note
+
     def test_unused_searches_get_one_nudge(self):
         _, report = self.intake([], searches=2)
         self.assertIn("BEFORE YOU FINISH: 8 of 10 searches are unused and nothing that fits has been found yet.", report)
@@ -717,6 +725,18 @@ class Platforms(ContractCase):
         self.hand_off({"assessed": [], "searches": 9})
         _, again = self.run_step(contract_tool.intake, today=TODAY)
         self.assertNotIn("BEFORE YOU FINISH", again)
+
+    def test_the_reminder_to_judge_does_not_use_up_the_reminder_to_keep_searching(self):
+        # From the tester's run: one fit, four of ten searches used, and no nudge, because the first one had been spent.
+        self.start()
+        self.hand_off({"assessed": [], "searches": 2})
+        _, first = self.run_step(contract_tool.intake, today=TODAY)
+        self.assertIn("had no judgement from you", first)
+        self.hand_off({"assessed": [{"id": "c1", "fit_assessment": 31, "engagement": "Fractional Contract",
+                                     "remote": True, "why": "What they sell."},
+                                    {"id": "c2", "not_a_gig": True}, {"id": "c3", "not_a_gig": True}], "searches": 4})
+        _, second = self.run_step(contract_tool.intake, today=TODAY)
+        self.assertIn("BEFORE YOU FINISH: 6 of 10 searches are unused and only 1 gig that fits has been found.", second)
 
     def test_a_tracked_gig_is_not_read_again(self):
         self.sweep({"CTO Advisory Board": {"fit_assessment": 31, "engagement": "Fractional Contract", "remote": True}})

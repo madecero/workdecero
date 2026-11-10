@@ -679,8 +679,8 @@ def intake_report(state, profile):
                   % (len(waiting), "" if len(waiting) == 1 else "s", ", ".join(waiting)),
                   "  Each has its text in the start answer. Judge them and run intake again with only those."]
     elif len([entry for entry in state["new"] if not entry.get("near")]) < ENOUGH_FITS \
-            and left >= limits["searches"] // 2 and not state.get("nudged"):
-        state["nudged"] = True                  # said once, so a sweep can never loop on it
+            and left >= limits["searches"] // 2 and not state.get("nudged_search"):
+        state["nudged_search"] = True           # said once, on its own count: judging the engine's gigs does not use it up
         fits = len([entry for entry in state["new"] if not entry.get("near")])
         lines += ["", "BEFORE YOU FINISH: %d of %d searches are unused and %s." % (
                       left, limits["searches"], "nothing that fits has been found yet" if not fits else
@@ -885,6 +885,11 @@ def finish_report(state, profile, title, featured, more, pending, due, problems)
     if pending:
         lines += ["", "CHANNELS TO SET UP (%d): %s." % (len(pending), ", ".join(
             "%s (%s)" % (name, status.lower()) for name, status, _ in pending))]
+    if state.get("left_out"):
+        lines += ["", "LEFT OUT BY THEIR PROFILE: %d. The digest note names each one and gives the reason, under "
+                      "\"Left out, and why\". The reasons are theirs to read there, so they are not repeated here. "
+                      "Tell the person the reasons are in the digest. Never say that no reason was given."
+                  % state["left_out"]]
     if state["not_covered"]:
         lines += ["", "Not covered: %s." % ", ".join(state["not_covered"])]
     if problems:
