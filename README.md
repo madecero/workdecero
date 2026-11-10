@@ -124,7 +124,7 @@ All off until you turn them on with `/workdecero:setup`.
 * **Task tracker.** Posts a comment of counts after each sweep.
 * **Spreadsheet snapshot.** A read-only spreadsheet of your trackers to glance at, rebuilt after each sweep.
 
-**No standing permission for these.** Claude Code asks for browser, calendar and tracker tools each time, like any other tool. The rules each one keeps, and what Lite and Full cost in searches, are in [docs/connections.md](docs/connections.md).
+**No standing permission for these.** Claude Code asks for browser, calendar and tracker tools each time, like any other tool. While browser use is off, a sweep is refused the browser outright. The rules each one keeps, and what Lite and Full cost in searches, are in [docs/connections.md](docs/connections.md).
 
 ## Update and uninstall
 

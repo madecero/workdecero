@@ -626,7 +626,8 @@ class Write(SetupCase):
     def test_the_helper_speaks_in_plain_labels(self):
         self.assertEqual(setup_tool.plain_label("jobs.salary_floor"), "pay floor")
         self.assertEqual(setup_tool.plain_label("jobs.titles"), "titles")
-        self.assertEqual(setup_tool.plain_label("networking.max_events_per_month"), "max events per month")
+        self.assertEqual(setup_tool.plain_label("networking.max_events_per_month"), "events a month")
+        self.assertEqual(setup_tool.plain_label("networking.max_cost_per_year"), "max cost per year")
         self.open_run()
         self.send({"set": {"jobs.titles": ["VP of Product"], "jobs.salary_floor": 210000, "location.radius_miles": 40}})
         _, out, _ = self.call("save")
@@ -636,9 +637,23 @@ class Write(SetupCase):
         _, out, _ = self.call("fields")
         self.assertTrue(out.startswith("PICKER OPTIONS."))
         self.assertIn("  How far they will travel: 25 miles (Recommended) / 15 miles / 40 miles / 60 miles", out)
+        self.assertIn("  Events a month (networking): 2 a month (Recommended) / 1 / 4 / 8", out)
+        self.assertIn("  When they cannot go to events (networking, pick any): Weekday daytime (9 to 5) / Weekday "
+                      "evenings / Weekends / No limits", out)
         for question, options in setup_tool.PICKERS:
+            self.assertLessEqual(len(options), 4, question)            # a picker shows four at most
+            if "pick any" in question:                                  # a fact about them: nothing to recommend
+                self.assertFalse([option for option in options if "(Recommended)" in option], question)
+                continue
             self.assertTrue(options[0].endswith("(Recommended)"), question)
             self.assertEqual(len([option for option in options if "(Recommended)" in option]), 1, question)
+
+    def test_every_time_the_picker_offers_is_one_the_networking_engine_understands(self):
+        sys.path.insert(0, os.path.join(_paths.REPO_ROOT, "engine"))
+        import networking
+        options = dict(setup_tool.PICKERS)["When they cannot go to events (networking, pick any)"]
+        for option in options[:-1]:
+            self.assertTrue(networking.time_rules({"networking": {"unavailable": [option]}}), option)
 
     def test_the_summary_says_when_a_sweep_is_not_in_this_version_yet(self):
         with tempfile.TemporaryDirectory() as skills:

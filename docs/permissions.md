@@ -19,7 +19,8 @@ Claude Code normally asks you before it runs a command or writes a file. Setup a
 
 * The helpers take no extra words, so an approved command cannot be pointed at another file. They read and write your profile, your local map, the `workdecero` folder in your vault and the temporary folder. That is all they can reach.
 * A helper command that changes anything only works while its part of workdecero is in the middle of a run. A stray call in some other conversation changes nothing.
-* Any other command, any extra word on those lines, any other file: Claude Code asks you as usual. The approval never blocks anything and never approves anything it does not recognise in full.
+* Any other command, any extra word on those lines, any other file: Claude Code asks you as usual. The approval never approves anything it does not recognise in full.
+* One thing is refused outright. While a sweep or a local map build is running and browser use is off in your profile (it is off unless you turn it on), any tool that drives a browser, such as Claude in Chrome, is refused with the reason "workdecero: browser use is off in your profile". A sweep counts as running for 30 minutes after its last step. Nothing else is ever refused, and outside a running sweep your browser tools behave as they always do.
 * The approval holds in any Claude Code conversation while the plugin is enabled. **To turn it off, disable the plugin:** `claude plugin disable workdecero@workdecero`. The code that does this is one short file, [`hooks/allow_helper.py`](../hooks/allow_helper.py), if you want to read it.
 
 **What still asks, on purpose:**

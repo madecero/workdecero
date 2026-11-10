@@ -158,7 +158,10 @@ Say the step line at the start of each block, such as **"Step 2 of 5: where you 
 ### Step 4 of 5: time and tools
 
 1. Picker: **digest size** (10 (Recommended) / 5 / 20 new items each sweep) and **mode** (Lite, for a Pro plan (Recommended) / Full, for a Max plan).
-2. If networking is on: show your suggestions for who to meet and ask them to keep or change them, and ask when they cannot attend (for example weekday mornings). Goals can stay as you drafted them.
+2. If networking is on, three things. Goals can stay as you drafted them.
+   * Show your suggestions for who to meet and ask them to keep or change them.
+   * Picker, multi-select: **When can you not go to events?** Weekday daytime (9 to 5) / Weekday evenings / Weekends / No limits. They can also type their own, such as "Tuesday evenings" or "before 8 AM". Save what they pick or type, in their words, as the list `networking.unavailable`. "No limits" saves an empty list. The sweep never picks an event at a time on this list.
+   * Picker: **How many events a month do you want suggested?** 2 a month (Recommended) / 1 / 4 / 8. Save the number as `networking.max_events_per_month`. The digest never suggests more than this.
 3. **The vault.** `status` listed the Obsidian vaults on this computer. Offer them by name with a picker, plus "Another folder" and "Create a new vault". Send the choice in an answers file (`storage.vault_path`, and `storage.vault_folder` if they want a name other than workdecero), then run `TOOL check-vault`.
    * If it is refused, show the reason as given and ask again. Never work around a refusal.
    * "Create a new vault" needs a path from them and a clear yes. Only then set `"_new_vault": true`.

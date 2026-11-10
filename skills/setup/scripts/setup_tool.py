@@ -564,6 +564,8 @@ def summary_card(profile, inferred=()):
             lines.append("  Networking goals: %s%s" % (_join(networking["goals"]), mark("networking.goals")))
         if networking.get("unavailable"):
             lines.append("  Cannot attend: %s" % _join(networking["unavailable"]))
+        if isinstance(networking.get("max_events_per_month"), int):
+            lines.append("  Events suggested a month, at most: %d" % networking["max_events_per_month"])
 
     location = full.get("location") or {}
     lines += ["", "WHERE"]
@@ -1095,6 +1097,7 @@ PLAIN_LABELS = {
     "location.open_to_relocation": "relocation", "exclusions": "leave-outs", "confidential": "confidential names",
     "confidential.names": "confidential names", "networking": "networking settings",
     "networking.who_to_meet": "who to meet", "networking.unavailable": "times you cannot do",
+    "networking.max_events_per_month": "events a month",
     "digest": "digest", "digest.max_new_items": "digest size", "mode": "Lite or Full", "storage": "vault",
     "storage.vault_path": "vault", "storage.vault_folder": "folder in the vault",
     "storage.spreadsheet_snapshot": "spreadsheet copy", "integrations": "connections",
@@ -1106,6 +1109,9 @@ PICKERS = (
     ("Open to relocating", ("No (Recommended)", "Yes")),
     ("Digest size", ("10 new items each sweep (Recommended)", "5", "20")),
     ("Mode", ("Lite, for a Pro plan (Recommended)", "Full, for a Max plan")),
+    ("When they cannot go to events (networking, pick any)",
+     ("Weekday daytime (9 to 5)", "Weekday evenings", "Weekends", "No limits")),
+    ("Events a month (networking)", ("2 a month (Recommended)", "1", "4", "8")),
     ("Another setup is open", ("Leave it and stop here (Recommended)", "Pick it up here", "Discard it and start fresh")),
 )
 SWEEP_SKILLS = (("jobs", "job-sweep", "job"), ("contracts", "contract-sweep", "contract"),
