@@ -57,6 +57,7 @@ import wdprofile  # noqa: E402
 
 KIND_WORDS = {
     "employer": "employers", "job-board": "state and city job boards", "field-board": "job boards for your field",
+    "state-board": "state workforce board to check by hand",
     "marketplace": "marketplaces", "talent-network": "talent networks", "agency": "agencies",
     "expert-network": "expert networks", "bid-portal": "public-bid portals",
     "chamber": "chambers", "meetup": "meetups", "user-group": "user groups", "association": "associations",
@@ -64,6 +65,7 @@ KIND_WORDS = {
 }
 KIND_ONE = {
     "employer": "employer", "job-board": "state or city job board", "field-board": "job board for your field",
+    "state-board": "state workforce board, checked by hand",
     "marketplace": "marketplace", "talent-network": "talent network", "agency": "agency",
     "expert-network": "expert network", "bid-portal": "public-bid portal", "chamber": "chamber", "meetup": "meetup",
     "user-group": "user group", "association": "association", "conference": "conference",
@@ -195,7 +197,10 @@ def plan(refresh=False, out=None, today=None):
             "whose job site was not found: search the employer name with the word careers and a system name "
             "such as Workday." % (max(2, share), 12 if mode == "lite" else 30),
             "The state's public workforce job board, the one its labor department runs. Every state has one. "
-            "It goes in every map (1 search). Then any city or regional job board. For every board, pass the "
+            "It goes in every map (1 search). If it has a page that lists postings for this field, pass that as "
+            "kind job-board. If it is only a search form, pass it as kind state-board, with search_url set to "
+            "a search already filled in for this field if its address takes one: it is kept for the person to "
+            "check by hand. Then any city or regional job board. For every board, pass the "
             "page that LISTS postings for this field and area (a search-results or category page), never the "
             "board's home page: a sweep reads exactly the page you give. The helper opens it and refuses a page "
             "with no posting that matches the person's titles.",
@@ -261,7 +266,9 @@ def board_problem(entry, profile, fetcher):
     where = _area(profile) or "your area"
     if failed:
         return ("its page has no list of postings a sweep can read. Add the page that lists %s jobs in %s (a search "
-                "results or category page)" % (_field(profile), where))
+                "results or category page). If this is the state's workforce board and it only has a search form, add "
+                "it with kind state-board, and it is kept for the person to check by hand"
+                % (_field(profile), where))
     if not leads:
         return ("this looks like the board's home page, or a list with nothing in your field: none of the postings "
                 "linked on it matches your titles. Add the page that lists %s jobs in %s" % (_field(profile), where))
@@ -424,7 +431,7 @@ def coverage_gaps(source_map, profile):
         employers, target = count("jobs", "employer"), EMPLOYER_TARGET.get(mode, 12)
         if employers < target:
             gaps.append("%d of %d employers" % (employers, target))
-        if not count("jobs", "job-board"):
+        if not count("jobs", "job-board", "state-board"):
             gaps.append("no state workforce job board yet")
         if not count("jobs", "field-board"):
             gaps.append("no job board for the field yet")

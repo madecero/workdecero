@@ -73,7 +73,7 @@ Each entry has:
 | --- | --- |
 | `name` | The employer, board, platform or group |
 | `url` | Where its postings or events are. For an employer, a page on **its own website** (see below) |
-| `kind` | jobs: `employer`, `job-board`, `field-board`. contracts: `marketplace`, `talent-network`, `agency`, `expert-network`, `bid-portal`. networking: `chamber`, `meetup`, `user-group`, `association`, `conference` |
+| `kind` | jobs: `employer`, `job-board`, `field-board`, `state-board` (the state's workforce board when it is only a search form). contracts: `marketplace`, `talent-network`, `agency`, `expert-network`, `bid-portal`. networking: `chamber`, `meetup`, `user-group`, `association`, `conference` |
 | `notes` | One short line on why it fits this person |
 | `last_active` | For a `meetup` or `user-group`: the date of its most recent event or post, as YEAR-MONTH-DAY. Required for those two kinds |
 | `how` | Optional. `rss` if you found a feed. Otherwise leave it out and the helper decides |
@@ -102,13 +102,14 @@ Do not pass a third-party board's copy of an employer's postings as the employer
    * A designer gets agencies and studios, and marketplaces such as design and freelance platforms.
    * A product or technology leader gets software employers, fractional and executive boards, and expert networks.
    Use the profile, not these examples, to decide.
-6. **A job board is added as its listing page.** A sweep reads a board by opening the exact page in the map and picking out postings whose titles match. So pass the page that lists postings for the person's field and area: a search-results page or a category page. Never the board's home page. The helper opens the page and refuses it when no posting linked there matches the person's titles. When it refuses, find the right page on that board and send that. A refresh re-checks every board the same way and names the weak ones.
-7. **Three things every map has**, whatever the field: the state's public workforce job board; the largest active meetup groups for the field, found with one Meetup topic search and ranked by members and next event; and for contract platforms the freelancer's side of the site, never the "hire talent" side (the helper refuses those).
-8. **A refresh adds an employer only when it has an open role for this person.** Size alone is not a reason. The helper checks, and leaves out a new employer with nothing that matches.
-9. **Use the budget.** If searches are left and a section is thin (fewer employers than the plan asks for, or a sweep with only two or three sources), keep going. Stopping early with half the budget unused shortchanges the person.
-10. When the checklist is done or the budget is used, write the true number of searches and a short list of what you did not get to into the hand-off file (an empty list if nothing was skipped), and run `TOOL finish`. Show the person the summary it prints, as it is.
-11. **If `TOOL finish` answers COVERAGE CHECK**, it lists exactly what the map is still short of and how many searches are left. Do one more pass on those gaps only, add what you find with `TOOL add`, write the hand-off file again with the new number of searches, and run `TOOL finish` again. It asks once. The second time it records the map and lists what is missing under "Not covered".
-12. Add one line of your own: anything notable you could not verify, and that they can say "show my sources" or "remove NAME from my sources" at any time.
+6. **The state's workforce board is in every map.** If it has a page that lists postings for the person's field, add that as a `job-board`. If it is only a search form, add it as a `state-board`, with `search_url` set to a search already filled in for their field when the board's address takes one. A sweep does not read a `state-board`. Each job digest links to it for the person to check by hand.
+7. **A job board is added as its listing page.** A sweep reads a board by opening the exact page in the map and picking out postings whose titles match. So pass the page that lists postings for the person's field and area: a search-results page or a category page. Never the board's home page. The helper opens the page and refuses it when no posting linked there matches the person's titles. When it refuses, find the right page on that board and send that. A refresh re-checks every board the same way and names the weak ones.
+8. **Three things every map has**, whatever the field: the state's public workforce job board; the largest active meetup groups for the field, found with one Meetup topic search and ranked by members and next event; and for contract platforms the freelancer's side of the site, never the "hire talent" side (the helper refuses those).
+9. **A refresh adds an employer only when it has an open role for this person.** Size alone is not a reason. The helper checks, and leaves out a new employer with nothing that matches.
+10. **Use the budget.** If searches are left and a section is thin (fewer employers than the plan asks for, or a sweep with only two or three sources), keep going. Stopping early with half the budget unused shortchanges the person.
+11. When the checklist is done or the budget is used, write the true number of searches and a short list of what you did not get to into the hand-off file (an empty list if nothing was skipped), and run `TOOL finish`. Show the person the summary it prints, as it is.
+12. **If `TOOL finish` answers COVERAGE CHECK**, it lists exactly what the map is still short of and how many searches are left. Do one more pass on those gaps only, add what you find with `TOOL add`, write the hand-off file again with the new number of searches, and run `TOOL finish` again. It asks once. The second time it records the map and lists what is missing under "Not covered".
+13. Add one line of your own: anything notable you could not verify, and that they can say "show my sources" or "remove NAME from my sources" at any time.
 
 ## Refreshing the map
 

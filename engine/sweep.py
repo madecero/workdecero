@@ -203,6 +203,9 @@ def start(profile, store, source_map, fetcher, today=None):
         "left_out_why": why,
         "boards": [{"name": entry["name"], "url": entry["url"]} for entry in boards],
         "board_leads": leads, "boards_read": boards_read, "boards_failed": boards_failed, "leads_read": [],
+        # Boards a sweep cannot read, kept for the person to check themselves.
+        "by_hand": [{"name": entry["name"], "url": entry.get("search_url") or entry["url"]}
+                    for entry in source_map.get("jobs") or [] if entry.get("kind") == "state-board"],
         "not_covered": browser_only + ["%s (its listing page could not be read)" % name for name in boards_failed],
         "board_postings": len(board_finds),
         "new": [], "searches": 0, "warm_done": [],
@@ -571,6 +574,11 @@ def write_digest(state, profile, store, problems, today=None):
         lines.append("- Employers added to your local map from postings found: %d." % state["learned"])
     if state["employers_failed"]:
         lines.append("- Job lists that did not answer: %s." % ", ".join(state["employers_failed"]))
+    if state.get("by_hand"):
+        lines += ["", "## Check by hand"]
+        for entry in state["by_hand"]:
+            lines.append("- [%s](%s): the state's workforce board is a search form, so a sweep cannot read it. "
+                         "Search it yourself now and then." % (entry["name"], entry["url"]))
     reasons = state.get("left_out_why") or []
     if reasons:
         lines += ["", "## Left out, and why"]

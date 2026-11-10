@@ -404,6 +404,23 @@ class Boards(SweepCase):
         self.assertIn("- Seen and not read: [Head of Product](https://boards.example.org/job/head-of-product/104)",
                       self.digest().section)
 
+    def test_a_state_board_to_check_by_hand_is_linked_in_the_digest_and_never_read(self):
+        data = sources.load()
+        data["jobs"].append({"name": "State workforce board", "url": "https://jobs.statework.example.gov/",
+                             "kind": "state-board", "how": "page", "check_by_hand": True, "verified_on": "2026-11-09",
+                             "search_url": "https://jobs.statework.example.gov/search?q=product"})
+        sources.save(data)
+        _, report = self.start()
+        self.assertNotIn("statework", " ".join(self.fetcher.requested))       # a sweep does not try to read it
+        self.assertNotIn("State workforce board (its listing page could not be read)", report)
+        self.hand_off({"assessed": self.judge_all(report, work_mode=None, pay_max=None), "leads_not_fits": ["b1"],
+                       "searches": 9})
+        self.run_step(sweep_tool.intake, fetcher=self.fetcher, today=TODAY)
+        self.run_step(sweep_tool.finish, today=TODAY)
+        by_hand = self.digest().section.split("## Check by hand")[1].split("##")[0]
+        self.assertIn("- [State workforce board](https://jobs.statework.example.gov/search?q=product): the state's "
+                      "workforce board is a search form, so a sweep cannot read it.", by_hand)
+
     def test_structured_data_is_read_and_nothing_is_guessed(self):
         read = liveness.page_posting
         found = read("https://boards.example.org/job/principal-product-manager-ai/101", self.fetcher)

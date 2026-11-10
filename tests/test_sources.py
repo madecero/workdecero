@@ -686,6 +686,29 @@ class Tool(MapCase):
         _, plan = self.run_tool(sources_tool.plan, today=TODAY)
         self.assertIn("never the board's home page", plan)
 
+    def test_a_state_board_that_is_a_search_form_is_kept_to_check_by_hand(self):
+        self.use_profile("product-leader-denver")
+        form = {"name": "State job board", "url": "https://jobs.statework.example.gov/", "kind": "state-board",
+                "search_url": "https://jobs.statework.example.gov/search/listings"}
+        code, out = self.run_tool(sources_tool.add, {"jobs": [form]}, fetcher=self.fetcher, today=TODAY)
+        self.assertEqual(code, 0, out)
+        entry = sources.load()["jobs"][0]
+        self.assertEqual((entry["kind"], entry["check_by_hand"], entry["search_url"]),
+                         ("state-board", True, "https://jobs.statework.example.gov/search/listings"))
+        self.assertIn("a sweep cannot read it", entry["notes"])
+        # The coverage check counts it as the state board being present.
+        gaps = sources_tool.coverage_gaps(sources.load(), wdprofile.load()[0])
+        self.assertNotIn("no state workforce job board yet", gaps)
+        # A refresh does not call it weak: it was never meant to be read.
+        _, refreshed = self.run_tool(sources_tool.reverify, fetcher=self.fetcher, today=TODAY)
+        self.assertNotIn("Boards a sweep will get nothing from", refreshed)
+        _, shown = self.run_tool(sources_tool.show)
+        self.assertIn("state workforce board, checked by hand: State job board", shown)
+        # The refusal of a form passed as an ordinary board says how to keep it.
+        _, out = self.run_tool(sources_tool.add, {"jobs": [dict(form, name="Another state board", kind="job-board")]},
+                               fetcher=self.fetcher, today=TODAY)
+        self.assertIn("add it with kind state-board", out)
+
     def test_a_refresh_names_boards_a_sweep_gets_nothing_from(self):
         self.use_profile("product-leader-denver")
         saved = sources.empty_map()

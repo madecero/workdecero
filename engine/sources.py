@@ -46,7 +46,9 @@ import wdprofile
 FILE_NAME = "sources.yaml"
 TRACKS = ("jobs", "contracts", "networking")
 KINDS = {
-    "jobs": ("employer", "job-board", "field-board"),
+    # A state-board is the state's public workforce board when it is only a search form: kept in the map
+    # for the person to check by hand, never read by a sweep.
+    "jobs": ("employer", "job-board", "field-board", "state-board"),
     "contracts": ("marketplace", "talent-network", "agency", "expert-network", "bid-portal"),
     "networking": ("chamber", "meetup", "user-group", "association", "conference"),
 }
@@ -522,7 +524,14 @@ def check_entry(track, entry, fetcher, today, require_activity=True):
         if ats:
             clean["ats"] = ats
         wanted = (entry.get("how") or "").strip().lower()
-        if state == "blocked":
+        if kind == "state-board":
+            clean["how"] = "page"
+            clean["check_by_hand"] = True
+            search = (entry.get("search_url") or "").strip()
+            if search.lower().startswith(("http://", "https://")):
+                clean["search_url"] = search          # a search already filled in for the person's field
+            notes.append("A search form, so a sweep cannot read it. Each job digest links to it for you to check")
+        elif state == "blocked":
             clean["how"] = "browser"
             notes.append("Could not be checked by script: %s" % note)
         else:
