@@ -15,8 +15,7 @@ To do this, a small check runs each time you send a prompt and each time Claude 
 | Run the job sweep helper | `python3 "<plugin folder>/skills/job-sweep/scripts/sweep_tool.py"` followed by one of: `start`, `restart`, `intake`, `warm`, `finish`, `cancel`, `list`, `open`, `update`, `close`. Nothing may follow that word |
 | Run the contract sweep helper | `python3 "<plugin folder>/skills/contract-sweep/scripts/contract_tool.py"` followed by one of: `start`, `restart`, `intake`, `finish`, `cancel`, `list`, `open`, `update`, `close`. Nothing may follow that word |
 | Run the networking sweep helper | `python3 "<plugin folder>/skills/networking-sweep/scripts/networking_tool.py"` followed by one of: `start`, `restart`, `intake`, `finish`, `cancel`, `list`, `open`, `update`, `prep`, `close`. Nothing may follow that word |
-| Run the import helper | `python3 "<plugin folder>/skills/import/scripts/import_tool.py"` followed by one of: `fields`, `check`, `run`, `cancel`. Nothing may follow that word |
-| Write one temporary file per helper | `setup-answers.json`, `sources-entries.json`, `sweep-handoff.json`, `contract-handoff.json`, `networking-handoff.json` and `import-plan.json`, each in `~/.cache/workdecero/`, and only while that folder is a real folder that you own and nobody else can open |
+| Write one temporary file per helper | `setup-answers.json`, `sources-entries.json`, `sweep-handoff.json`, `contract-handoff.json` and `networking-handoff.json`, each in `~/.cache/workdecero/`, and only while that folder is a real folder that you own and nobody else can open |
 
 **What that means.**
 

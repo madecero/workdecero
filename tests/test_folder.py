@@ -1,8 +1,8 @@
 """The private hand-off folder is there before the assistant's first write, in every skill.
 
 Claude Code lets the assistant write a hand-off file without asking only while
-the folder exists and is private. From a live import: the folder had been
-removed, and "Do you want to create import-plan.json?" appeared three times.
+the folder exists and is private. In a live run the folder had been removed,
+and Claude Code asked about the hand-off file three times.
 """
 
 import importlib
@@ -26,7 +26,6 @@ FIRST = {
     "job-sweep": ("start", "restart", "list", "open"),
     "contract-sweep": ("start", "restart", "list", "open"),
     "networking-sweep": ("start", "restart", "list", "open"),
-    "import": ("fields", "check"),
 }
 
 
@@ -89,7 +88,7 @@ class FolderBeforeTheFirstWrite(unittest.TestCase):
             module = self.module(skill)
             for command in module.ENDS:
                 self.assertIn(command, module.COMMANDS, skill)
-        module = self.module("import")
+        module = self.module("setup")
         self.call(module, "fields")
         self.assertTrue(os.path.isdir(self.cache))
         self.assertEqual(self.call(module, "cancel"), 0)

@@ -68,8 +68,6 @@ Three steps, once, in order. Each is a slash command you type in Claude Code.
 
 You can also use plain words, such as "run the job sweep". When you do, Claude Code asks once whether it may start that part of workdecero. Say yes. The slash commands ask nothing.
 
-**Already keep a tracker in a spreadsheet?** Run `/workdecero:import` after setup. Export each table as a CSV file and say where the files are. It shows you what each column would become and how many notes it would write, and writes nothing until you say yes. Columns it has no place for are kept, word for word, in each note. Your spreadsheet is not changed, and importing twice adds nothing twice.
-
 **Two things on screen are Claude Code's own, and workdecero has no say in them.** The first time you open a folder, Claude Code asks whether you trust it, and it may ask about a tool the first time one is used. And it sometimes shows a grey suggested reply in the box where you type. Those suggestions are guesses. They can contain a number or an answer you never gave, such as a pay figure or "my profile there is live". Type your own answers.
 
 ## Weekly use
@@ -116,7 +114,7 @@ Your profile and local map live in `~/.config/workdecero/`. Your trackers live i
 
 ## What workdecero runs without asking
 
-Claude Code normally asks you before it runs a command or writes a file. Setup and the sweeps have many small steps, so while workdecero is enabled it approves a short, fixed list of its own actions for you: six small programs of its own (one each for setup, the local map, the three sweeps and the importer), each of which can only do a fixed list of steps, and one temporary file for each. Nothing else. To turn that off, disable the plugin with `claude plugin disable workdecero@workdecero`.
+Claude Code normally asks you before it runs a command or writes a file. Setup and the sweeps have many small steps, so while workdecero is enabled it approves a short, fixed list of its own actions for you: five small programs of its own (one each for setup, the local map and the three sweeps), each of which can only do a fixed list of steps, and one temporary file for each. Nothing else. To turn that off, disable the plugin with `claude plugin disable workdecero@workdecero`.
 
 To do this, a small check runs each time you send a prompt and each time Claude Code is about to run a shell command, write a file, start a skill or use a connected tool. It is a short Python script on your own computer and takes a few hundredths of a second. It looks at the name of what is about to happen. For a shell command it compares the whole command line with its fixed list, and for a file it compares the path. It keeps one empty mark per conversation that has started a workdecero skill. It keeps or logs nothing else, and sends nothing anywhere.
 

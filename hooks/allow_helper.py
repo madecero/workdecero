@@ -65,9 +65,6 @@ HELPERS = {
     "networking-sweep": ("networking_tool.py",
                          ("start", "restart", "intake", "finish", "cancel", "list", "open", "update", "prep", "close"),
                          "networking-handoff.json"),
-    "import": ("import_tool.py",
-               ("fields", "check", "run", "cancel"),
-               "import-plan.json"),
 }
 HANDOFF_DIR = os.path.join("~", ".cache", "workdecero")
 
