@@ -91,7 +91,7 @@ def _posted_from_words(text, today):
 def _iso_day(value):
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         try:
-            return datetime.datetime.utcfromtimestamp(value / 1000.0).date().isoformat()
+            return datetime.datetime.fromtimestamp(value / 1000.0, datetime.timezone.utc).date().isoformat()
         except (OverflowError, OSError, ValueError):
             return None
     match = re.match(r"^(\d{4}-\d{2}-\d{2})", value or "") if isinstance(value, str) else None

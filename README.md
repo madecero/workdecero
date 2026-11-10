@@ -86,7 +86,8 @@ Claude Code normally asks before it runs a command or writes a file. Setup and t
 | --- | --- |
 | Run the setup helper | `python3 "<plugin folder>/skills/setup/scripts/setup_tool.py"` followed by one of: `status`, `takeover`, `fields`, `save`, `read-resume`, `check-vault`, `preview`, `preview-details`, `preview-file`, `write`, `cancel`, `import-connections`. Nothing may follow the subcommand |
 | Run the local map helper | `python3 "<plugin folder>/skills/sources/scripts/sources_tool.py"` followed by one of: `plan`, `plan-refresh`, `open`, `add`, `reverify`, `remove`, `finish`, `close`, `show`. Nothing may follow the subcommand |
-| Write one temporary file per helper | `~/.cache/workdecero/setup-answers.json` and `~/.cache/workdecero/sources-entries.json`, and only while that folder is a real folder that you own and nobody else can open |
+| Run the job sweep helper | `python3 "<plugin folder>/skills/job-sweep/scripts/sweep_tool.py"` followed by one of: `start`, `restart`, `intake`, `warm`, `finish`, `cancel`. Nothing may follow the subcommand |
+| Write one temporary file per helper | `~/.cache/workdecero/setup-answers.json`, `sources-entries.json` and `sweep-handoff.json` in the same folder, and only while that folder is a real folder that you own and nobody else can open |
 
 What that means in practice:
 

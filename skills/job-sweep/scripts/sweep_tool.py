@@ -21,6 +21,9 @@ Commands (none takes an argument):
     finish    verify, write the digest note, and print the summary for the person
     cancel    stop the sweep. Notes already written stay
 
+`start` (or `restart`) opens a sweep. `intake`, `warm` and `finish` only work
+while one is open and has been active in the last six hours.
+
 Exit codes: 0 fine, 1 a problem to fix, 2 the command could not run.
 Standard library only, Python 3.9+.
 """
@@ -35,20 +38,22 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.
 sys.path.insert(0, os.path.join(_ROOT, "engine"))
 sys.path.insert(0, os.path.join(_ROOT, "trackers"))
 
+import handoff  # noqa: E402
 import liveness  # noqa: E402
 import sources  # noqa: E402
 import sweep  # noqa: E402
 import vault  # noqa: E402
 import wdprofile  # noqa: E402
 
-DRAFT_DIR_ENV = "WORKDECERO_DRAFT_DIR"       # for tests: where the hand-off and state files live
+DRAFT_DIR_ENV = handoff.DRAFT_DIR_ENV        # for tests: where the hand-off and state files live
 HANDOFF_NAME = "sweep-handoff.json"
 COMMANDS = ("start", "restart", "intake", "warm", "finish", "cancel")
 ACTIVE_MINUTES = 30
+STALE_HOURS = 6                              # a sweep with no activity for this long has ended
 
 
 def work_dir():
-    return os.path.expanduser(os.environ.get(DRAFT_DIR_ENV) or os.path.join("~", ".cache", "workdecero"))
+    return handoff.folder()
 
 
 def handoff_path():
@@ -57,19 +62,7 @@ def handoff_path():
 
 def read_handoff():
     """What the assistant wrote for this command. The file is removed once read."""
-    path = handoff_path()
-    if not os.path.isfile(path):
-        raise ValueError("Nothing to read. Write your results to %s first, then run this command again." % path)
-    with open(path, "r", encoding="utf-8") as handle:
-        text = handle.read()
-    os.remove(path)
-    try:
-        data = json.loads(text)
-    except ValueError as exc:
-        raise ValueError("The hand-off file was not valid JSON (%s). Write it again as one JSON object." % exc)
-    if not isinstance(data, dict):
-        raise ValueError("The hand-off file must hold one JSON object.")
-    return data
+    return handoff.read(HANDOFF_NAME)
 
 
 def _context():
@@ -90,9 +83,14 @@ def _context():
 
 
 def _state():
-    state = sweep.load_state(work_dir())
+    path = sweep.state_path(work_dir())
+    state = None if os.path.islink(path) else sweep.load_state(work_dir())
     if state is None:
-        raise ValueError("No sweep is in progress. Run the start command first.")
+        raise ValueError("No sweep is in progress, so nothing was changed. Run the start command first.")
+    idle = (time.time() - os.path.getmtime(path)) / 3600.0
+    if idle > STALE_HOURS:
+        raise ValueError("The sweep in progress has been idle for %d hours, so nothing was changed. "
+                         "Run the restart command to begin a fresh one." % int(idle))
     return state
 
 
@@ -109,6 +107,7 @@ def start(out=None, fetcher=None, today=None, force=False):
             print("  Otherwise tell the person. Only if they want to discard it, run the restart command.", file=out)
             return 1
     sweep.clear_state(work_dir())
+    handoff.ensure_folder()                  # private, and never a link, before anything is written into it
     source_map = sources.load()
     state = sweep.start(profile, store, source_map, fetcher or liveness.HttpFetcher(), today)
     sweep.save_state(work_dir(), state)

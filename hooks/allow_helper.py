@@ -44,6 +44,9 @@ HELPERS = {
     "sources": ("sources_tool.py",
                 ("plan", "plan-refresh", "open", "add", "reverify", "remove", "finish", "close", "show"),
                 "sources-entries.json"),
+    "job-sweep": ("sweep_tool.py",
+                  ("start", "restart", "intake", "warm", "finish", "cancel"),
+                  "sweep-handoff.json"),
 }
 HANDOFF_DIR = os.path.join("~", ".cache", "workdecero")
 

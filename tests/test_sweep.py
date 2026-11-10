@@ -4,6 +4,7 @@ import json
 import os
 import re
 import sys
+import time
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -343,7 +344,8 @@ class FullRun(SweepCase):
     def test_digest_features_only_the_top_few(self):
         self.full_run()                                                  # this profile shows at most 8
         self.assertNotIn("more are in your tracker", self.digest().section)
-        raw = miniyaml.loads(open(wdprofile.profile_path(), encoding="utf-8").read())
+        with open(wdprofile.profile_path(), encoding="utf-8") as handle:
+            raw = miniyaml.loads(handle.read())
         raw["digest"] = {"max_new_items": 2}
         with open(wdprofile.profile_path(), "w", encoding="utf-8") as handle:
             handle.write(miniyaml.dumps(raw))
@@ -473,8 +475,26 @@ class FullRun(SweepCase):
         code, text = self.run_step(sweep_tool.cancel)
         self.assertIn("No sweep was in progress.", text)
 
+    def test_a_sweep_left_idle_too_long_changes_nothing(self):
+        self.start()
+        path = sweep.state_path(sweep_tool.work_dir())
+        self.assertEqual(os.stat(sweep_tool.work_dir()).st_mode & 0o777, 0o700)
+        old = time.time() - (sweep_tool.STALE_HOURS + 1) * 3600
+        os.utime(path, (old, old))
+        before = sorted(self.jobs())
+        with open(sweep_tool.handoff_path(), "w", encoding="utf-8") as handle:
+            json.dump({"finds": [{"title": "Head of Product", "company": "Front Range Robotics", "fit_assessment": 30,
+                                  "url": "https://job-boards.greenhouse.io/frontrangerobotics/jobs/1"}]}, handle)
+        for command in ("intake", "warm", "finish"):
+            out, err = io.StringIO(), io.StringIO()
+            with redirect_stdout(out), redirect_stderr(err):
+                self.assertEqual(sweep_tool.main([command]), 2)
+            self.assertIn("idle for 7 hours, so nothing was changed", err.getvalue())
+        self.assertEqual(sorted(self.jobs()), before)
+
     def test_a_profile_with_jobs_off_is_told_so(self):
-        raw = miniyaml.loads(open(wdprofile.profile_path(), encoding="utf-8").read())
+        with open(wdprofile.profile_path(), encoding="utf-8") as handle:
+            raw = miniyaml.loads(handle.read())
         raw["tracks"]["jobs"] = False
         with open(wdprofile.profile_path(), "w", encoding="utf-8") as handle:
             handle.write(miniyaml.dumps(raw))
@@ -497,7 +517,7 @@ class SkillText(unittest.TestCase):
         self.assertEqual(sorted(rule[len(prefix):] for rule in rules), sorted(sweep_tool.COMMANDS))
         self.assertNotIn("*", self.front)
         self.assertEqual(re.findall(r"(?:Write|Edit)\(([^)]*)\)", self.front),
-                         ["~/.cache/workdecero/sweep-handoff.json"] * 2)
+                         ["~/.cache/workdecero/sweep-handoff.json"])
         self.assertNotIn("Read", self.front)
         self.assertIn("WebSearch, WebFetch", self.front)
         lines = [line.strip() for line in self.text.splitlines() if line.strip().startswith("python3 ")]

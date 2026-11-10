@@ -1,7 +1,7 @@
 ---
 name: job-sweep
 description: Run the workdecero job sweep, the weekly search for salaried jobs that fit the person's profile. Use when the user says "run the job sweep", "check for new jobs", "weekly job scan", "update my job tracker", or asks what is new in their job search.
-allowed-tools: Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" start), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" restart), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" intake), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" warm), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" finish), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" cancel), Write(~/.cache/workdecero/sweep-handoff.json), Edit(~/.cache/workdecero/sweep-handoff.json), WebSearch, WebFetch
+allowed-tools: Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" start), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" restart), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" intake), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" warm), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" finish), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/sweep_tool.py" cancel), Write(~/.cache/workdecero/sweep-handoff.json), WebSearch, WebFetch
 ---
 
 # workdecero job sweep
