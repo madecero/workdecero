@@ -84,6 +84,8 @@ If you have neither posting text nor a page that loads, give your best `fit_asse
 
 **Then search for more**, with the web searches you have left. Work through PLACES TO SEARCH. Good searches name a target title and the area, or a target title and "remote". For each real posting you find that is not already a candidate, read it and record the same keys, plus `title`, `company`, `url` (the link to the posting itself, on the employer's own site when you can find it) and `source` (where you found it). Put these under `finds`.
 
+**A lead you did not read is worth nothing to the person.** When a search shows a posting that could fit, open it and read it before moving on, and record it. Do not finish this step with searches unused and leads unread: use the budget. Naming unread leads under `not_covered` is for places you could not read, not for ones you chose not to.
+
 Do not record postings older than about a month, staffing-agency reposts of a job you already have, or search-result pages. A find needs a link to one specific posting.
 
 **Write the hand-off file** with everything from this step:
@@ -103,7 +105,7 @@ Do not record postings older than about a month, staffing-agency reposts of a jo
 
 `searches` is the true number of web searches you used. `not_covered` lists any place you were pointed to but could not read.
 
-Then run `TOOL intake`. The engine scores everything, drops what the person's profile rules out, and writes the notes. It will not tell you why something was left out, and you should not ask.
+Then run `TOOL intake`. If its answer starts a section **BEFORE WARM PATHS**, do what it says: search and read more, write a new hand-off file with only the new `finds` (and the updated `searches`), and run `TOOL intake` once more. The engine scores everything, drops what the person's profile rules out, and writes the notes. It will not tell you why something was left out, and you should not ask.
 
 ## Step 3: warm paths
 

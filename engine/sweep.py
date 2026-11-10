@@ -253,7 +253,8 @@ def intake(state, handoff, profile, store, source_map, fetcher=None, today=None)
     today = today or datetime.date.today()
     by_id = dict((find["_id"], find) for find in state["candidates"])
     items, unjudged = [], 0
-    judged = set()
+    judged = set(state.get("judged") or [])          # intake can run again with more finds
+    found_before = state.get("finds_read", 0)
     for entry in handoff.get("assessed") or []:
         find = by_id.get(str(entry.get("id")))
         if find is None or entry.get("id") in judged:
@@ -264,9 +265,12 @@ def intake(state, handoff, profile, store, source_map, fetcher=None, today=None)
         item["link_verified"] = True          # it came from the employer's live job list a moment ago
         items.append(item)
     unjudged = len(by_id) - len(judged)
+    state["judged"] = sorted(judged)
     for entry in handoff.get("finds") or []:
         if isinstance(entry, dict) and entry.get("title") and entry.get("url"):
             items.append(_clean(entry, FIND_KEYS))
+            found_before += 1
+    state["finds_read"] = found_before
 
     result = merge.plan_intake("job", items, store, profile, today)
     store.apply(result.operations)
@@ -311,6 +315,14 @@ def intake_report(state, profile):
     if state.get("unjudged"):
         lines.append("  %d candidate%s had no judgement from you and were not written. They will come up again."
                      % (state["unjudged"], "" if state["unjudged"] == 1 else "s"))
+    left = limits["searches"] - state.get("searches", 0)
+    if not state.get("finds_read") and left >= limits["searches"] // 2 and not state.get("nudged"):
+        state["nudged"] = True                  # said once, so a sweep can never loop on it
+        lines += ["", "BEFORE WARM PATHS: %d of %d searches are unused and no posting from a search was read."
+                  % (left, limits["searches"]),
+                  "  The person's best role is often on a board, not on an employer list. Go back to PLACES TO SEARCH,",
+                  "  open and read the most promising postings your searches turn up, and run intake again with them",
+                  "  under finds. If you searched and nothing real came up, carry on and say so in not_covered."]
     targets = warm_targets(state, profile)
     lines += ["", "WARM PATHS: research who to contact for these (%d at most this run)" % limits["warm"]]
     for entry in targets:

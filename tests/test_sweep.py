@@ -262,6 +262,28 @@ class Start(SweepCase):
             "https://jobs.lever.co/granitepeaksoftware/99999999-9999-4999-8999-999999999999", FixtureFetcher()),
             "Lead product for a workflow software company. What you will do: Own strategy. Grow the team.")
 
+    def test_unused_searches_get_one_nudge_and_a_second_intake_adds_finds(self):
+        _, report = self.start()
+        self.hand_off({"assessed": [{"id": "c1", "fit_assessment": 30, "why": "Same scope."}], "searches": 2})
+        _, first = self.run_step(sweep_tool.intake, fetcher=self.fetcher, today=TODAY)
+        self.assertIn("BEFORE WARM PATHS: 8 of 10 searches are unused and no posting from a search was read.", first)
+        self.assertEqual(len(self.jobs()), 1)
+        self.hand_off({"finds": [{"title": "Head of Product", "company": "Front Range Robotics", "fit_assessment": 30,
+                                  "url": "https://job-boards.greenhouse.io/frontrangerobotics/jobs/1",
+                                  "work_mode": "remote", "source": "State job board"}], "searches": 6})
+        _, second = self.run_step(sweep_tool.intake, fetcher=self.fetcher, today=TODAY)
+        self.assertNotIn("BEFORE WARM PATHS", second)
+        self.assertEqual(len(self.jobs()), 2)                         # the first note is kept, the find is added
+        self.hand_off({"searches": 6})
+        _, third = self.run_step(sweep_tool.intake, fetcher=self.fetcher, today=TODAY)
+        self.assertNotIn("BEFORE WARM PATHS", third)                  # said once only
+
+    def test_no_nudge_when_the_budget_was_used(self):
+        self.start()
+        self.hand_off({"assessed": [], "searches": 9, "not_covered": ["Nothing real came up on the boards"]})
+        _, report = self.run_step(sweep_tool.intake, fetcher=self.fetcher, today=TODAY)
+        self.assertNotIn("BEFORE WARM PATHS", report)
+
     def test_a_candidate_from_a_live_job_list_is_always_verified(self):
         self.start()
         self.hand_off({"assessed": [{"id": "c1", "fit_assessment": 30, "why": "Same scope.", "link_verified": False}]})

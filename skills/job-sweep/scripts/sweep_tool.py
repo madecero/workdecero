@@ -128,8 +128,9 @@ def intake(out=None, fetcher=None, today=None):
     state = sweep.intake(state, handoff, profile, store, source_map, fetcher or liveness.HttpFetcher(), today)
     if json.dumps(source_map, sort_keys=True) != before:
         sources.save(source_map)
+    report = sweep.intake_report(state, profile)          # may note that it has nudged, so save after
     sweep.save_state(work_dir(), state)
-    print(sweep.intake_report(state, profile), file=out)
+    print(report, file=out)
     return 0
 
 
