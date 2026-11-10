@@ -39,6 +39,44 @@ def config_home():
     return os.path.normpath(os.path.expanduser(os.environ.get(HOME_ENV) or DEFAULT_HOME))
 
 
+def secure_home(folder=None):
+    """Create the settings folder if needed and close it to everyone but its owner.
+
+    A folder this creates is always owner-only. One that already exists is
+    tightened only when it is the default location, because a person who
+    pointed WORKDECERO_HOME at a folder of their own chose its permissions.
+    """
+    folder = folder or config_home()
+    default = os.path.normpath(os.path.expanduser(DEFAULT_HOME))
+    if not os.path.isdir(folder):
+        os.makedirs(folder, mode=0o700, exist_ok=True)
+        os.chmod(folder, 0o700)
+    elif os.path.normpath(folder) == default and not os.path.islink(folder):
+        os.chmod(folder, 0o700)
+    return folder
+
+
+def private_folder(path):
+    """A folder inside the settings folder (backups), owner-only."""
+    os.makedirs(path, mode=0o700, exist_ok=True)
+    if not os.path.islink(path):
+        os.chmod(path, 0o700)
+    return path
+
+
+def write_private(path, text):
+    """Write a settings file so that only its owner can read it, replacing any old version in one step."""
+    temp = path + ".tmp"
+    handle = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(handle, "w", encoding="utf-8") as out:
+        out.write(text)
+        out.flush()
+        os.fsync(out.fileno())
+    os.chmod(temp, 0o600)
+    os.replace(temp, path)
+    return path
+
+
 def profile_path():
     return os.path.join(config_home(), PROFILE_NAME)
 

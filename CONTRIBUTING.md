@@ -6,7 +6,7 @@
 make dev-setup
 ```
 
-This runs `git config core.hooksPath hooks`, which turns on three git hooks. Without it nothing guards your commits, so do it before your first commit.
+This runs `git config core.hooksPath dev/git-hooks`, which turns on three git hooks. (The `hooks/` folder at the top level is different: it belongs to the plugin and ships to users.) Without it nothing guards your commits, so do it before your first commit.
 
 ## The leak guard
 

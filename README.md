@@ -45,7 +45,7 @@ Nothing personal is stored in this repository or in the plugin folder.
 
 | What | Where | Notes |
 | --- | --- | --- |
-| Profile (`profile.yaml`) and local map (`sources.yaml`) | `~/.config/workdecero/` | Location can be overridden. Untouched by updates and by uninstall. |
+| Profile (`profile.yaml`), local map (`sources.yaml`) and backups | `~/.config/workdecero/` | Readable by you alone. Location can be overridden. Untouched by updates and by uninstall. |
 | Trackers (postings, contracts, groups, events, people, companies) | Your Obsidian vault | Plain Markdown notes that you own. |
 | Setup draft | `~/.cache/workdecero/` (`setup-answers.json`, `setup-state.json`) | Temporary. Holds your answers only while setup is running, in a folder only you can open, and is deleted when setup is saved or cancelled. |
 | Source hand-off | `~/.cache/workdecero/` (`sources-entries.json`, `sources-run.json`) | Temporary. Holds public names and links found while your local map is being built. Each batch is deleted as soon as it is checked, and the folder goes when the run ends. |

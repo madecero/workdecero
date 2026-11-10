@@ -2,7 +2,7 @@
 
 # One-time wiring after cloning: turns on the leak-guard git hooks.
 dev-setup:
-	git config core.hooksPath hooks
+	git config core.hooksPath dev/git-hooks
 	@echo "Hooks on. Private denylist: $${WORKDECERO_DENYLIST:-~/.config/workdecero-dev/denylist.txt}"
 
 test:

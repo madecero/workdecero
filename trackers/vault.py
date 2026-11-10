@@ -197,6 +197,9 @@ class VaultStore(object):
         if not self.backup_dir or not os.path.isfile(path):
             return
         target = os.path.join(self.backup_dir, self._stamp, os.path.relpath(path, self.vault))
+        for folder in (self.backup_dir, os.path.join(self.backup_dir, self._stamp)):
+            os.makedirs(folder, mode=0o700, exist_ok=True)       # copies of your notes: owner-only
+            os.chmod(folder, 0o700)
         os.makedirs(os.path.dirname(target), exist_ok=True)
         shutil.copy2(path, target)
 

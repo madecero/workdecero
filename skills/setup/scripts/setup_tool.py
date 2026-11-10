@@ -757,13 +757,9 @@ def _print_review(result, show_file=False, out=None, details=False):
 # --------------------------------------------------------------------------
 
 def _write_atomic(path, text):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    temp = path + ".tmp"
-    with open(temp, "w", encoding="utf-8") as handle:
-        handle.write(text)
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(temp, path)
+    """The profile holds pay floors and the current employer, so only its owner may read it."""
+    wdprofile.secure_home(os.path.dirname(path))
+    wdprofile.write_private(path, text)
 
 
 def obsidian_link(vault_path, folder):
@@ -813,11 +809,13 @@ def write(draft, out=None):
         changed = previous != text
         if changed:
             stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-            os.makedirs(backups, exist_ok=True)
-            with open(os.path.join(backups, "profile-%s.yaml" % stamp), "w", encoding="utf-8") as handle:
-                handle.write(previous)
+            wdprofile.private_folder(backups)
+            wdprofile.write_private(os.path.join(backups, "profile-%s.yaml" % stamp), previous)
     if changed:
         _write_atomic(path, text)
+    else:
+        wdprofile.secure_home(home)
+        os.chmod(path, 0o600)                # a profile written by an older version was readable by others
     if not os.path.isdir(target):
         os.makedirs(target)
     store = vault.VaultStore(target, folder, backup_dir=backups)

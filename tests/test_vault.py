@@ -255,6 +255,8 @@ class Safety(VaultCase):
         store = self.new_store()
         store.upsert("job", "J-1", "", {"fit": 5})
         runs = os.listdir(self.backups)
+        self.assertEqual(os.stat(self.backups).st_mode & 0o777, 0o700)              # copies of notes: owner-only
+        self.assertEqual(os.stat(os.path.join(self.backups, runs[0])).st_mode & 0o777, 0o700)
         self.assertEqual(len(runs), 1)
         with open(os.path.join(self.backups, runs[0], row.path), encoding="utf-8") as handle:
             self.assertEqual(handle.read(), original)

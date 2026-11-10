@@ -116,16 +116,8 @@ def save(source_map, file_path=None):
     header = ("# Where your sweeps look. Built by /workdecero:sources and refreshed every few weeks.\n"
               "# You can edit it: add an entry with added_by: user and it is never dropped,\n"
               "# or list a name under removed and it is never added back.\n\n")
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    temp = file_path + ".tmp"
-    handle = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)     # the map is the person's own
-    with os.fdopen(handle, "w", encoding="utf-8") as out:
-        out.write(header + miniyaml.dumps(ordered))
-        out.flush()
-        os.fsync(out.fileno())
-    os.chmod(temp, 0o600)
-    os.replace(temp, file_path)
-    return file_path
+    wdprofile.secure_home(os.path.dirname(file_path))
+    return wdprofile.write_private(file_path, header + miniyaml.dumps(ordered))
 
 
 # --------------------------------------------------------------------------

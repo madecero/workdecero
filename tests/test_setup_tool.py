@@ -2,6 +2,7 @@ import hashlib
 import io
 import json
 import os
+import shutil
 import re
 import stat
 import sys
@@ -569,6 +570,39 @@ class Write(SetupCase):
         self.assertIn('Say "build my local map"', out)
         self.assertIn("Change anything later:   /workdecero:setup", out)
         self.assertIn(setup_tool.PRIVACY, out)
+
+    def test_settings_files_are_readable_by_their_owner_only(self):
+        home = wdprofile.config_home()
+        shutil.rmtree(home, ignore_errors=True)                         # setup creates the folder itself
+        self.assertEqual(self.save(self.example())[0], 0)
+        self.assertEqual(mode_of(home), 0o700)
+        self.assertEqual(mode_of(wdprofile.profile_path()), 0o600)
+        os.chmod(wdprofile.profile_path(), 0o644)                       # as an older version left it
+        self.open_run()
+        self.send({"set": {"digest.max_new_items": 5}})
+        self.assertEqual(self.call("preview")[0], 0)
+        self.assertEqual(self.call("write")[0], 0)
+        self.run_id = None
+        backups = os.path.join(home, "backups")
+        self.assertEqual(mode_of(wdprofile.profile_path()), 0o600)
+        self.assertEqual(mode_of(backups), 0o700)
+        copies = [name for name in os.listdir(backups) if name.startswith("profile-")]
+        self.assertEqual(len(copies), 1)
+        self.assertEqual(mode_of(os.path.join(backups, copies[0])), 0o600)
+        os.chmod(wdprofile.profile_path(), 0o644)
+        self.open_run()
+        self.assertEqual(self.call("preview")[0], 0)
+        self.assertEqual(self.call("write")[0], 0)                      # nothing changed, still tightened
+        self.run_id = None
+        self.assertEqual(mode_of(wdprofile.profile_path()), 0o600)
+
+    def test_a_settings_folder_the_person_chose_keeps_its_permissions(self):
+        home = wdprofile.config_home()                                  # the test folder is not the default location
+        os.makedirs(home, exist_ok=True)
+        os.chmod(home, 0o755)
+        self.assertEqual(self.save(self.example())[0], 0)
+        self.assertEqual(mode_of(home), 0o755)
+        self.assertEqual(mode_of(wdprofile.profile_path()), 0o600)
 
     def test_saved_file_matches_the_draft(self):
         self.save(self.example())
