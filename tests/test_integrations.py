@@ -131,7 +131,7 @@ class Gates(unittest.TestCase):
         self.assertEqual(handoff["finds"][0]["read_with"], "browser")              # the caller's copy is untouched
 
     def test_a_switch_that_is_off_gets_one_plain_skipped_line(self):
-        # From the tester's run: the same switched-off connection was reported in several wordings.
+        # From a test run: the same switched-off connection was reported in several wordings.
         handoff = {"integrations_skipped": ["browser: Claude in Chrome is not connected", "browser pass was off",
                                             "Chrome was not used", "linkedin: not signed in",
                                             "calendar: no Outlook tool in this session"]}

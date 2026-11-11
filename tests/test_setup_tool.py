@@ -509,7 +509,7 @@ class Preview(SetupCase):
         self.assertIn("about a dozen answers, not twenty", skill)
 
     def test_the_summary_card_shows_when_they_cannot_go_and_how_many_events_a_month(self):
-        # From the tester's run: setup asked about networking times, and the summary showed neither answer.
+        # From a test run: setup asked about networking times, and the summary showed neither answer.
         answers = self.example()
         answers["networking"]["unavailable"] = ["Weekday daytime (9 to 5)", "Sundays"]
         answers["networking"]["max_events_per_month"] = 2

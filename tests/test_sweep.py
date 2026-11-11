@@ -220,11 +220,11 @@ class SweepCase(unittest.TestCase):
         return rows[0]
 
 
-class TesterFindings(SweepCase):
+class RunFindings(SweepCase):
     """Shapes from the first live fit check: real fits on a board the sweep read that never surfaced."""
 
     def setUp(self):
-        super(TesterFindings, self).setUp()
+        super(RunFindings, self).setUp()
         data = sources.empty_map()
         data["jobs"] = [employer("Cedar Ridge Payroll", "greenhouse", board="cedarridgepayroll")]
         sources.save(data)
@@ -299,7 +299,7 @@ class TesterFindings(SweepCase):
 
 
 class FitQuality(SweepCase):
-    """From the tester's fit check: what looks like a fit and is not must not rank as one."""
+    """From a fit check: what looks like a fit and is not must not rank as one."""
 
     def setUp(self):
         super(FitQuality, self).setUp()

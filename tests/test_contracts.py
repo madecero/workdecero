@@ -374,7 +374,7 @@ class Intake(ContractCase):
         self.assertNotIn("BEFORE YOU FINISH", again)                   # said once
 
     def test_a_platform_the_engine_read_is_never_also_reported_as_not_opened(self):
-        # From the tester's run: one platform appeared under "read directly" and under "not opened" in one digest.
+        # From a test run: one platform appeared under "read directly" and under "not opened" in one digest.
         read = ["Example Talent Portland", "Sample Creative Staffing", "Marketplace One"]
         fix = contracts.already_read_removed
         self.assertEqual(fix("Other Board, Third Network, Example Talent Portland and Sample Creative Staffing listing "
@@ -388,7 +388,7 @@ class Intake(ContractCase):
         self.assertEqual(fix(other, read), other)
 
     def test_an_unclear_place_is_never_shown_as_plain_hybrid(self):
-        # From the tester's run: a note said Hybrid while its caveat said the location was not clear.
+        # From a test run: a note said Hybrid while its caveat said the location was not clear.
         import merge
 
         class Result(object):
@@ -450,7 +450,7 @@ class Intake(ContractCase):
         self.assertEqual(contracts.PLACE_KINDS[0], "gig-board")        # and it is the first place research is sent
 
     def test_a_place_is_listed_once_under_not_covered(self):
-        # From the tester's run: one marketplace appeared twice, once from the engine and once from research.
+        # From a test run: one marketplace appeared twice, once from the engine and once from research.
         lines = ["Marketplace One (its listing page could not be read)"]
         self.assertFalse(scoring.add_not_covered(lines, "Marketplace One (listing page could not be read without a browser)"))
         self.assertFalse(scoring.add_not_covered(lines, "marketplace one: needs a login"))
@@ -699,7 +699,7 @@ class PlatformFetcher(PageFetcher):
 
 
 class Platforms(ContractCase):
-    """From the tester's contract run: read the platforms, and feature only what is a real fit."""
+    """From a contract test run: read the platforms, and feature only what is a real fit."""
 
     profile_name = "product-leader-denver"
 
@@ -829,7 +829,7 @@ class Platforms(ContractCase):
         self.assertNotIn("BEFORE YOU FINISH", again)
 
     def test_the_reminder_to_judge_does_not_use_up_the_reminder_to_keep_searching(self):
-        # From the tester's run: one fit, four of ten searches used, and no nudge, because the first one had been spent.
+        # From a test run: one fit, four of ten searches used, and no nudge, because the first one had been spent.
         self.start()
         self.hand_off({"assessed": [], "searches": 2})
         _, first = self.run_step(contract_tool.intake, today=TODAY)

@@ -354,7 +354,7 @@ class Events(NetCase):
 
 
 class GoingOnAStatedDay(NetCase):
-    """From the tester's run: "I'm going on Nov 18" marked the group's Nov 11 meeting and queued a calendar check for it."""
+    """From a test run: "I'm going on Nov 18" marked the group's Nov 11 meeting and queued a calendar check for it."""
 
     def setUp(self):
         super(GoingOnAStatedDay, self).setUp()
@@ -385,7 +385,7 @@ class GoingOnAStatedDay(NetCase):
 
 
 class UnknownTime(NetCase):
-    """From the tester's run: a weekday in-person event with no posted time was the first pick, tagged Daytime,
+    """From a test run: a weekday in-person event with no posted time was the first pick, tagged Daytime,
     for a person who had ruled out weekday daytime."""
 
     def setUp(self):
@@ -483,7 +483,7 @@ class WithinReach(NetCase):
 
 class OneAnEvening(NetCase):
     def test_two_events_on_the_same_evening_take_one_pick_between_them(self):
-        # From the tester's run: both picks were on one evening, half an hour apart, and the month's limit was spent.
+        # From a test run: both picks were on one evening, half an hour apart, and the month's limit was spent.
         self.sweep([], [event("a", "Product leaders social", "2026-11-18", time="5:00 PM", fit_assessment=30),
                         event("b", "Design tools night", "2026-11-18", time="5:30 PM", where="Other Hall, Portland",
                               fit_assessment=28),
@@ -698,7 +698,7 @@ class Updates(NetCase):
         self.assertEqual(self.events()["Design Awards Gala"].values["status"], "New")
 
     def test_the_going_box_and_the_status_always_agree(self):
-        # From the tester's run: a note said "Want to go" with Going ticked. One word for one thing.
+        # From a test run: a note said "Want to go" with Going ticked. One word for one thing.
         gala = self.ids["Design Awards Gala"]
 
         def now():
@@ -869,7 +869,7 @@ class WeekOne(NetCase):
         self.assertIn("Nearest is a statewide association.", missing)  # the line with detail is the one kept
 
     def test_a_gap_research_described_in_its_own_words_is_not_said_twice(self):
-        # From the tester's run: "No group or event found for ..." and then the same gap again with detail.
+        # From a test run: "No group or event found for ..." and then the same gap again with detail.
         self.start()
         self.hand_off({"groups": [group("freelance", "Freelance Designers Coffee", audience=[DESIGNERS])],
                        "not_found": ["No Portland group for food and drink founders. Nearest: a statewide food "
@@ -945,7 +945,7 @@ class WeekOne(NetCase):
 
         def person(*phrases):
             return {"networking": {"unavailable": list(phrases)}}
-        # The tester persona's phrasing: no weekday daytime unless it is virtual.
+        # A real phrasing: no weekday daytime unless it is virtual.
         parent = person("No weekday daytime unless it's virtual")
         self.assertTrue(outside(parent, day(2026, 11, 17), "10:00 AM", False, False))     # Tuesday morning, in person
         self.assertTrue(outside(parent, day(2026, 11, 17), "1:30 PM", False, False))
