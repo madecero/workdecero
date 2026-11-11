@@ -12,10 +12,10 @@
 
 | What | Where | Notes |
 | --- | --- | --- |
-| Your profile, your local map and backups | `~/.config/workdecero/` | `profile.yaml`, `sources.yaml` and a `backups` folder. Readable by you alone. Updates and uninstalling do not touch them. |
+| Your profile, your local map and backups | `~/.config/workdecero/` | `profile.yaml`, `sources.yaml` and a `backups` folder holding earlier versions of your profile and of your tracker notes (the last 30 runs). Readable by you alone. Updates and uninstalling do not touch them. |
 | Your trackers | The `workdecero` folder in your Obsidian vault | Plain notes that you own: jobs, contracts, channels, groups, events, people, companies and digests. |
 | Spreadsheet snapshot, only if you turn it on | `workdecero snapshot.xlsx` in that same folder | A read-only picture of your trackers, rebuilt after every sweep. Anything typed into it is lost. Readable by you alone. |
-| Temporary working files | `~/.cache/workdecero/` | Exist only while setup or a sweep is running, in a folder only you can open, and are deleted when it ends. During setup they hold your answers. During a sweep they hold public postings. |
+| Temporary working files | `~/.cache/workdecero/` | Exist while setup or a sweep is running, in a folder only you can open, and are deleted when it ends. During setup they hold your answers. A setup that was cut off keeps its answers there for at most a day, so you can pick it up. During a sweep they hold public postings. |
 | Whether browser use is on | `~/.config/workdecero/flags.json` | One line, yes or no, kept in step with your profile. |
 | Which conversations started a workdecero skill | `~/.cache/workdecero-sessions/` | One empty file per conversation, named by its id, in a folder only you can open. Removed after a day. Nothing about you or the conversation is in it. |
 | A small count of LinkedIn pages viewed, only if you turn that connection on | `~/.config/workdecero/usage.json` | Numbers per day for the last week. |

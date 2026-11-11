@@ -9,9 +9,7 @@ Promises it keeps:
     It never writes to .obsidian or anywhere else.
   * A note's body belongs to the user. So do any properties the user added.
     A write changes only the wd_ properties a sweep owns and the one block
-    between the workdecero markers. The one addition to a body is the
-    person's own text from a tracker they asked to import, added once under
-    a heading and never rewritten.
+    between the workdecero markers.
   * A property marked SEED or USER in the model is written when the note is
     created and then left alone, so a status changed in Obsidian stays changed.
   * Every write is atomic (write a temp file, then rename), and the previous

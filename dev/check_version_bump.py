@@ -19,14 +19,13 @@ MANIFEST = ".claude-plugin/plugin.json"
 
 # Paths that end up running on a user's machine. Docs, tests, CI, examples
 # and developer tooling do not need a bump.
-SHIPPED_PREFIXES = (".claude-plugin/", "skills/", "engine/", "trackers/", "commands/", "agents/", "bin/")
-SHIPPED_FILES = ("hooks/hooks.json",)
+SHIPPED_PREFIXES = (".claude-plugin/", "skills/", "engine/", "trackers/", "hooks/", "commands/", "agents/", "bin/")
 
 VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 
 
 def is_shipped(path):
-    return path.startswith(SHIPPED_PREFIXES) or path in SHIPPED_FILES
+    return path.startswith(SHIPPED_PREFIXES)
 
 
 def parse_version(text):

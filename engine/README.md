@@ -9,12 +9,9 @@ Shared logic for the sweeps. Standard library Python only (3.9 or newer), so it 
 | `model.py` | The tracker note types, their properties and their status lists, defined once. |
 | `profile.schema.json` | The profile format: every setting, with a description, an example and a default. |
 | `wdprofile.py` | Loads a profile, fills in defaults, runs the checks. `python3 engine/wdprofile.py validate [PATH]`. |
-
 | `liveness.py` | Checks whether a posting is still open. `python3 engine/liveness.py check URL`. |
-
 | `merge.py` | Decides which finds are the same posting, merges them, matches them against the vault and plans the writes. |
 | `scoring.py` | Fit for jobs and Win odds for contracts, 0 to 100, from the profile. Applies exclusions. |
-
 | `harvest.py` | Reads open postings straight from the job lists of employers in the local map and keeps the ones whose titles match the profile. |
 | `sweep.py` | The job sweep: liveness, harvest, intake, warm paths, verification and the digest note. Keeps everything private out of the research conversation. |
 | `sources.py` | The local source map: checks each proposed source with a live call, removes duplicates, re-checks old entries, and keeps `sources.yaml`. |

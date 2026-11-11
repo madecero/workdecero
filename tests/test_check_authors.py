@@ -29,8 +29,10 @@ class Authors(unittest.TestCase):
     def test_real_email_is_rejected(self):
         self.assertEqual(ca.violations([record(author=REAL_EMAIL)]), [("a" * 40, "author")])
 
-    def test_handle_must_match_its_email_and_be_allowed(self):
-        self.assertEqual(len(ca.violations([record(author=OTHER_HANDLE)])), 1)
+    def test_any_handle_with_its_own_noreply_address_is_allowed(self):
+        self.assertEqual(ca.violations([record(author=OTHER_HANDLE, committer=OTHER_HANDLE)]), [])
+
+    def test_handle_must_match_its_email(self):
         mismatch = ("madecero", "9+someoneelse@users.noreply.github.com")
         self.assertEqual(len(ca.violations([record(author=mismatch)])), 1)
 

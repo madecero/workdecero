@@ -6,9 +6,11 @@ The things that came up most in testing.
 
 **"Unknown command" after installing.** Start a new Claude Code session. A plugin installed in the middle of a session is not loaded until the next one.
 
-**The install command fails with an access or "not found" message.** While the repository is private, your computer must be signed in to GitHub with an account that has been given access. See the note under [Install](../README.md#install).
+**The install command fails with a "not found" message.** Check the spelling: `/plugin marketplace add madecero/workdecero`, then `/plugin install workdecero@workdecero`. If it still fails, check that this computer can reach github.com.
 
-**A window about "Command Line Developer Tools" appears.** That is macOS offering to install python3. Click Install, wait for it to finish, and run the command again.
+**A window about "Command Line Developer Tools" appears, or Claude Code shows a hook error on every message.** python3 is missing. That window is macOS offering to install it. Click Install and wait for it to finish. In Terminal, `python3 --version` should then print a version. Start a new Claude Code session.
+
+**The tables in Start here show as code, or are blank.** Update Obsidian to 1.9 or newer, and check that Bases is on under Settings, Core plugins.
 
 **I said "run the job sweep" and Claude Code asked for permission.** That is expected when you start by plain words. Say yes, or use the slash command, which does not ask.
 

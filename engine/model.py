@@ -344,5 +344,3 @@ TYPES = [JOB, CONTRACT, CHANNEL, EVENT, GROUP, PERSON, COMPANY, DIGEST]
 BY_NAME = dict((note_type.name, note_type) for note_type in TYPES)
 
 NOT_CONNECTED = "Not connected"
-RELATIONSHIPS = ["1st", "2nd", NOT_CONNECTED]
-WORK_MODES = ["Remote", "Hybrid", "Onsite"]

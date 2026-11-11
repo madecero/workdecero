@@ -29,9 +29,9 @@ Nothing was applied for, sent or posted.
 
 You need three things.
 
-* **Claude Code on a paid plan.** Claude Code comes with the paid Claude plans (Pro and Max). workdecero has a **Lite** mode sized for a Pro plan and a **Full** mode that searches wider and suits a Max plan.
-* **Obsidian.** A free notes app, from obsidian.md. Install it, open it once and create a vault (a vault is just a folder). Your trackers will live there as ordinary notes.
-* **python3.** A small helper program. On a Mac it is very likely already there. On a brand new Mac, macOS shows a window offering to install the "Command Line Developer Tools" the first time it is needed. Click **Install** and wait a few minutes.
+* **Claude Code on a paid plan.** Claude Code comes with the paid Claude plans (Pro, Max, Team and Enterprise). workdecero has a **Lite** mode sized for a Pro plan and a **Full** mode that searches wider and suits a Max plan.
+* **Obsidian.** A free notes app, from obsidian.md. Use version 1.9 or newer, which has Bases, the feature that draws your tracker tables. Install it, open it once and create a vault (a vault is just a folder). Your trackers will live there as ordinary notes.
+* **python3, version 3.9 or newer.** A small helper program. Before you install, open Terminal and type `python3 --version`. On a Mac it very likely prints a version. On a brand new Mac it opens a window offering to install the "Command Line Developer Tools" instead. Click **Install**, wait a few minutes, and type it again until it prints a version. workdecero checks each message you send with python3, so until python3 is there Claude Code shows a hook error on every message.
 
 I built and tested this on macOS. It should work on Linux, which I have not tested. Windows is not supported yet.
 
@@ -134,7 +134,7 @@ All off until you turn them on with `/workdecero:setup`.
 
 ## Update and uninstall
 
-**Update.** In Claude Code, type `/plugin`, open the **Marketplaces** tab, choose `workdecero`, and choose **Update marketplace**. The new version is used from your next session. To have it update by itself, choose **Enable auto-update** in the same place. It is off by default.
+**Update.** In Claude Code, type `/plugin`, open the **Marketplaces** tab, choose `workdecero`, and choose **Update marketplace**. The new version is used from your next session. To have it update by itself, choose **Enable auto-update** in the same place. It is off by default. From a terminal: `claude plugin marketplace update workdecero`, then `claude plugin update workdecero@workdecero`, then start a new session.
 
 **Uninstall.** `/plugin uninstall workdecero@workdecero` opens the plugin's page, where you choose Uninstall. From a terminal: `claude plugin uninstall workdecero@workdecero`, then `claude plugin marketplace remove workdecero`.
 

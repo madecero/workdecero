@@ -100,9 +100,6 @@ class Result(object):
     def suspect(self):
         return self.state == UNKNOWN and bool(self.weak_signals)
 
-    def as_dict(self):
-        return {"state": self.state, "evidence": self.evidence, "source": self.source, "suspect": self.suspect}
-
     def __repr__(self):
         return "Result(%s, %r)" % (self.state, self.evidence)
 

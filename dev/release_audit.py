@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Release audit: look for private names and personal data in everything a public repository would show.
 
-Run this before the repository is made public. It only reads. It never
+Run this before a repository is made public, and before each release. It only reads. It never
 pushes, edits, comments, closes or deletes anything, on GitHub or locally.
 It makes one throwaway mirror clone in a temporary folder to read from.
 
@@ -373,8 +373,8 @@ def actions_runs(audit, owner, name):
     total = runs.get("total_count") or 0
     audit.count("Actions runs (logs not read)", total)
     if total:
-        audit.notes.append("There are %d Actions runs. Their logs, summaries and artifacts become readable by anyone "
-                           "when the repository is public. This audit does not read them. Delete the runs, or read "
+        audit.notes.append("There are %d Actions runs. Their logs, summaries and artifacts are readable by anyone "
+                           "in a public repository. This audit does not read them. Delete the runs, or read "
                            "every log, before release." % total)
 
 
@@ -434,9 +434,9 @@ CANNOT_SEE = (
     "to anyone who has its id, until it is garbage-collected. Only GitHub Support can remove one for certain. A "
     "fresh repository pushed from clean history carries none of them.",
     "Events older than GitHub keeps (about 90 days, at most 300 events).",
-    "Actions: workflow run logs, job summaries, artifacts and caches. They are counted, not read. They become "
-    "readable when the repository is public.",
-    "Forks and clones made while the repository was private, and anything already copied out of it.",
+    "Actions: workflow run logs, job summaries, artifacts and caches. They are counted, not read. In a public "
+    "repository anyone can read them.",
+    "Forks and clones others have made, and anything already copied out of the repository.",
     "Wiki pages, Discussions, Projects, and security advisories.",
     "Pictures and other binary files: they are copied out for a check by eye, not read. That includes text inside "
     "images, and data inside files such as spreadsheets or PDFs.",
@@ -512,7 +512,7 @@ def repo_from_remote(cwd):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Read-only audit before a repository is made public.")
+    parser = argparse.ArgumentParser(description="Read-only audit of everything a public repository shows.")
     parser.add_argument("--repo", help="owner/name on GitHub (default: this checkout's origin)")
     parser.add_argument("--local", action="store_true", help="only this checkout's own history, no network")
     parser.add_argument("--style", action="store_true", help="also report long dashes")

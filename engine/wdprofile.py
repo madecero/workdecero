@@ -218,10 +218,6 @@ def normalize_pasted(text):
     return text.translate(_PASTED)
 
 
-def _guess_message(value, guess):
-    return "Did you mean %s?" % guess if guess != value else "Check the number."
-
-
 def warnings(profile, today=None):
     """Things that are allowed but look like mistakes. They never block a sweep."""
     found = []

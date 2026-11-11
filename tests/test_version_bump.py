@@ -7,10 +7,10 @@ import check_version_bump as bump
 class VersionBump(unittest.TestCase):
     def test_shipped_paths(self):
         for path in (".claude-plugin/plugin.json", "skills/setup/SKILL.md", "engine/x.py",
-                     "trackers/vault.py", "hooks/hooks.json"):
+                     "trackers/vault.py", "hooks/hooks.json", "hooks/allow_helper.py"):
             self.assertTrue(bump.is_shipped(path), path)
         for path in ("README.md", "tests/test_x.py", ".github/workflows/ci.yml", "dev/leak_guard.py",
-                     "examples/profiles/a.yaml", "hooks/pre-commit", "CONTRIBUTING.md"):
+                     "examples/profiles/a.yaml", "dev/git-hooks/pre-commit", "CONTRIBUTING.md"):
             self.assertFalse(bump.is_shipped(path), path)
 
     def test_docs_only_change_needs_no_bump(self):

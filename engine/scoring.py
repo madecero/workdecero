@@ -51,7 +51,6 @@ PART_LABELS = {"fit": "background", "level": "level", "industry": "industry", "l
 PENALTY_PAY_START_BELOW_FLOOR = 6
 PENALTY_UNVERIFIED_LINK = 3
 PENALTY_FLAGGED = 10
-PENALTY_ONSITE_OUTSIDE_AREA = 4      # kept for older notes: such a role is now left out
 PENALTY_MISSING_CREDENTIAL = 10
 NEAR_MISS_BELOW = 20          # a background fit under this, out of 40, is a near miss
 PENALTY_HOURS_OUTSIDE_RANGE = 4

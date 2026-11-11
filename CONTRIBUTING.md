@@ -29,14 +29,14 @@ Never copy denylist contents into a file, commit message, pull request or issue.
 
 ## Commit identity
 
-Commit metadata becomes public. Before your first commit, set a handle and your GitHub noreply address for this repository:
+Commit metadata becomes public. Before your first commit, set your GitHub handle and its GitHub noreply address for this repository:
 
 ```
 git config user.name <your GitHub handle>
 git config user.email <your GitHub noreply address>
 ```
 
-CI runs `dev/check_authors.py` on every pull request and on `main`. It fails if any commit's author or committer is not an allowed handle with a GitHub noreply address, and it reports the commit hash only. Merges use rebase, because a squash or merge commit made on the website is stamped with the account's profile name.
+CI runs `dev/check_authors.py` on every pull request and on `main`. It fails if any commit's author or committer is not a GitHub handle with that handle's own noreply address, and it reports the commit hash only. Pull requests are merged by fast-forwarding `main` to the tested head, never on the website, because a squash, merge or rebase made there is stamped with the account's profile name.
 
 ## Fixtures and examples
 
@@ -66,7 +66,7 @@ runs the leak guard over the tree, the manifest validator, the commit identity c
 
 ## Versioning
 
-Installed copies of the plugin only update when `version` in `.claude-plugin/plugin.json` goes up. A pull request that changes shipped files (`.claude-plugin/`, `skills/`, `engine/`, `trackers/`) must raise the version, and CI fails if it does not. Docs, tests, CI and examples need no bump.
+Installed copies of the plugin only update when `version` in `.claude-plugin/plugin.json` goes up. A pull request that changes shipped files (`.claude-plugin/`, `skills/`, `engine/`, `trackers/`, `hooks/`) must raise the version, and CI fails if it does not. Docs, tests, CI and examples need no bump.
 
 ## Style
 

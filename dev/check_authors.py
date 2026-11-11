@@ -2,8 +2,8 @@
 """Fail when a commit carries an identity that must not become public.
 
 Commit author and committer names are public history. Every commit in this
-repository must be made under an allowed handle with a GitHub noreply
-address. A violation is reported by commit hash only, so the offending name
+repository must be made under a GitHub handle with that handle's own
+noreply address, so no real name or personal email lands in the history. A violation is reported by commit hash only, so the offending name
 never reaches a log.
 
 Usage: check_authors.py [REVISION_RANGE]   (default: HEAD, the whole history)
@@ -14,7 +14,6 @@ import re
 import subprocess
 import sys
 
-ALLOWED_HANDLES = ("madecero",)
 HANDLE_EMAIL_RE = re.compile(r"^(?:\d+\+)?([A-Za-z0-9-]+)@users\.noreply\.github\.com$")
 # GitHub commits rebase merges and web edits under its own identity.
 GITHUB_COMMITTER = ("GitHub", "noreply@github.com")
@@ -24,7 +23,7 @@ def identity_allowed(name, email, allow_github=False):
     if allow_github and (name, email) == GITHUB_COMMITTER:
         return True
     match = HANDLE_EMAIL_RE.match(email or "")
-    return bool(match) and name in ALLOWED_HANDLES and match.group(1) == name
+    return bool(match) and bool(name) and match.group(1).lower() == name.lower()
 
 
 def violations(records):
