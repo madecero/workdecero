@@ -48,8 +48,6 @@ Then start a new Claude Code session.
 
 From a terminal, `claude plugin marketplace add madecero/workdecero` and `claude plugin install workdecero@workdecero` do the same thing.
 
-> **While this repository is private** (remove this note at public release): you need to have been given access to it, and your computer needs to be signed in to GitHub. The simplest way is to install the GitHub command line tool and run `gh auth login`. If the first command above fails with a message about access or a repository that cannot be found, this is why.
-
 ## First run
 
 Three steps, once, in order. Each is a slash command you type in Claude Code.
